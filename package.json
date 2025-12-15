@@ -1,0 +1,46 @@
+{
+  "name": "falkordb-canvas",
+  "version": "1.0.0",
+  "description": "A standalone web component for visualizing FalkorDB graphs using force-directed layouts",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./dist/*": "./dist/*"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:types": "tsc --declaration --emitDeclarationOnly --outDir dist",
+    "dev": "tsc --watch",
+    "example": "python3 -m http.server 8080",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "falkordb",
+    "graph",
+    "visualization",
+    "web-component",
+    "force-directed",
+    "canvas"
+  ],
+  "author": "FalkorDB",
+  "license": "MIT",
+  "dependencies": {
+    "d3": "^7.9.0",
+    "force-graph": "^1.44.4",
+    "tsup": "^8.5.1"
+  },
+  "devDependencies": {
+    "@types/d3": "^7.4.3",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FalkorDB Canvas Web Component Example</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .graph-container {
+      height: 600px;
+      width: 100%;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .controls {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    button {
+      margin-right: 10px;
+      padding: 8px 16px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+
+    .info {
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    #selected-info {
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>FalkorDB Canvas Web Component</h1>
+
+    <div class="controls">
+      <button onclick="addNode()">Add Node</button>
+      <button onclick="addLink()">Add Link</button>
+      <button onclick="toggleLoading()">Toggle Loading</button>
+    </div>
+
+    <div class="graph-container">
+      <falkordb-canvas id="graph"></falkordb-canvas>
+    </div>
+
+    <div class="info">
+      <h3>Selected Element:</h3>
+      <div id="selected-info">Click on a node or link to see details</div>
+    </div>
+  </div>
+
+  <!-- Import map for module resolution -->
+  <script type="importmap">
+    {
+      "imports": {
+        "d3": "https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm",
+        "force-graph": "https://cdn.jsdelivr.net/npm/force-graph@1.51.0/+esm"
+      }
+    }
+  </script>
+
+  <!-- Import the web component -->
+  <script type="module">
+    import FalkorDBCanvas from '../dist/falkordb-canvas.js';
+    // Sample data
+    const sampleData = {
+      nodes: [
+        { id: 1, labels: ['Person'], color: '#FF6B6B', visible: true, data: { name: 'Alice', age: 30 } },
+        { id: 2, labels: ['Person'], color: '#4ECDC4', visible: true, data: { name: 'Bob', age: 25 } },
+        { id: 3, labels: ['Person'], color: '#45B7D1', visible: true, data: { name: 'Charlie', age: 35 } },
+        { id: 4, labels: ['Company'], color: '#FFA07A', visible: true, data: { name: 'TechCorp' } },
+      ],
+      links: [
+        { id: 1, relationship: 'KNOWS', color: '#999', source: 1, target: 2, visible: true, data: {} },
+        { id: 2, relationship: 'WORKS_AT', color: '#999', source: 1, target: 4, visible: true, data: {} },
+        { id: 3, relationship: 'WORKS_AT', color: '#999', source: 2, target: 4, visible: true, data: {} },
+        { id: 4, relationship: 'KNOWS', color: '#999', source: 2, target: 3, visible: true, data: {} },
+      ]
+    };
+
+    const displayTextPriority = [
+      { name: 'name', ignore: false },
+      { name: 'title', ignore: false },
+      { name: 'label', ignore: false },
+    ];
+
+    // Get the graph element
+    const canvas = document.getElementById('graph');
+
+    // Wait for the element to be defined
+    await customElements.whenDefined('falkordb-canvas');
+
+    // Set initial data
+    canvas.setData(sampleData);
+
+    const graphContainer = document.querySelector('.graph-container');
+
+    // Configure the graph using individual setters (more efficient!)
+    canvas.setWidth(graphContainer.clientWidth);
+    canvas.setHeight(graphContainer.clientHeight);
+    canvas.setBackgroundColor('#FFFFFF');
+    canvas.setForegroundColor('#1A1A1A');
+    canvas.setDisplayTextPriority(displayTextPriority);
+    canvas.setCooldownTicks(300);
+    canvas.setIsLoading(false);
+
+    // Set event handlers using setConfig (for callbacks)
+    canvas.setConfig({
+      onNodeClick: (node, event) => {
+        console.log('Node clicked:', node);
+        document.getElementById('selected-info').textContent =
+          `Node: ${node.data.name || node.id} (${node.labels.join(', ')})`;
+      },
+      onNodeRightClick: (node, event) => {
+        console.log('Node right-clicked:', node);
+        document.getElementById('selected-info').textContent =
+          `Right-clicked Node: ${node.data.name || node.id}`;
+      },
+      onLinkRightClick: (link, event) => {
+        console.log('Link right-clicked:', link);
+        document.getElementById('selected-info').textContent =
+          `Right-clicked Link: ${link.relationship}`;
+      },
+      onNodeHover: (node) => {
+        if (node) {
+          console.log('Node hover:', node);
+        }
+      },
+      onLinkHover: (link) => {
+        if (link) {
+          console.log('Link hover:', link);
+        }
+      },
+      onBackgroundClick: () => {
+        document.getElementById('selected-info').textContent =
+          'Click on a node or link to see details';
+      },
+      isNodeSelected: (node) => false,
+      isLinkSelected: (link) => false,
+    });
+
+    // Control functions
+    let nodeCounter = 5;
+    let linkCounter = 5;
+
+    window.addNode = () => {
+      const data = canvas.getData();
+      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#96CEB4'];
+      data.nodes.push({
+        id: nodeCounter,
+        labels: ['Person'],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        visible: true,
+        data: { name: `Person ${nodeCounter}` }
+      });
+      nodeCounter++;
+      canvas.setData(data);
+    };
+
+    window.addLink = () => {
+      const data = canvas.getData();
+      if (data.nodes.length < 2) {
+        alert('Need at least 2 nodes to create a link');
+        return;
+      }
+      const sourceIdx = Math.floor(Math.random() * data.nodes.length);
+      let targetIdx = Math.floor(Math.random() * data.nodes.length);
+      while (targetIdx === sourceIdx && data.nodes.length > 1) {
+        targetIdx = Math.floor(Math.random() * data.nodes.length);
+      }
+      data.links.push({
+        id: linkCounter,
+        relationship: 'CONNECTS',
+        color: '#999',
+        source: data.nodes[sourceIdx].id,
+        target: data.nodes[targetIdx].id,
+        visible: true,
+        data: {}
+      });
+      linkCounter++;
+      canvas.setData(data);
+    };
+
+    let isLoading = false;
+    window.toggleLoading = () => {
+      isLoading = !isLoading;
+      // Use individual setters for better performance
+      canvas.setIsLoading(isLoading);
+      canvas.setCooldownTicks(isLoading ? undefined : 300);
+    };
+  </script>
+</body>
+
+</html>
