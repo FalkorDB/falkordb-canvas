@@ -77,8 +77,8 @@ export const getNodeDisplayText = (
   const displayText = displayTextPriority.find(({ name, ignore }) => {
     const key = ignore
       ? Object.keys(nodeData).find(
-          (k) => k.toLowerCase() === name.toLowerCase()
-        )
+        (k) => k.toLowerCase() === name.toLowerCase()
+      )
       : name;
 
     return (
@@ -92,12 +92,47 @@ export const getNodeDisplayText = (
   if (displayText) {
     const key = displayText.ignore
       ? Object.keys(nodeData).find(
-          (k) => k.toLowerCase() === displayText.name.toLowerCase()
-        )
+        (k) => k.toLowerCase() === displayText.name.toLowerCase()
+      )
       : displayText.name;
 
     if (key) {
       return String(nodeData[key]);
+    }
+  }
+
+  return String(node.id);
+};
+
+export const getNodeDisplayKey = (
+  node: Node,
+  displayTextPriority: TextPriority[]
+) => {
+  const { data: nodeData } = node;
+  const displayText = displayTextPriority.find(({ name, ignore }) => {
+    const key = ignore
+      ? Object.keys(nodeData).find(
+        (k) => k.toLowerCase() === name.toLowerCase()
+      )
+      : name;
+
+    return (
+      key &&
+      nodeData[key] &&
+      typeof nodeData[key] === "string" &&
+      nodeData[key].trim().length > 0
+    );
+  });
+
+  if (displayText) {
+    const key = displayText.ignore
+      ? Object.keys(nodeData).find(
+        (k) => k.toLowerCase() === displayText.name.toLowerCase()
+      )
+      : displayText.name;
+
+    if (key) {
+      return key;
     }
   }
 

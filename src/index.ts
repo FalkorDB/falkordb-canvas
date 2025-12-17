@@ -38,5 +38,6 @@ export {
   dataToGraphData,
   graphDataToData,
   getNodeDisplayText,
+  getNodeDisplayKey,
   wrapTextForCircularNode,
 } from "./falkordb-canvas-utils.js";
