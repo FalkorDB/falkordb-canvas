@@ -189,7 +189,7 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   getViewport(): ViewportState {
-    if (!this.graph) return { zoom: 1, centerX: 0, centerY: 0 };
+    if (!this.graph) return undefined;
 
     const { x: centerX, y: centerY } = this.graph.centerAt();
     const zoom = this.graph.zoom();
@@ -222,8 +222,11 @@ class FalkorDBCanvas extends HTMLElement {
       .graphData(this.data)
       .cooldownTicks(this.config.cooldownTicks ?? Infinity);
 
-    this.graph.zoom(this.viewport?.zoom || 0, 0);
-    this.graph.centerAt(this.viewport?.centerX || 0, this.viewport?.centerY || 0, 0);
+    if (this.viewport) {
+      this.graph.zoom(this.viewport.zoom, 0);
+      this.graph.centerAt(this.viewport.centerX, this.viewport.centerY, 0);
+      this.viewport = undefined;
+    }
 
     this.updateLoadingState();
     this.setupForces();
