@@ -9,6 +9,7 @@ import {
   GraphLink,
   GraphNode,
   ForceGraphConfig,
+  ViewportState,
 } from "./falkordb-canvas-types.js";
 import {
   dataToGraphData,
@@ -77,6 +78,8 @@ class FalkorDBCanvas extends HTMLElement {
     }
   > = new Map();
 
+  private viewport: ViewportState;
+
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
@@ -95,11 +98,11 @@ class FalkorDBCanvas extends HTMLElement {
 
   setConfig(config: Partial<ForceGraphConfig>) {
     Object.assign(this.config, config);
-    
+
     // Update event handlers if they were provided
     if (config.onNodeClick || config.onNodeRightClick || config.onLinkRightClick ||
-        config.onNodeHover || config.onLinkHover || config.onBackgroundClick ||
-        config.onEngineStop || config.isNodeSelected || config.isLinkSelected) {
+      config.onNodeHover || config.onLinkHover || config.onBackgroundClick ||
+      config.onEngineStop || config.isNodeSelected || config.isLinkSelected) {
       this.updateEventHandlers();
     }
   }
@@ -160,16 +163,18 @@ class FalkorDBCanvas extends HTMLElement {
     return graphDataToData(this.data);
   }
 
+
   setData(data: Data) {
     this.data = dataToGraphData(data);
     this.config.cooldownTicks = this.data.nodes.length > 0 ? undefined : 0;
     this.config.isLoading = this.data.nodes.length > 0;
-    
+    this.config.onLoadingChange?.(this.config.isLoading);
+
     // Initialize graph if it hasn't been initialized yet
     if (!this.graph && this.container) {
       this.initGraph();
     }
-    
+
     if (!this.graph) return;
 
     this.calculateNodeDegree();
@@ -183,15 +188,83 @@ class FalkorDBCanvas extends HTMLElement {
     this.setupForces();
   }
 
+  getViewport(): ViewportState {
+    if (!this.graph) return { zoom: 1, centerX: 0, centerY: 0 };
+
+    const { x: centerX, y: centerY } = this.graph.centerAt();
+    const zoom = this.graph.zoom();
+
+    return {
+      zoom,
+      centerX,
+      centerY,
+    };
+  }
+
+  setViewport(viewport: ViewportState) {
+    this.viewport = viewport;
+  }
+
+  getGraphData(): GraphData {
+    return this.data;
+  }
+
+  setGraphData(data: GraphData) {
+    this.data = data;
+
+    this.config.cooldownTicks = 0;
+    this.config.isLoading = false;
+
+    if (!this.graph) return;
+
+    this.calculateNodeDegree();
+    this.graph
+      .graphData(this.data)
+      .cooldownTicks(this.config.cooldownTicks ?? Infinity);
+
+    this.graph.zoom(this.viewport?.zoom || 0, 0);
+    this.graph.centerAt(this.viewport?.centerX || 0, this.viewport?.centerY || 0, 0);
+
+    this.updateLoadingState();
+    this.setupForces();
+  }
+
   getGraph(): ForceGraphInstance | undefined {
     return this.graph;
   }
 
+  public getZoom(): number {
+    return this.graph?.zoom() || 0;
+  }
+
+  public zoom(zoomLevel: number): ForceGraphInstance | undefined {
+    if (!this.graph) return;
+
+    return this.graph.zoom(zoomLevel);
+  }
+
+  public zoomToFit(paddingMultiplier = 1, filter?: (node: GraphNode) => boolean) {
+    if (!this.graph || !this.shadowRoot) return;
+
+    // Get canvas from shadow DOM
+    const canvas = this.shadowRoot.querySelector("canvas") as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+
+    // Calculate padding as 10% of the smallest canvas dimension
+    const minDimension = Math.min(rect.width, rect.height);
+    const padding = minDimension * 0.1;
+
+    // Use the force-graph's built-in zoomToFit method
+    this.graph.zoomToFit(500, padding * paddingMultiplier, filter);
+  }
+
   private triggerRender() {
     if (!this.graph || this.graph.cooldownTicks() !== 0) return;
-    
+
     // If simulation is stopped (0), trigger one tick to re-render
-      this.graph.cooldownTicks(1);
+    this.graph.cooldownTicks(1);
   }
 
   private calculateNodeDegree() {
@@ -618,23 +691,6 @@ class FalkorDBCanvas extends HTMLElement {
     }
   }
 
-  private zoomToFit(paddingMultiplier = 1) {
-    if (!this.graph || !this.shadowRoot) return;
-
-    // Get canvas from shadow DOM
-    const canvas = this.shadowRoot.querySelector("canvas") as HTMLCanvasElement;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-
-    // Calculate padding as 10% of the smallest canvas dimension
-    const minDimension = Math.min(rect.width, rect.height);
-    const padding = minDimension * 0.1;
-
-    // Use the force-graph's built-in zoomToFit method
-    this.graph.zoomToFit(500, padding * paddingMultiplier);
-  }
-
   private handleEngineStop() {
     if (!this.graph) return;
 
@@ -651,6 +707,7 @@ class FalkorDBCanvas extends HTMLElement {
       if (!this.graph) return;
       // Stop loading
       this.config.isLoading = false;
+      this.config.onLoadingChange?.(this.config.isLoading);
       this.updateLoadingState();
       this.config.cooldownTicks = 0;
       this.graph.cooldownTicks(0);
@@ -689,6 +746,12 @@ class FalkorDBCanvas extends HTMLElement {
       .onBackgroundClick((event: MouseEvent) => {
         if (this.config.onBackgroundClick) {
           this.config.onBackgroundClick(event);
+        }
+      })
+      .onEngineStop(() => {
+        this.handleEngineStop();
+        if (this.config.onEngineStop) {
+          this.config.onEngineStop();
         }
       })
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {

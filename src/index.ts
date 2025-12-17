@@ -1,8 +1,18 @@
 import FalkorDBCanvas from "./falkordb-canvas.js";
+import type React from "react";
 
 declare global {
   interface HTMLElementTagNameMap {
     "falkordb-canvas": FalkorDBCanvas;
+  }
+
+  namespace JSX {
+    interface IntrinsicElements {
+      "falkordb-canvas": React.DetailedHTMLProps<
+        React.HTMLAttributes<FalkorDBCanvas>,
+        FalkorDBCanvas
+      >;
+    }
   }
 }
 
@@ -19,6 +29,7 @@ export type {
   Link,
   Data,
   TextPriority,
+  ViewportState,
   ForceGraphInstance,
 } from "./falkordb-canvas-types.js";
 

@@ -13,6 +13,7 @@ export interface ForceGraphConfig {
   onLinkHover?: (link: GraphLink | null) => void;
   onBackgroundClick?: (event: MouseEvent) => void;
   onEngineStop?: () => void;
+  onLoadingChange?: (loading: boolean) => void;
   cooldownTicks?: number | undefined;
   cooldownTime?: number;
   isLinkSelected?: (link: GraphLink) => boolean;
@@ -76,6 +77,12 @@ export type TextPriority = {
   name: string;
   ignore: boolean;
 };
+
+export type ViewportState = {
+  zoom: number;
+  centerX: number;
+  centerY: number;
+} | undefined;
 
 // Force graph instance type from force-graph library
 // The instance is created by calling ForceGraph as a function with a container element
