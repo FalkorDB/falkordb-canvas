@@ -409,7 +409,9 @@ class FalkorDBCanvas extends HTMLElement {
         this.config.isLinkSelected?.(link) ? 2 : 1
       )
       .linkCurvature("curve")
-      .cooldownTicks(this.config.cooldownTicks ?? Infinity) // undefined = infinite (like react-force-graph)
+      .linkVisibility("visible")
+      .nodeVisibility("visible")
+      .cooldownTicks(this.config.cooldownTicks ?? Infinity) // undefined = infinite
       .cooldownTime(this.config.cooldownTime ?? 1000)
       .enableNodeDrag(true)
       .enableZoomInteraction(true)
