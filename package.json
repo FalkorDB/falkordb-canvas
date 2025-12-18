@@ -25,6 +25,14 @@
     "clean": "rm -rf dist",
     "lint": "eslint ."
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FalkorDB/falkordb-canvas"
+  },
+  "bugs": {
+    "url": "https://github.com/FalkorDB/falkordb-canvas/issues"
+  },
+  "homepage": "https://github.com/FalkorDB/falkordb-canvas",
   "keywords": [
     "falkordb",
     "graph",
