@@ -421,6 +421,11 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onNodeClick(node, event);
         }
       })
+      .onLinkClick((link: GraphLink, event: MouseEvent) => {
+        if (this.config.onLinkClick) {
+          this.config.onLinkClick(link, event);
+        }
+      })
       .onNodeRightClick((node: GraphNode, event: MouseEvent) => {
         if (this.config.onNodeRightClick) {
           this.config.onNodeRightClick(node, event);
@@ -726,6 +731,11 @@ class FalkorDBCanvas extends HTMLElement {
       .onNodeClick((node: GraphNode, event: MouseEvent) => {
         if (this.config.onNodeClick) {
           this.config.onNodeClick(node, event);
+        }
+      })
+      .onLinkClick((link: GraphLink, event: MouseEvent) => {
+        if (this.config.onLinkClick) {
+          this.config.onLinkClick(link, event);
         }
       })
       .onNodeRightClick((node: GraphNode, event: MouseEvent) => {

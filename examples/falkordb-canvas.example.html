@@ -151,6 +151,11 @@
         document.getElementById('selected-info').textContent =
           `Node: ${node.data.name || node.id} (${node.labels.join(', ')})`;
       },
+      onLinkClick: (link, event) => {
+        console.log('Link clicked:', link);
+        document.getElementById('selected-info').textContent =
+          `Link: ${link.relationship}`;
+      },
       onNodeRightClick: (node, event) => {
         console.log('Node right-clicked:', node);
         document.getElementById('selected-info').textContent =

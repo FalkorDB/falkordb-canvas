@@ -7,6 +7,7 @@ export interface ForceGraphConfig {
   foregroundColor?: string;
   displayTextPriority?: TextPriority[];
   onNodeClick?: (node: GraphNode, event: MouseEvent) => void;
+  onLinkClick?: (link: GraphLink, event: MouseEvent) => void;
   onNodeRightClick?: (node: GraphNode, event: MouseEvent) => void;
   onLinkRightClick?: (link: GraphLink, event: MouseEvent) => void;
   onNodeHover?: (node: GraphNode | null) => void;
