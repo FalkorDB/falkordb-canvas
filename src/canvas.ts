@@ -10,6 +10,7 @@ import {
   GraphNode,
   ForceGraphConfig,
   ViewportState,
+  Transform,
 } from "./canvas-types.js";
 import {
   dataToGraphData,
@@ -101,7 +102,7 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Update event handlers if they were provided
     if (config.onNodeClick || config.onLinkClick || config.onNodeRightClick || config.onLinkRightClick ||
-      config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick ||
+      config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick || config.onZoom ||
       config.onEngineStop || config.isNodeSelected || config.isLinkSelected) {
       this.updateEventHandlers();
     }
@@ -456,6 +457,11 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onBackgroundRightClick(event);
         }
       })
+      .onZoom((transform: Transform) => {
+        if (this.config.onZoom) {
+          this.config.onZoom(transform);
+        }
+      })
       .onEngineStop(() => {
         this.handleEngineStop();
         if (this.config.onEngineStop) {
@@ -771,6 +777,11 @@ class FalkorDBCanvas extends HTMLElement {
       .onBackgroundRightClick((event: MouseEvent) => {
         if (this.config.onBackgroundRightClick) {
           this.config.onBackgroundRightClick(event);
+        }
+      })
+      .onZoom((transform: Transform) => {
+        if (this.config.onZoom) {
+          this.config.onZoom(transform);
         }
       })
       .onEngineStop(() => {
