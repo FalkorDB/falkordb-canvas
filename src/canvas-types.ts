@@ -14,6 +14,7 @@ export interface ForceGraphConfig {
   onLinkHover?: (link: GraphLink | null) => void;
   onBackgroundClick?: (event: MouseEvent) => void;
   onBackgroundRightClick?: (event: MouseEvent) => void;
+  onZoom?: (transform: Transform) => void;
   onEngineStop?: () => void;
   onLoadingChange?: (loading: boolean) => void;
   cooldownTicks?: number | undefined;
@@ -85,6 +86,8 @@ export type ViewportState = {
   centerX: number;
   centerY: number;
 } | undefined;
+
+export type Transform = { k: number, x: number, y: number };
 
 // Force graph instance type from force-graph library
 // The instance is created by calling ForceGraph as a function with a container element
