@@ -100,8 +100,8 @@ class FalkorDBCanvas extends HTMLElement {
     Object.assign(this.config, config);
 
     // Update event handlers if they were provided
-    if (config.onNodeClick || config.onNodeRightClick || config.onLinkRightClick ||
-      config.onNodeHover || config.onLinkHover || config.onBackgroundClick ||
+    if (config.onNodeClick || config.onLinkClick || config.onNodeRightClick || config.onLinkRightClick ||
+      config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick ||
       config.onEngineStop || config.isNodeSelected || config.isLinkSelected) {
       this.updateEventHandlers();
     }
@@ -451,6 +451,11 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onBackgroundClick(event);
         }
       })
+      .onBackgroundRightClick((event: MouseEvent) => {
+        if (this.config.onBackgroundRightClick) {
+          this.config.onBackgroundRightClick(event);
+        }
+      })
       .onEngineStop(() => {
         this.handleEngineStop();
         if (this.config.onEngineStop) {
@@ -761,6 +766,11 @@ class FalkorDBCanvas extends HTMLElement {
       .onBackgroundClick((event: MouseEvent) => {
         if (this.config.onBackgroundClick) {
           this.config.onBackgroundClick(event);
+        }
+      })
+      .onBackgroundRightClick((event: MouseEvent) => {
+        if (this.config.onBackgroundRightClick) {
+          this.config.onBackgroundRightClick(event);
         }
       })
       .onEngineStop(() => {

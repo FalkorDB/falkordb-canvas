@@ -13,6 +13,7 @@ export interface ForceGraphConfig {
   onNodeHover?: (node: GraphNode | null) => void;
   onLinkHover?: (link: GraphLink | null) => void;
   onBackgroundClick?: (event: MouseEvent) => void;
+  onBackgroundRightClick?: (event: MouseEvent) => void;
   onEngineStop?: () => void;
   onLoadingChange?: (loading: boolean) => void;
   cooldownTicks?: number | undefined;
