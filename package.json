@@ -36,12 +36,12 @@
   "author": "FalkorDB",
   "license": "MIT",
   "dependencies": {
-    "@types/react": "^19.2.7",
     "d3": "^7.9.0",
     "force-graph": "^1.44.4",
     "react": "^19.2.3"
   },
   "devDependencies": {
+    "@types/react": "^19.2.7",
     "@types/d3": "^7.4.3",
     "@typescript-eslint/eslint-plugin": "^8.18.2",
     "@typescript-eslint/parser": "^8.18.2",
