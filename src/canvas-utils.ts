@@ -6,7 +6,7 @@ import {
   GraphNode,
   GraphLink,
   TextPriority,
-} from "./falkordb-canvas-types.js";
+} from "./canvas-types.js";
 
 /**
  * Converts Data format to GraphData format

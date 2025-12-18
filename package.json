@@ -1,6 +1,6 @@
 {
-  "name": "falkordb-canvas",
-  "version": "0.0.3",
+  "name": "@falkordb/canvas",
+  "version": "0.0.4",
   "description": "A standalone web component for visualizing FalkorDB graphs using force-directed layouts",
   "main": "dist/index.js",
   "module": "dist/index.js",

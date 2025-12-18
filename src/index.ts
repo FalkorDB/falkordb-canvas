@@ -1,4 +1,4 @@
-import FalkorDBCanvas from "./falkordb-canvas.js";
+import FalkorDBCanvas from "./canvas.js";
 import type React from "react";
 
 declare global {
@@ -31,7 +31,7 @@ export type {
   TextPriority,
   ViewportState,
   ForceGraphInstance,
-} from "./falkordb-canvas-types.js";
+} from "./canvas-types.js";
 
 // Utils
 export {
@@ -40,4 +40,4 @@ export {
   getNodeDisplayText,
   getNodeDisplayKey,
   wrapTextForCircularNode,
-} from "./falkordb-canvas-utils.js";
+} from "./canvas-utils.js";

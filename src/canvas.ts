@@ -10,13 +10,13 @@ import {
   GraphNode,
   ForceGraphConfig,
   ViewportState,
-} from "./falkordb-canvas-types.js";
+} from "./canvas-types.js";
 import {
   dataToGraphData,
   getNodeDisplayText,
   graphDataToData,
   wrapTextForCircularNode,
-} from "./falkordb-canvas-utils.js";
+} from "./canvas-utils.js";
 
 const NODE_SIZE = 6;
 const PADDING = 2;
