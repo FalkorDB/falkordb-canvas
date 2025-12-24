@@ -103,7 +103,7 @@ class FalkorDBCanvas extends HTMLElement {
     // Update event handlers if they were provided
     if (config.onNodeClick || config.onLinkClick || config.onNodeRightClick || config.onLinkRightClick ||
       config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick || config.onZoom ||
-      config.onEngineStop || config.isNodeSelected || config.isLinkSelected) {
+      config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.node || config.link) {
       this.updateEventHandlers();
     }
   }
@@ -469,11 +469,28 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
-        this.drawNode(node, ctx);
+        this.config.node
+          ? this.config.node.nodeCanvasObject(node, ctx)
+          : this.drawNode(node, ctx);
       })
       .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D) => {
-        this.drawLink(link, ctx);
+        this.config.link
+          ? this.config.link.linkCanvasObject(link, ctx)
+          : this.drawLink(link, ctx);
       });
+
+    // Only set pointer area paint if custom node/link configs are provided
+    if (this.config.node) {
+      this.graph?.nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+        this.config.node?.nodePointerAreaPaint(node, color, ctx);
+      });
+    }
+
+    if (this.config.link) {
+      this.graph?.linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
+        this.config.link?.linkPointerAreaPaint(link, color, ctx);
+      });
+    }
 
     // Setup forces
     this.setupForces();
@@ -791,11 +808,31 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
-        this.drawNode(node, ctx);
+        this.config.node
+          ? this.config.node.nodeCanvasObject(node, ctx)
+          : this.drawNode(node, ctx);
       })
       .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D) => {
-        this.drawLink(link, ctx);
+        this.config.link
+          ? this.config.link.linkCanvasObject(link, ctx)
+          : this.drawLink(link, ctx);
       });
+
+    if (this.config.node) {
+      this.graph.nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+        this.config.node!.nodePointerAreaPaint(node, color, ctx);
+      });
+    } else {
+      this.graph.nodePointerAreaPaint();
+    }
+
+    if (this.config.link) {
+      this.graph.linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
+        this.config.link!.linkPointerAreaPaint(link, color, ctx);
+      });
+    } else {
+      this.graph.linkPointerAreaPaint();
+    }
   }
 }
 
