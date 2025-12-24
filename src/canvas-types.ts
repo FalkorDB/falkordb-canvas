@@ -22,6 +22,14 @@ export interface ForceGraphConfig {
   isLinkSelected?: (link: GraphLink) => boolean;
   isNodeSelected?: (node: GraphNode) => boolean;
   isLoading?: boolean;
+  node?: {
+    nodeCanvasObject: (node: GraphNode, ctx: CanvasRenderingContext2D) => void;
+    nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void;
+  };
+  link?: {
+    linkCanvasObject: (link: GraphLink, ctx: CanvasRenderingContext2D) => void;
+    linkPointerAreaPaint: (link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => void;
+  };
 }
 
 export type GraphNode = NodeObject & {
