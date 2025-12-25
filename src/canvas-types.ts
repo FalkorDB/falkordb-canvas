@@ -1,5 +1,7 @@
 import { NodeObject } from "force-graph";
 
+type CanvasObjectMode = 'before' | 'after' | 'replace';
+
 export interface ForceGraphConfig {
   width?: number;
   height?: number;
@@ -25,19 +27,21 @@ export interface ForceGraphConfig {
   node?: {
     nodeCanvasObject: (node: GraphNode, ctx: CanvasRenderingContext2D) => void;
     nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void;
+    nodeCanvasObjectMode?: CanvasObjectMode | ((node: GraphNode) => CanvasObjectMode);
   };
   link?: {
     linkCanvasObject: (link: GraphLink, ctx: CanvasRenderingContext2D) => void;
     linkPointerAreaPaint: (link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => void;
+    linkCanvasObjectMode?: CanvasObjectMode | ((link: GraphLink) => CanvasObjectMode);
   };
 }
 
 export type GraphNode = NodeObject & {
   id: number;
   labels: string[];
-  color: string;
   visible: boolean;
   displayName: [string, string];
+  color: string;
   data: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
@@ -53,10 +57,10 @@ export type GraphNode = NodeObject & {
 export type GraphLink = {
   id: number;
   relationship: string;
-  color: string;
   source: GraphNode;
   target: GraphNode;
   visible: boolean;
+  color?: string;
   curve: number;
   data: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
