@@ -63,6 +63,8 @@ class FalkorDBCanvas extends HTMLElement {
 
   private loadingOverlay: HTMLDivElement | null = null;
 
+  private resizeObserver: ResizeObserver | null = null;
+
   private data: GraphData = { nodes: [], links: [] };
 
   private config: ForceGraphConfig = {};
@@ -91,6 +93,10 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   disconnectedCallback() {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
     if (this.graph) {
       // eslint-disable-next-line no-underscore-dangle
       this.graph._destructor();
@@ -378,6 +384,22 @@ class FalkorDBCanvas extends HTMLElement {
     this.shadowRoot.appendChild(this.container);
     this.initGraph();
     this.container.appendChild(this.loadingOverlay);
+    this.setupResizeObserver();
+  }
+
+  private setupResizeObserver() {
+    if (!this.container) return;
+
+    this.resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (this.graph && width > 0 && height > 0) {
+          this.graph.width(width).height(height);
+        }
+      }
+    });
+
+    this.resizeObserver.observe(this.container);
   }
 
   private initGraph() {
@@ -394,8 +416,8 @@ class FalkorDBCanvas extends HTMLElement {
       .backgroundColor(this.config.backgroundColor || "#FFFFFF")
       .graphData(this.data)
       .nodeRelSize(NODE_SIZE)
-      .nodeCanvasObjectMode(() => "after")
-      .linkCanvasObjectMode(() => "after")
+      .nodeCanvasObjectMode(this.config.node?.nodeCanvasObjectMode || "after")
+      .linkCanvasObjectMode(this.config.link?.linkCanvasObjectMode || "after")
       .nodeLabel((node: GraphNode) =>
         getNodeDisplayText(node, this.config.displayTextPriority || [])
       )
@@ -818,13 +840,17 @@ class FalkorDBCanvas extends HTMLElement {
           : this.drawLink(link, ctx);
       });
 
+    this.graph.nodeCanvasObjectMode(this.config.node?.nodeCanvasObjectMode || "after");
+
     if (this.config.node) {
       this.graph.nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
         this.config.node!.nodePointerAreaPaint(node, color, ctx);
-      });
+      })
     } else {
       this.graph.nodePointerAreaPaint();
     }
+
+    this.graph.linkCanvasObjectMode(this.config.link?.linkCanvasObjectMode || "after");
 
     if (this.config.link) {
       this.graph.linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
