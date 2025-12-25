@@ -1,5 +1,7 @@
 import { NodeObject } from "force-graph";
 
+type CanvasObjectMode = 'before' | 'after' | 'replace';
+
 export interface ForceGraphConfig {
   width?: number;
   height?: number;
@@ -25,12 +27,12 @@ export interface ForceGraphConfig {
   node?: {
     nodeCanvasObject: (node: GraphNode, ctx: CanvasRenderingContext2D) => void;
     nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void;
-    nodeCanvasObjectMode?: (node: GraphNode) => 'before' | 'after';
+    nodeCanvasObjectMode?: CanvasObjectMode | ((node: GraphNode) => CanvasObjectMode);
   };
   link?: {
     linkCanvasObject: (link: GraphLink, ctx: CanvasRenderingContext2D) => void;
     linkPointerAreaPaint: (link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => void;
-    linkCanvasObjectMode?: (link: GraphLink) => 'before' | 'after';
+    linkCanvasObjectMode?: CanvasObjectMode | ((link: GraphLink) => CanvasObjectMode);
   };
 }
 
