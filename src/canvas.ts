@@ -90,13 +90,13 @@ class FalkorDBCanvas extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    
+
     // Read mode attributes once at initialization
     const nodeModeAttr = this.getAttribute('node-mode');
     if (nodeModeAttr === 'before' || nodeModeAttr === 'after' || nodeModeAttr === 'replace') {
       this.nodeMode = nodeModeAttr;
     }
-    
+
     const linkModeAttr = this.getAttribute('link-mode');
     if (linkModeAttr === 'before' || linkModeAttr === 'after' || linkModeAttr === 'replace') {
       this.linkMode = linkModeAttr;
@@ -126,7 +126,7 @@ class FalkorDBCanvas extends HTMLElement {
       config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick || config.onZoom ||
       config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.node || config.link) {
       this.updateEventHandlers();
-      
+
       // If node or link rendering functions changed, trigger a canvas refresh
       if (config.node || config.link) {
         this.triggerRender();
@@ -435,7 +435,7 @@ class FalkorDBCanvas extends HTMLElement {
       .height(this.config.height || 600)
       .backgroundColor(this.config.backgroundColor || "#FFFFFF")
       .graphData(this.data)
-      .nodeVal((node: GraphNode) => node.size ?? NODE_SIZE)
+      .nodeVal((node: GraphNode) => node.size ?? NODE_SIZE / 2)
       .nodeCanvasObjectMode(() => this.nodeMode)
       .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
@@ -592,7 +592,7 @@ class FalkorDBCanvas extends HTMLElement {
         .forceCollide((node: GraphNode) => {
           // Use node.size as base, or default to NODE_SIZE
           const baseSize = node.size ?? NODE_SIZE;
-          
+
           // Add extra radius based on node degree (connections)
           const degree = this.nodeDegreeMap.get(node.id) || 0;
           return baseSize + Math.sqrt(degree) * HIGH_DEGREE_PADDING;
@@ -622,13 +622,16 @@ class FalkorDBCanvas extends HTMLElement {
       node.y = 0;
     }
 
-    ctx.lineWidth = this.config.isNodeSelected?.(node) ? 1.5 : 0.5;
+    ctx.lineWidth = this.config.isNodeSelected?.(node) ? 1.5 : 1;
     ctx.strokeStyle = this.config.foregroundColor || "#1A1A1A";
+    ctx.fillStyle = node.color;
 
     ctx.beginPath();
-    ctx.arc(node.x, node.y, NODE_SIZE, 0, 2 * Math.PI, false);
-    ctx.fillStyle = node.color;
+    ctx.arc(node.x, node.y, NODE_SIZE - ctx.lineWidth, 0, 2 * Math.PI, false);
     ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, NODE_SIZE + ctx.lineWidth, 0, 2 * Math.PI, false);
     ctx.stroke();
 
     // Draw text
@@ -792,7 +795,7 @@ class FalkorDBCanvas extends HTMLElement {
         this.config.isLoading = false;
         this.config.onLoadingChange?.(this.config.isLoading);
         this.updateLoadingState();
-        
+
         // Stop the simulation
         this.config.cooldownTicks = 0;
         this.graph.cooldownTicks(0);
