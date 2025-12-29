@@ -1,7 +1,5 @@
 import { NodeObject } from "force-graph";
 
-type CanvasObjectMode = 'before' | 'after' | 'replace';
-
 export interface ForceGraphConfig {
   width?: number;
   height?: number;
@@ -21,18 +19,17 @@ export interface ForceGraphConfig {
   onLoadingChange?: (loading: boolean) => void;
   cooldownTicks?: number | undefined;
   cooldownTime?: number;
+  autoStopOnSettle?: boolean;
   isLinkSelected?: (link: GraphLink) => boolean;
   isNodeSelected?: (node: GraphNode) => boolean;
   isLoading?: boolean;
   node?: {
     nodeCanvasObject: (node: GraphNode, ctx: CanvasRenderingContext2D) => void;
     nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void;
-    nodeCanvasObjectMode?: CanvasObjectMode | ((node: GraphNode) => CanvasObjectMode);
   };
   link?: {
     linkCanvasObject: (link: GraphLink, ctx: CanvasRenderingContext2D) => void;
     linkPointerAreaPaint: (link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => void;
-    linkCanvasObjectMode?: CanvasObjectMode | ((link: GraphLink) => CanvasObjectMode);
   };
 }
 
@@ -42,6 +39,7 @@ export type GraphNode = NodeObject & {
   visible: boolean;
   displayName: [string, string];
   color: string;
+  size?: number;
   data: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
@@ -100,6 +98,8 @@ export type ViewportState = {
 } | undefined;
 
 export type Transform = { k: number, x: number, y: number };
+
+export type CanvasRenderMode = 'before' | 'after' | 'replace';
 
 // Force graph instance type from force-graph library
 // The instance is created by calling ForceGraph as a function with a container element

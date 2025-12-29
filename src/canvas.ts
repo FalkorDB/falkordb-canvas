@@ -11,13 +11,14 @@ import {
   ForceGraphConfig,
   ViewportState,
   Transform,
-} from "./canvas-types.js";
+  CanvasRenderMode,
+} from "./canvas-types";
 import {
   dataToGraphData,
   getNodeDisplayText,
   graphDataToData,
   wrapTextForCircularNode,
-} from "./canvas-utils.js";
+} from "./canvas-utils";
 
 const NODE_SIZE = 6;
 const PADDING = 2;
@@ -30,7 +31,6 @@ const MIN_LINK_STRENGTH = 0.3;
 const COLLISION_STRENGTH = 1.35;
 const CHARGE_STRENGTH = -5;
 const CENTER_STRENGTH = 0.4;
-const COLLISION_BASE_RADIUS = NODE_SIZE * 2;
 const HIGH_DEGREE_PADDING = 1.25;
 const DEGREE_STRENGTH_DECAY = 15;
 const CROWDING_THRESHOLD = 20;
@@ -69,6 +69,10 @@ class FalkorDBCanvas extends HTMLElement {
 
   private config: ForceGraphConfig = {};
 
+  private nodeMode: CanvasRenderMode = 'after';
+
+  private linkMode: CanvasRenderMode = 'after';
+
   private nodeDegreeMap: Map<number, number> = new Map();
 
   private relationshipsTextCache: Map<
@@ -86,6 +90,17 @@ class FalkorDBCanvas extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    
+    // Read mode attributes once at initialization
+    const nodeModeAttr = this.getAttribute('node-mode');
+    if (nodeModeAttr === 'before' || nodeModeAttr === 'after' || nodeModeAttr === 'replace') {
+      this.nodeMode = nodeModeAttr;
+    }
+    
+    const linkModeAttr = this.getAttribute('link-mode');
+    if (linkModeAttr === 'before' || linkModeAttr === 'after' || linkModeAttr === 'replace') {
+      this.linkMode = linkModeAttr;
+    }
   }
 
   connectedCallback() {
@@ -111,6 +126,11 @@ class FalkorDBCanvas extends HTMLElement {
       config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick || config.onZoom ||
       config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.node || config.link) {
       this.updateEventHandlers();
+      
+      // If node or link rendering functions changed, trigger a canvas refresh
+      if (config.node || config.link) {
+        this.triggerRender();
+      }
     }
   }
 
@@ -415,9 +435,9 @@ class FalkorDBCanvas extends HTMLElement {
       .height(this.config.height || 600)
       .backgroundColor(this.config.backgroundColor || "#FFFFFF")
       .graphData(this.data)
-      .nodeRelSize(NODE_SIZE)
-      .nodeCanvasObjectMode(this.config.node?.nodeCanvasObjectMode || "after")
-      .linkCanvasObjectMode(this.config.link?.linkCanvasObjectMode || "after")
+      .nodeVal((node: GraphNode) => node.size ?? NODE_SIZE)
+      .nodeCanvasObjectMode(() => this.nodeMode)
+      .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
         getNodeDisplayText(node, this.config.displayTextPriority || [])
       )
@@ -491,28 +511,28 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
-        this.config.node
-          ? this.config.node.nodeCanvasObject(node, ctx)
-          : this.drawNode(node, ctx);
+        if (this.config.node) {
+          this.config.node.nodeCanvasObject(node, ctx);
+        } else {
+          this.drawNode(node, ctx);
+        }
       })
       .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D) => {
-        this.config.link
-          ? this.config.link.linkCanvasObject(link, ctx)
-          : this.drawLink(link, ctx);
+        if (this.config.link) {
+          this.config.link.linkCanvasObject(link, ctx);
+        } else {
+          this.drawLink(link, ctx);
+        }
       });
 
     // Only set pointer area paint if custom node/link configs are provided
     if (this.config.node) {
-      this.graph?.nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
-        this.config.node?.nodePointerAreaPaint(node, color, ctx);
-      });
+      this.graph?.nodePointerAreaPaint(this.config.node?.nodePointerAreaPaint);
     }
 
     if (this.config.link) {
-      this.graph?.linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
-        this.config.link?.linkPointerAreaPaint(link, color, ctx);
-      });
-    }
+      this.graph?.linkPointerAreaPaint(this.config.link?.linkPointerAreaPaint);
+    };
 
     // Setup forces
     this.setupForces();
@@ -570,10 +590,12 @@ class FalkorDBCanvas extends HTMLElement {
       "collision",
       d3
         .forceCollide((node: GraphNode) => {
+          // Use node.size as base, or default to NODE_SIZE
+          const baseSize = node.size ?? NODE_SIZE;
+          
+          // Add extra radius based on node degree (connections)
           const degree = this.nodeDegreeMap.get(node.id) || 0;
-          return (
-            COLLISION_BASE_RADIUS + Math.sqrt(degree) * HIGH_DEGREE_PADDING
-          );
+          return baseSize + Math.sqrt(degree) * HIGH_DEGREE_PADDING;
         })
         .strength(COLLISION_STRENGTH)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -594,6 +616,7 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
+
     if (!node.x || !node.y) {
       node.x = 0;
       node.y = 0;
@@ -757,21 +780,29 @@ class FalkorDBCanvas extends HTMLElement {
     // If already stopped, don't do anything
     if (this.config.cooldownTicks === 0) return;
 
-    // Zoom to fit using the same logic as handleZoomToFit from utils
     const nodeCount = this.data.nodes.length;
     const paddingMultiplier = nodeCount < 2 ? 4 : 1;
     this.zoomToFit(paddingMultiplier);
 
-    // Stop the force simulation after centering (like it was in ForceGraph.tsx)
-    setTimeout(() => {
-      if (!this.graph) return;
-      // Stop loading
+    // Stop the force simulation after centering (only if autoStopOnSettle is true)
+    if (this.config.autoStopOnSettle !== false) {
+      setTimeout(() => {
+        if (!this.graph) return;
+        // Stop loading
+        this.config.isLoading = false;
+        this.config.onLoadingChange?.(this.config.isLoading);
+        this.updateLoadingState();
+        
+        // Stop the simulation
+        this.config.cooldownTicks = 0;
+        this.graph.cooldownTicks(0);
+      }, 1000);
+    } else {
+      // Just update loading state without stopping
       this.config.isLoading = false;
       this.config.onLoadingChange?.(this.config.isLoading);
       this.updateLoadingState();
-      this.config.cooldownTicks = 0;
-      this.graph.cooldownTicks(0);
-    }, 1000);
+    }
   }
 
   private updateEventHandlers() {
@@ -830,27 +861,27 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
-        this.config.node
-          ? this.config.node.nodeCanvasObject(node, ctx)
-          : this.drawNode(node, ctx);
+        if (this.config.node) {
+          this.config.node.nodeCanvasObject(node, ctx);
+        } else {
+          this.drawNode(node, ctx);
+        }
       })
       .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D) => {
-        this.config.link
-          ? this.config.link.linkCanvasObject(link, ctx)
-          : this.drawLink(link, ctx);
+        if (this.config.link) {
+          this.config.link.linkCanvasObject(link, ctx);
+        } else {
+          this.drawLink(link, ctx);
+        }
       });
-
-    this.graph.nodeCanvasObjectMode(this.config.node?.nodeCanvasObjectMode || "after");
 
     if (this.config.node) {
       this.graph.nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
         this.config.node!.nodePointerAreaPaint(node, color, ctx);
-      })
+      });
     } else {
       this.graph.nodePointerAreaPaint();
     }
-
-    this.graph.linkCanvasObjectMode(this.config.link?.linkCanvasObjectMode || "after");
 
     if (this.config.link) {
       this.graph.linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
