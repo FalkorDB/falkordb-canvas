@@ -1,5 +1,6 @@
 import FalkorDBCanvas from "./canvas";
 import type React from "react";
+import type { CanvasRenderMode } from "./canvas-types";
 
 declare global {
   interface HTMLElementTagNameMap {
@@ -9,7 +10,10 @@ declare global {
   namespace JSX {
     interface IntrinsicElements {
       "falkordb-canvas": React.DetailedHTMLProps<
-        React.HTMLAttributes<FalkorDBCanvas>,
+        React.HTMLAttributes<FalkorDBCanvas> & {
+          'node-mode'?: CanvasRenderMode;
+          'link-mode'?: CanvasRenderMode;
+        },
         FalkorDBCanvas
       >;
     }
@@ -21,6 +25,10 @@ export { FalkorDBCanvas as default, FalkorDBCanvas };
 
 // Types
 export type {
+  CanvasRenderMode,
+}
+
+export type {
   ForceGraphConfig,
   GraphNode,
   GraphLink,
@@ -31,6 +39,7 @@ export type {
   TextPriority,
   ViewportState,
   ForceGraphInstance,
+  Transform,
 } from "./canvas-types";
 
 // Utils
