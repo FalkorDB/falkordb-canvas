@@ -211,6 +211,11 @@ class FalkorDBCanvas extends HTMLElement {
     this.config.isLoading = this.data.nodes.length > 0;
     this.config.onLoadingChange?.(this.config.isLoading);
 
+    // Update simulation state
+    if (this.data.nodes.length > 0) {
+      this.updateCanvasSimulationAttribute(true);
+    }
+
     // Initialize graph if it hasn't been initialized yet
     if (!this.graph && this.container) {
       this.initGraph();
@@ -309,6 +314,15 @@ class FalkorDBCanvas extends HTMLElement {
 
     // If simulation is stopped (0), trigger one tick to re-render
     this.graph.cooldownTicks(1);
+  }
+
+  private updateCanvasSimulationAttribute(isRunning: boolean) {
+    if (!this.shadowRoot) return;
+    
+    const canvas = this.shadowRoot.querySelector("canvas") as HTMLCanvasElement;
+    if (canvas) {
+      canvas.setAttribute('data-simulation-running', isRunning.toString());
+    }
   }
 
   private calculateNodeDegree() {
@@ -813,6 +827,9 @@ class FalkorDBCanvas extends HTMLElement {
         // Stop the simulation
         this.config.cooldownTicks = 0;
         this.graph.cooldownTicks(0);
+        
+        // Update simulation state
+        this.updateCanvasSimulationAttribute(false);
       }, 1000);
     } else {
       // Just update loading state without stopping
