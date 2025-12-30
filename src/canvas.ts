@@ -36,7 +36,7 @@ const DEGREE_STRENGTH_DECAY = 15;
 const CROWDING_THRESHOLD = 20;
 
 // Create styles for the web component
-function createStyles(): HTMLStyleElement {
+function createStyles(backgroundColor?: string, foregroundColor?: string): HTMLStyleElement {
   const style = document.createElement("style");
   style.textContent = `
     :host {
@@ -51,6 +51,18 @@ function createStyles(): HTMLStyleElement {
       50% {
         opacity: 0.5;
       }
+    }
+    /* Force-graph tooltip styling */
+    .float-tooltip-kap {
+      position: absolute;
+      pointer-events: none;
+      background-color: ${backgroundColor || '#FFFFFF'};
+      color: ${foregroundColor || '#000000'};
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      z-index: 1000;
     }
   `;
   return style;
@@ -159,11 +171,13 @@ class FalkorDBCanvas extends HTMLElement {
     if (this.loadingOverlay) {
       this.loadingOverlay.style.background = color;
     }
+    this.updateTooltipStyles();
   }
 
   setForegroundColor(color: string) {
     if (this.config.foregroundColor === color) return;
     this.config.foregroundColor = color;
+    this.updateTooltipStyles();
     this.triggerRender();
   }
 
@@ -398,7 +412,7 @@ class FalkorDBCanvas extends HTMLElement {
     this.loadingOverlay = this.createLoadingOverlay();
 
     // Add styles using standalone function
-    const style = createStyles();
+    const style = createStyles(this.config.backgroundColor, this.config.foregroundColor);
 
     this.shadowRoot.appendChild(style);
     this.shadowRoot.appendChild(this.container);
@@ -892,6 +906,16 @@ class FalkorDBCanvas extends HTMLElement {
       });
     } else {
       this.graph.linkPointerAreaPaint();
+    }
+  }
+
+  private updateTooltipStyles() {
+    if (!this.shadowRoot) return;
+    
+    const existingStyle = this.shadowRoot.querySelector('style');
+    if (existingStyle) {
+      const newStyle = createStyles(this.config.backgroundColor, this.config.foregroundColor);
+      existingStyle.textContent = newStyle.textContent;
     }
   }
 }
