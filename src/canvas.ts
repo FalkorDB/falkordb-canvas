@@ -193,6 +193,8 @@ class FalkorDBCanvas extends HTMLElement {
     if (this.graph) {
       this.graph.cooldownTicks(ticks ?? Infinity);
     }
+
+    this.updateCanvasSimulationAttribute(ticks !== 0);
   }
 
   setDisplayTextPriority(priority: ForceGraphConfig['displayTextPriority']) {
@@ -320,8 +322,9 @@ class FalkorDBCanvas extends HTMLElement {
     if (!this.shadowRoot) return;
     
     const canvas = this.shadowRoot.querySelector("canvas") as HTMLCanvasElement;
+    
     if (canvas) {
-      canvas.setAttribute('data-simulation-running', isRunning.toString());
+      canvas.setAttribute('data-engine-status', isRunning ? "running" : "stopped");
     }
   }
 
