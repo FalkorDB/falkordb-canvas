@@ -226,6 +226,7 @@ class FalkorDBCanvas extends HTMLElement {
     if (!this.graph) return;
 
     this.calculateNodeDegree();
+    this.setupForces();
 
     // Update graph data and properties
     this.graph
@@ -233,7 +234,6 @@ class FalkorDBCanvas extends HTMLElement {
       .cooldownTicks(this.config.cooldownTicks ?? Infinity);
 
     this.updateLoadingState();
-    this.setupForces();
   }
 
   getViewport(): ViewportState {
@@ -266,6 +266,8 @@ class FalkorDBCanvas extends HTMLElement {
     if (!this.graph) return;
 
     this.calculateNodeDegree();
+    this.setupForces();
+    
     this.graph
       .graphData(this.data)
       .cooldownTicks(this.config.cooldownTicks ?? Infinity);
@@ -277,7 +279,6 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     this.updateLoadingState();
-    this.setupForces();
   }
 
   getGraph(): ForceGraphInstance | undefined {
