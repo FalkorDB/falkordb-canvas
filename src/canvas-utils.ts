@@ -73,6 +73,10 @@ export const getNodeDisplayText = (
   node: Node,
   displayTextPriority: TextPriority[]
 ) => {
+  if (node.caption && node.caption.trim().length > 0) {
+    return node.caption;
+  }
+  
   const { data: nodeData } = node;
   const displayText = displayTextPriority.find(({ name, ignore }) => {
     const key = ignore

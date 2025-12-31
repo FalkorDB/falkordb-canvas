@@ -671,7 +671,7 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.textBaseline = "middle";
     ctx.font = "400 2px SofiaSans";
 
-    let [line1, line2] = node.displayName || ["", ""];
+    let [line1, line2] = node.displayName;
 
     if (!line1 && !line2) {
       const text = getNodeDisplayText(
