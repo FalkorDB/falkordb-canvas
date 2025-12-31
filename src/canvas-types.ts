@@ -40,6 +40,7 @@ export type GraphNode = NodeObject & {
   displayName: [string, string];
   color: string;
   size?: number;
+  caption?: string;
   data: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
