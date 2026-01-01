@@ -12,13 +12,13 @@ import {
   ViewportState,
   Transform,
   CanvasRenderMode,
-} from "./canvas-types";
+} from "./canvas-types.js";
 import {
   dataToGraphData,
   getNodeDisplayText,
   graphDataToData,
   wrapTextForCircularNode,
-} from "./canvas-utils";
+} from "./canvas-utils.js";
 
 const NODE_SIZE = 6;
 const PADDING = 2;
@@ -467,7 +467,7 @@ class FalkorDBCanvas extends HTMLElement {
       .height(this.config.height || 600)
       .backgroundColor(this.config.backgroundColor || "#FFFFFF")
       .graphData(this.data)
-      .nodeVal((node: GraphNode) => node.size ?? NODE_SIZE / 2)
+      .nodeVal((node: GraphNode) => (node.size ?? NODE_SIZE) / 2)
       .nodeCanvasObjectMode(() => this.nodeMode)
       .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
@@ -659,11 +659,11 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.fillStyle = node.color;
 
     ctx.beginPath();
-    ctx.arc(node.x, node.y, NODE_SIZE - ctx.lineWidth, 0, 2 * Math.PI, false);
+    ctx.arc(node.x, node.y, (node.size ?? NODE_SIZE) - ctx.lineWidth, 0, 2 * Math.PI, false);
     ctx.fill();
 
     ctx.beginPath();
-    ctx.arc(node.x, node.y, NODE_SIZE + ctx.lineWidth, 0, 2 * Math.PI, false);
+    ctx.arc(node.x, node.y, (node.size ?? NODE_SIZE) + ctx.lineWidth, 0, 2 * Math.PI, false);
     ctx.stroke();
 
     // Draw text

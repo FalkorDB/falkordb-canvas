@@ -101,22 +101,43 @@
 
   <!-- Import the web component -->
   <script type="module">
-    import FalkorDBCanvas from '../dist/falkordb-canvas.js';
-    // Sample data
-    const sampleData = {
-      nodes: [
-        { id: 1, labels: ['Person'], color: '#FF6B6B', visible: true, data: { name: 'Alice', age: 30 } },
-        { id: 2, labels: ['Person'], color: '#4ECDC4', visible: true, data: { name: 'Bob', age: 25 } },
-        { id: 3, labels: ['Person'], color: '#45B7D1', visible: true, data: { name: 'Charlie', age: 35 } },
-        { id: 4, labels: ['Company'], color: '#FFA07A', visible: true, data: { name: 'TechCorp' } },
-      ],
-      links: [
-        { id: 1, relationship: 'KNOWS', color: '#999', source: 1, target: 2, visible: true, data: {} },
-        { id: 2, relationship: 'WORKS_AT', color: '#999', source: 1, target: 4, visible: true, data: {} },
-        { id: 3, relationship: 'WORKS_AT', color: '#999', source: 2, target: 4, visible: true, data: {} },
-        { id: 4, relationship: 'KNOWS', color: '#999', source: 2, target: 3, visible: true, data: {} },
-      ]
-    };
+    import 'https://cdn.jsdelivr.net/npm/@falkordb/canvas@latest/dist/index.js';
+
+    const TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwNjM0MGRiNy1mMjJmLTRlZWItODA1YS0xZDdmMjI1MjhhOWYiLCJqdGkiOiIxNzY3MjY1OTg3Njc2LTAxOGRmNzIwLTdkMGEtNDU2Ni05MDljLWQ1MzRkYjBjODQzMSIsInVzZXJuYW1lIjoiZGVmYXVsdCIsInJvbGUiOiJBZG1pbiIsImhvc3QiOiJsb2NhbGhvc3QiLCJwb3J0Ijo2Mzc5LCJ0bHMiOmZhbHNlLCJjYSI6InVuZGVmaW5lZCIsImlhdCI6MTc2NzI2NTk4N30.KXTJtYfZtoP4Oju77EHXRlqThEllHdZ2CfHjYpgf3AA';
+    const graphName = 'NETIT'; // Replace with actual graph name
+
+    // Fetch graph data with a query
+    const query = 'MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN n LIMIT 100'; // Your Cypher query
+    const response = await fetch(`http://localhost:3000/api/graph/${graphName}?query=${encodeURIComponent(query)}`, {
+      headers: {
+        'Authorization': TOKEN
+      }
+    });
+
+    // The response is a Server-Sent Events stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    let result = '';
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      result += decoder.decode(value);
+    }
+
+    // Parse the SSE events to get your data
+    const events = result.split('\n\n').filter(e => e.trim());
+    const sampleData = events.map(event => {
+      if (event.startsWith('event: error')) {
+        const dataLine = event.split('\n').find(l => l.startsWith('data:'));
+        console.error('Error:', JSON.parse(dataLine.substring(5)));
+      } else if (event.startsWith('data:')) {
+        const data = JSON.parse(event.substring(5));
+        console.log('Query result:', data);
+        return data;
+      }
+    });
 
     const displayTextPriority = [
       { name: 'name', ignore: false },

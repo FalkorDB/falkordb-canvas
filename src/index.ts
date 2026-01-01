@@ -1,6 +1,6 @@
-import FalkorDBCanvas from "./canvas";
+import FalkorDBCanvas from "./canvas.js";
 import type React from "react";
-import type { CanvasRenderMode } from "./canvas-types";
+import type { CanvasRenderMode } from "./canvas-types.js";
 
 declare global {
   interface HTMLElementTagNameMap {
@@ -40,7 +40,7 @@ export type {
   ViewportState,
   ForceGraphInstance,
   Transform,
-} from "./canvas-types";
+} from "./canvas-types.js";
 
 // Utils
 export {
@@ -49,4 +49,4 @@ export {
   getNodeDisplayText,
   getNodeDisplayKey,
   wrapTextForCircularNode,
-} from "./canvas-utils";
+} from "./canvas-utils.js";

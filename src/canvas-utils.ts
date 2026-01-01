@@ -74,7 +74,7 @@ export const getNodeDisplayText = (
   displayTextPriority: TextPriority[]
 ) => {
   if (node.caption && node.caption.trim().length > 0) {
-    return node.caption;
+    return node.data[node.caption];
   }
   
   const { data: nodeData } = node;
