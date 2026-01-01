@@ -101,41 +101,147 @@
 
   <!-- Import the web component -->
   <script type="module">
-    import 'https://cdn.jsdelivr.net/npm/@falkordb/canvas@latest/dist/index.js';
+    import 'https://cdn.jsdelivr.net/npm/@falkordb/canvas@0.0.16/dist/index.js';
 
-    const TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwNjM0MGRiNy1mMjJmLTRlZWItODA1YS0xZDdmMjI1MjhhOWYiLCJqdGkiOiIxNzY3MjY1OTg3Njc2LTAxOGRmNzIwLTdkMGEtNDU2Ni05MDljLWQ1MzRkYjBjODQzMSIsInVzZXJuYW1lIjoiZGVmYXVsdCIsInJvbGUiOiJBZG1pbiIsImhvc3QiOiJsb2NhbGhvc3QiLCJwb3J0Ijo2Mzc5LCJ0bHMiOmZhbHNlLCJjYSI6InVuZGVmaW5lZCIsImlhdCI6MTc2NzI2NTk4N30.KXTJtYfZtoP4Oju77EHXRlqThEllHdZ2CfHjYpgf3AA';
-    const graphName = 'NETIT'; // Replace with actual graph name
+    const TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwNjM0MGRiNy1mMjJmLTRlZWItODA1YS0xZDdmMjI1MjhhOWYiLCJqdGkiOiIxNzY3MjY3MjYzOTI4LTEwZmFiMzExLTcxZTgtNDNmYS04MjgxLWM0NmExZDlkMDAyYyIsInVzZXJuYW1lIjoiZGVmYXVsdCIsInJvbGUiOiJBZG1pbiIsImhvc3QiOiJsb2NhbGhvc3QiLCJwb3J0Ijo2Mzc5LCJ0bHMiOmZhbHNlLCJjYSI6InVuZGVmaW5lZCIsImlhdCI6MTc2NzI2NzI2M30.ZK52aFmsNiy5lCmlDeHvm1rkLlzVL6IYIF1iP2ptvrk';
+    const graphName = 'NETIT';
+    const query = 'MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN * LIMIT 100';
 
-    // Fetch graph data with a query
-    const query = 'MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN n LIMIT 100'; // Your Cypher query
-    const response = await fetch(`http://localhost:3000/api/graph/${graphName}?query=${encodeURIComponent(query)}`, {
-      headers: {
-        'Authorization': TOKEN
-      }
-    });
-
-    // The response is a Server-Sent Events stream
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    let result = '';
+    const url = `http://localhost:3000/api/graph/${graphName}?query=${encodeURIComponent(query)}`;
     
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      result += decoder.decode(value);
-    }
+    let graphData = { nodes: [], links: [] };
+    
+    // Color palettes
+    const labelColors = {};
+    const relationshipColors = {};
+    const colorPalette = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#96CEB4',
+      '#FFEAA7', '#DFE6E9', '#74B9FF', '#A29BFE', '#FD79A8',
+      '#FDCB6E', '#6C5CE7', '#00B894', '#E17055', '#0984E3'
+    ];
+    let colorIndex = 0;
+    
+    // Helper function to get color for a label
+    const getColorForLabel = (label) => {
+      if (!labelColors[label]) {
+        labelColors[label] = colorPalette[colorIndex % colorPalette.length];
+        colorIndex++;
+      }
+      return labelColors[label];
+    };
+    
+    // Helper function to get color for a relationship type
+    const getColorForRelationship = (type) => {
+      if (!relationshipColors[type]) {
+        relationshipColors[type] = colorPalette[colorIndex % colorPalette.length];
+        colorIndex++;
+      }
+      return relationshipColors[type];
+    };
+    
+    // Use fetch with manual SSE parsing (simpler than polyfill)
+    await new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${TOKEN}`,
+          }
+        });
 
-    // Parse the SSE events to get your data
-    const events = result.split('\n\n').filter(e => e.trim());
-    const sampleData = events.map(event => {
-      if (event.startsWith('event: error')) {
-        const dataLine = event.split('\n').find(l => l.startsWith('data:'));
-        console.error('Error:', JSON.parse(dataLine.substring(5)));
-      } else if (event.startsWith('data:')) {
-        const data = JSON.parse(event.substring(5));
-        console.log('Query result:', data);
-        return data;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Process complete events
+          const events = buffer.split('\n\n');
+          buffer = events.pop(); // Keep incomplete event in buffer
+          
+          for (const event of events) {
+            if (!event.trim()) continue;
+            
+            const lines = event.split('\n');
+            let eventType = '';
+            let data = '';
+            
+            for (const line of lines) {
+              if (line.startsWith('event:')) {
+                eventType = line.substring(6).trim();
+              } else if (line.startsWith('data:')) {
+                data += line.substring(5);
+              }
+            }
+            
+            if (eventType === 'result' && data) {
+              const result = JSON.parse(data);
+              console.log('Query result:', result);
+
+              // Convert to falkordb-canvas format
+              if (result.data && Array.isArray(result.data)) {
+                result.data.forEach(row => {
+                  if (row.n) {
+                    const primaryLabel = row.n.labels[0] || 'Unknown';
+                    const node = {
+                      id: row.n.id,
+                      labels: row.n.labels,
+                      data: row.n.properties,
+                      visible: true,
+                      color: getColorForLabel(primaryLabel)
+                    };
+                    // Avoid duplicates
+                    if (!graphData.nodes.find(n => n.id === node.id)) {
+                      graphData.nodes.push(node);
+                    }
+                  }
+                  // Add target node if present
+                  if (row.m) {
+                    const primaryLabel = row.m.labels[0] || 'Unknown';
+                    const targetNode = {
+                      id: row.m.id,
+                      labels: row.m.labels,
+                      data: row.m.properties,
+                      visible: true,
+                      color: getColorForLabel(primaryLabel)
+                    };
+                    if (!graphData.nodes.find(n => n.id === targetNode.id)) {
+                      graphData.nodes.push(targetNode);
+                    }
+                  }
+                  // Add links if relationship present
+                  if (row.e && row.n && row.m) {
+                    const relType = row.e.relationshipType || 'RELATED';
+                    const link = {
+                      id: row.e.id,
+                      source: row.e.sourceId,
+                      target: row.e.destinationId,
+                      relationship: relType,
+                      data: row.e.properties || {},
+                      color: getColorForRelationship(relType),
+                      visible: true
+                    };
+                    if (!graphData.links.find(l => l.id === link.id)) {
+                      graphData.links.push(link);
+                    }
+                  }
+                });
+              }
+              
+              resolve(result);
+            } else if (eventType === 'error' && data) {
+              const { message } = JSON.parse(data);
+              console.error('Error:', message);
+              reject(new Error(message));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Fetch error:', error);
+        reject(error);
       }
     });
 
@@ -151,8 +257,10 @@
     // Wait for the element to be defined
     await customElements.whenDefined('falkordb-canvas');
 
+    console.log(graphData);
+
     // Set initial data
-    canvas.setData(sampleData);
+    canvas.setData(graphData);
 
     const graphContainer = document.querySelector('.graph-container');
 
@@ -162,6 +270,7 @@
 
     // Set event handlers using setConfig (for callbacks)
     canvas.setConfig({
+      autoStopOnSettle: false,
       onNodeClick: (node, event) => {
         console.log('Node clicked:', node);
         document.getElementById('selected-info').textContent =

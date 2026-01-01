@@ -59,7 +59,7 @@ export type GraphLink = {
   source: GraphNode;
   target: GraphNode;
   visible: boolean;
-  color?: string;
+  color: string;
   curve: number;
   data: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
