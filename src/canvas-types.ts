@@ -5,7 +5,6 @@ export interface ForceGraphConfig {
   height?: number;
   backgroundColor?: string;
   foregroundColor?: string;
-  displayTextPriority?: TextPriority[];
   onNodeClick?: (node: GraphNode, event: MouseEvent) => void;
   onLinkClick?: (link: GraphLink, event: MouseEvent) => void;
   onNodeRightClick?: (node: GraphNode, event: MouseEvent) => void;
@@ -86,11 +85,6 @@ export interface Data {
   nodes: Node[];
   links: Link[];
 }
-
-export type TextPriority = {
-  name: string;
-  ignore: boolean;
-};
 
 export type ViewportState = {
   zoom: number;

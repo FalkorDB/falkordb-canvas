@@ -36,7 +36,6 @@ export type {
   Node,
   Link,
   Data,
-  TextPriority,
   ViewportState,
   ForceGraphInstance,
   Transform,

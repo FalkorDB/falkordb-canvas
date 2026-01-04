@@ -197,11 +197,6 @@ class FalkorDBCanvas extends HTMLElement {
     this.updateCanvasSimulationAttribute(ticks !== 0);
   }
 
-  setDisplayTextPriority(priority: ForceGraphConfig['displayTextPriority']) {
-    this.config.displayTextPriority = priority;
-    this.triggerRender();
-  }
-
   getData(): Data {
     return graphDataToData(this.data);
   }
@@ -471,7 +466,7 @@ class FalkorDBCanvas extends HTMLElement {
       .nodeCanvasObjectMode(() => this.nodeMode)
       .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
-        getNodeDisplayText(node, this.config.displayTextPriority || [])
+        getNodeDisplayText(node)
       )
       .linkLabel((link: GraphLink) => link.relationship)
       .linkDirectionalArrowRelPos(1)
@@ -675,10 +670,7 @@ class FalkorDBCanvas extends HTMLElement {
     let [line1, line2] = node.displayName;
 
     if (!line1 && !line2) {
-      const text = getNodeDisplayText(
-        node,
-        this.config.displayTextPriority || []
-      );
+      const text = getNodeDisplayText(node);
       const textRadius = NODE_SIZE - PADDING / 2;
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
       node.displayName = [line1, line2];

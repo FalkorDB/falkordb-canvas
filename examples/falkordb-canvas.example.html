@@ -102,12 +102,12 @@
   <!-- Import the web component -->
   <script type="module">
     import 'https://cdn.jsdelivr.net/npm/@falkordb/canvas@0.0.16/dist/index.js';
+      
+    const API_TOKEN = 'your-api-token';
+    const graphName = 'your-graph';
+    const query = 'your-query'; // MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN * LIMIT 100
 
-    const TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwNjM0MGRiNy1mMjJmLTRlZWItODA1YS0xZDdmMjI1MjhhOWYiLCJqdGkiOiIxNzY3MjY3MjYzOTI4LTEwZmFiMzExLTcxZTgtNDNmYS04MjgxLWM0NmExZDlkMDAyYyIsInVzZXJuYW1lIjoiZGVmYXVsdCIsInJvbGUiOiJBZG1pbiIsImhvc3QiOiJsb2NhbGhvc3QiLCJwb3J0Ijo2Mzc5LCJ0bHMiOmZhbHNlLCJjYSI6InVuZGVmaW5lZCIsImlhdCI6MTc2NzI2NzI2M30.ZK52aFmsNiy5lCmlDeHvm1rkLlzVL6IYIF1iP2ptvrk';
-    const graphName = 'NETIT';
-    const query = 'MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN * LIMIT 100';
-
-    const url = `http://localhost:3000/api/graph/${graphName}?query=${encodeURIComponent(query)}`;
+    const url = `http://localhost:3000/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
     
     let graphData = { nodes: [], links: [] };
     
@@ -144,7 +144,7 @@
       try {
         const response = await fetch(url, {
           headers: {
-            'Authorization': `Bearer ${TOKEN}`,
+            'Authorization': `Bearer ${API_TOKEN}`,
           }
         });
 
@@ -256,8 +256,6 @@
 
     // Wait for the element to be defined
     await customElements.whenDefined('falkordb-canvas');
-
-    console.log(graphData);
 
     // Set initial data
     canvas.setData(graphData);

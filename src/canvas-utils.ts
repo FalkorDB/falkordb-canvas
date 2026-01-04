@@ -5,7 +5,6 @@ import {
   Link,
   GraphNode,
   GraphLink,
-  TextPriority,
 } from "./canvas-types.js";
 
 /**
@@ -69,40 +68,29 @@ export function graphDataToData(graphData: GraphData): Data {
   return { nodes, links };
 }
 
+const displayTextPriority = [
+  "name",
+  "title",
+  "label",
+];
+
 export const getNodeDisplayText = (
   node: Node,
-  displayTextPriority: TextPriority[]
 ) => {
   if (node.caption && node.caption.trim().length > 0) {
     return node.data[node.caption];
   }
-  
+
   const { data: nodeData } = node;
-  const displayText = displayTextPriority.find(({ name, ignore }) => {
-    const key = ignore
-      ? Object.keys(nodeData).find(
-        (k) => k.toLowerCase() === name.toLowerCase()
-      )
-      : name;
+  const key = displayTextPriority.find((name) => (
+    name &&
+    nodeData[name] &&
+    typeof nodeData[name] === "string" &&
+    nodeData[name].trim().length > 0
+  ));
 
-    return (
-      key &&
-      nodeData[key] &&
-      typeof nodeData[key] === "string" &&
-      nodeData[key].trim().length > 0
-    );
-  });
-
-  if (displayText) {
-    const key = displayText.ignore
-      ? Object.keys(nodeData).find(
-        (k) => k.toLowerCase() === displayText.name.toLowerCase()
-      )
-      : displayText.name;
-
-    if (key) {
-      return String(nodeData[key]);
-    }
+  if (key) {
+    return String(nodeData[key]);
   }
 
   return String(node.id);
@@ -110,37 +98,23 @@ export const getNodeDisplayText = (
 
 export const getNodeDisplayKey = (
   node: Node,
-  displayTextPriority: TextPriority[]
 ) => {
+  if (node.caption && node.caption.trim().length > 0) {
+    return node.caption;
+  }
   const { data: nodeData } = node;
-  const displayText = displayTextPriority.find(({ name, ignore }) => {
-    const key = ignore
-      ? Object.keys(nodeData).find(
-        (k) => k.toLowerCase() === name.toLowerCase()
-      )
-      : name;
+  const key = displayTextPriority.find((name) => (
+    name &&
+    nodeData[name] &&
+    typeof nodeData[name] === "string" &&
+    nodeData[name].trim().length > 0
+  ));
 
-    return (
-      key &&
-      nodeData[key] &&
-      typeof nodeData[key] === "string" &&
-      nodeData[key].trim().length > 0
-    );
-  });
-
-  if (displayText) {
-    const key = displayText.ignore
-      ? Object.keys(nodeData).find(
-        (k) => k.toLowerCase() === displayText.name.toLowerCase()
-      )
-      : displayText.name;
-
-    if (key) {
-      return key;
-    }
+  if (key) {
+    return key;
   }
 
-  return String(node.id);
+  return "id";
 };
 
 /**
