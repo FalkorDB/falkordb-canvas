@@ -99,6 +99,9 @@ export const getNodeDisplayText = (
 export const getNodeDisplayKey = (
   node: Node,
 ) => {
+  if (node.caption && node.caption.trim().length > 0) {
+    return node.caption;
+  }
   const { data: nodeData } = node;
   const key = displayTextPriority.find((name) => (
     name &&
@@ -111,7 +114,7 @@ export const getNodeDisplayKey = (
     return key;
   }
 
-  return String(node.id);
+  return "id";
 };
 
 /**
