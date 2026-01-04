@@ -38,7 +38,7 @@ export type GraphNode = NodeObject & {
   visible: boolean;
   displayName: [string, string];
   color: string;
-  size?: number;
+  size: number;
   caption?: string;
   data: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,8 +73,10 @@ export interface GraphData {
 
 export type Node = Omit<
   GraphNode,
-  "x" | "y" | "vx" | "vy" | "fx" | "fy" | "displayName"
->;
+  "x" | "y" | "vx" | "vy" | "fx" | "fy" | "displayName" | "size"
+> & {
+  size?: number;
+}
 
 export type Link = Omit<GraphLink, "curve" | "source" | "target"> & {
   source: number;

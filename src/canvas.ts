@@ -81,7 +81,7 @@ class FalkorDBCanvas extends HTMLElement {
 
   private config: ForceGraphConfig = {};
 
-  private nodeMode: CanvasRenderMode = 'after';
+  private nodeMode: CanvasRenderMode = 'replace';
 
   private linkMode: CanvasRenderMode = 'after';
 
@@ -462,7 +462,7 @@ class FalkorDBCanvas extends HTMLElement {
       .height(this.config.height || 600)
       .backgroundColor(this.config.backgroundColor || "#FFFFFF")
       .graphData(this.data)
-      .nodeVal((node: GraphNode) => (node.size ?? NODE_SIZE) / 2)
+      .nodeVal((node: GraphNode) => node.size)
       .nodeCanvasObjectMode(() => this.nodeMode)
       .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
@@ -617,8 +617,8 @@ class FalkorDBCanvas extends HTMLElement {
       "collision",
       d3
         .forceCollide((node: GraphNode) => {
-          // Use node.size as base, or default to NODE_SIZE
-          const baseSize = node.size ?? NODE_SIZE;
+          // Use node.size as base
+          const baseSize = node.size;
 
           // Add extra radius based on node degree (connections)
           const degree = this.nodeDegreeMap.get(node.id) || 0;
@@ -653,7 +653,7 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.strokeStyle = this.config.foregroundColor || "#1A1A1A";
     ctx.fillStyle = node.color;
 
-    const radius = (node.size ?? NODE_SIZE) - ctx.lineWidth / 2;
+    const radius = node.size;
 
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);

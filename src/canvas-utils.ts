@@ -7,6 +7,8 @@ import {
   GraphLink,
 } from "./canvas-types.js";
 
+const DEFAULT_NODE_SIZE = 6;
+
 /**
  * Converts Data format to GraphData format
  * Adds runtime properties (x, y, vx, vy, fx, fy, displayName, curve)
@@ -14,6 +16,7 @@ import {
 export function dataToGraphData(data: Data): GraphData {
   const nodes: GraphNode[] = data.nodes.map((node) => ({
     ...node,
+    size: node.size ?? DEFAULT_NODE_SIZE,
     displayName: ["", ""] as [string, string],
     x: undefined,
     y: undefined,
