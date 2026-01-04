@@ -78,7 +78,7 @@ export const getNodeDisplayText = (
   node: Node,
 ) => {
   if (node.caption && node.caption.trim().length > 0) {
-    return node.data[node.caption];
+    return String(node.data[node.caption]);
   }
 
   const { data: nodeData } = node;
