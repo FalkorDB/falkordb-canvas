@@ -653,12 +653,11 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.strokeStyle = this.config.foregroundColor || "#1A1A1A";
     ctx.fillStyle = node.color;
 
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, (node.size ?? NODE_SIZE) - ctx.lineWidth, 0, 2 * Math.PI, false);
-    ctx.fill();
+    const radius = (node.size ?? NODE_SIZE) - ctx.lineWidth / 2;
 
     ctx.beginPath();
-    ctx.arc(node.x, node.y, (node.size ?? NODE_SIZE) + ctx.lineWidth, 0, 2 * Math.PI, false);
+    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+    ctx.fill();
     ctx.stroke();
 
     // Draw text
