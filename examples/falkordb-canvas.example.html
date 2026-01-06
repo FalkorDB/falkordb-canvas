@@ -102,15 +102,31 @@
   <!-- Import the web component -->
   <script type="module">
     import 'https://cdn.jsdelivr.net/npm/@falkordb/canvas@0.0.16/dist/index.js';
-      
+
     const API_TOKEN = 'your-api-token';
     const graphName = 'your-graph';
     const query = 'your-query'; // MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN * LIMIT 100
 
+    // when using localhost, make sure to run the browser with CORS disabled or use a CORS proxy
+    /*
+      // CORS headers helper
+      function corsHeaders() {
+        return {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        };
+      }
+
+      // Handle preflight requests
+      export async function OPTIONS() {
+        return NextResponse.json({}, { headers: corsHeaders() });
+      }
+    */
     const url = `http://localhost:3000/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
-    
+
     let graphData = { nodes: [], links: [] };
-    
+
     // Color palettes
     const labelColors = {};
     const relationshipColors = {};
@@ -120,7 +136,7 @@
       '#FDCB6E', '#6C5CE7', '#00B894', '#E17055', '#0984E3'
     ];
     let colorIndex = 0;
-    
+
     // Helper function to get color for a label
     const getColorForLabel = (label) => {
       if (!labelColors[label]) {
@@ -129,7 +145,7 @@
       }
       return labelColors[label];
     };
-    
+
     // Helper function to get color for a relationship type
     const getColorForRelationship = (type) => {
       if (!relationshipColors[type]) {
@@ -138,7 +154,7 @@
       }
       return relationshipColors[type];
     };
-    
+
     // Use fetch with manual SSE parsing (simpler than polyfill)
     await new Promise(async (resolve, reject) => {
       try {
@@ -155,20 +171,20 @@
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          
+
           buffer += decoder.decode(value, { stream: true });
-          
+
           // Process complete events
           const events = buffer.split('\n\n');
           buffer = events.pop(); // Keep incomplete event in buffer
-          
+
           for (const event of events) {
             if (!event.trim()) continue;
-            
+
             const lines = event.split('\n');
             let eventType = '';
             let data = '';
-            
+
             for (const line of lines) {
               if (line.startsWith('event:')) {
                 eventType = line.substring(6).trim();
@@ -176,7 +192,7 @@
                 data += line.substring(5);
               }
             }
-            
+
             if (eventType === 'result' && data) {
               const result = JSON.parse(data);
               console.log('Query result:', result);
@@ -230,7 +246,7 @@
                   }
                 });
               }
-              
+
               resolve(result);
             } else if (eventType === 'error' && data) {
               const { message } = JSON.parse(data);
@@ -244,12 +260,6 @@
         reject(error);
       }
     });
-
-    const displayTextPriority = [
-      { name: 'name', ignore: false },
-      { name: 'title', ignore: false },
-      { name: 'label', ignore: false },
-    ];
 
     // Get the graph element
     const canvas = document.getElementById('graph');
