@@ -130,59 +130,57 @@ function GraphVisualization() {
 
 ### Configuration Options
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `width` | `number` | Canvas width in pixels |
-| `height` | `number` | Canvas height in pixels |
-| `backgroundColor` | `string` | Background color (hex or CSS color) |
-| `foregroundColor` | `string` | Foreground color for borders and text |
-| `cooldownTicks` | `number \| undefined` | Number of simulation ticks before stopping (undefined = infinite) |
-| `cooldownTime` | `number` | Time in ms for each simulation tick (default: 1000) |
-| `autoStopOnSettle` | `boolean` | Automatically stop simulation when settled (default: true) |
-| `isLoading` | `boolean` | Show/hide loading skeleton |
-| `onNodeClick` | `(node: GraphNode, event: MouseEvent) => void` | Callback when a node is clicked |
-| `onNodeRightClick` | `(node: GraphNode, event: MouseEvent) => void` | Callback when a node is right-clicked |
-| `onLinkClick` | `(link: GraphLink, event: MouseEvent) => void` | Callback when a link is clicked |
-| `onLinkRightClick` | `(link: GraphLink, event: MouseEvent) => void` | Callback when a link is right-clicked |
-| `onNodeHover` | `(node: GraphNode \| null) => void` | Callback when hovering over a node |
-| `onLinkHover` | `(link: GraphLink \| null) => void` | Callback when hovering over a link |
-| `onBackgroundClick` | `(event: MouseEvent) => void` | Callback when clicking the background |
-| `onBackgroundRightClick` | `(event: MouseEvent) => void` | Callback when right-clicking the background |
-| `onZoom` | `(transform: Transform) => void` | Callback when zoom/pan changes |
-| `onEngineStop` | `() => void` | Callback when the force simulation stops |
-| `onLoadingChange` | `(loading: boolean) => void` | Callback when loading state changes |
-| `isNodeSelected` | `(node: GraphNode) => boolean` | Function to determine if a node is selected |
-| `isLinkSelected` | `(link: GraphLink) => boolean` | Function to determine if a link is selected |
-| `node` | `object` | Custom node rendering functions (see Custom Rendering) |
-| `link` | `object` | Custom link rendering functions (see Custom Rendering) |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `width` | `<window width>` | Canvas width in pixels |
+| `height` | `<window height>` | Canvas height in pixels |
+| `backgroundColor` | | Background color (hex or CSS color) |
+| `foregroundColor` | | Foreground color for borders and text |
+| `cooldownTicks` | `undefined` | Number of simulation ticks before stopping (undefined = infinite) |
+| `cooldownTime` | `1000` | Time in ms for each simulation tick |
+| `autoStopOnSettle` | `true` | Automatically stop simulation when settled |
+| `isLoading` | `false` | Show/hide loading skeleton |
+| `onNodeClick` | | Callback when a node is clicked. Signature: `(node: GraphNode, event: MouseEvent) => void` |
+| `onNodeRightClick` | | Callback when a node is right-clicked. Signature: `(node: GraphNode, event: MouseEvent) => void` |
+| `onLinkClick` | | Callback when a link is clicked. Signature: `(link: GraphLink, event: MouseEvent) => void` |
+| `onLinkRightClick` | | Callback when a link is right-clicked. Signature: `(link: GraphLink, event: MouseEvent) => void` |
+| `onNodeHover` | | Callback when hovering over a node. Signature: `(node: GraphNode \| null) => void` |
+| `onLinkHover` | | Callback when hovering over a link. Signature: `(link: GraphLink \| null) => void` |
+| `onBackgroundClick` | | Callback when clicking the background. Signature: `(event: MouseEvent) => void` |
+| `onBackgroundRightClick` | | Callback when right-clicking the background. Signature: `(event: MouseEvent) => void` |
+| `onZoom` | | Callback when zoom/pan changes. Signature: `(transform: Transform) => void` |
+| `onEngineStop` | | Callback when the force simulation stops. Signature: `() => void` |
+| `onLoadingChange` | | Callback when loading state changes. Signature: `(loading: boolean) => void` |
+| `isNodeSelected` | | Function to determine if a node is selected. Signature: `(node: GraphNode) => boolean` |
+| `isLinkSelected` | | Function to determine if a link is selected. Signature: `(link: GraphLink) => boolean` |
+| `node` | | Custom node rendering functions (see Custom Rendering) |
+| `link` | | Custom link rendering functions (see Custom Rendering) |
 
 ### Data Types
 
 #### Node
-```typescript
-{
-  id: number;
-  labels: string[];
-  color: string;
-  visible: boolean;
-  size?: number;              // Optional: node radius (default: 6)
-  caption?: string;           // Optional: property key to use from the data for display text (default: id)
-  data: Record<string, any>;  // Node properties
-}
-```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `id` | *required* | Unique identifier for the node |
+| `labels` | *required* | Array of label names for the node |
+| `color` | *required* | Node color (hex or CSS color) |
+| `visible` | *required* | Whether the node is visible |
+| `size` | `6` | Node radius |
+| `caption` | `'id'` | Property key to use from the data for display text |
+| `data` | *required* | Node properties as key-value pairs |
 
 #### Link
-```typescript
-{
-  id: number;
-  relationship: string;       // Label displayed on the link
-  color: string;
-  source: number;            // Source node ID
-  target: number;            // Target node ID
-  visible: boolean;
-  data: Record<string, any>; // Link properties
-}
-```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `id` | *required* | Unique identifier for the link |
+| `relationship` | *required* | Label displayed on the link |
+| `color` | *required* | Link color (hex or CSS color) |
+| `source` | *required* | Source node ID |
+| `target` | *required* | Target node ID |
+| `visible` | *required* | Whether the link is visible |
+| `data` | *required* | Link properties as key-value pairs |
 
 #### GraphNode
 Internal format with computed properties:
