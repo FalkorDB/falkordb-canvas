@@ -45,6 +45,7 @@ export type {
 export {
   dataToGraphData,
   graphDataToData,
+  getContrastTextColor,
   getNodeDisplayText,
   getNodeDisplayKey,
   wrapTextForCircularNode,

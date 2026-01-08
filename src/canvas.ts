@@ -15,6 +15,7 @@ import {
 } from "./canvas-types.js";
 import {
   dataToGraphData,
+  getContrastTextColor,
   getNodeDisplayText,
   graphDataToData,
   wrapTextForCircularNode,
@@ -81,7 +82,7 @@ class FalkorDBCanvas extends HTMLElement {
 
   private config: ForceGraphConfig = {};
 
-  private nodeMode: CanvasRenderMode = 'replace';
+  private nodeMode: CanvasRenderMode = 'after';
 
   private linkMode: CanvasRenderMode = 'after';
 
@@ -92,8 +93,7 @@ class FalkorDBCanvas extends HTMLElement {
     {
       textWidth: number;
       textHeight: number;
-      textAscent: number;
-      textDescent: number;
+      textYOffset: number;
     }
   > = new Map();
 
@@ -262,7 +262,7 @@ class FalkorDBCanvas extends HTMLElement {
 
     this.calculateNodeDegree();
     this.setupForces();
-    
+
     this.graph
       .graphData(this.data)
       .cooldownTicks(this.config.cooldownTicks ?? Infinity);
@@ -316,9 +316,9 @@ class FalkorDBCanvas extends HTMLElement {
 
   private updateCanvasSimulationAttribute(isRunning: boolean) {
     if (!this.shadowRoot) return;
-    
+
     const canvas = this.shadowRoot.querySelector("canvas") as HTMLCanvasElement;
-    
+
     if (canvas) {
       canvas.setAttribute('data-engine-status', isRunning ? "running" : "stopped");
     }
@@ -462,7 +462,12 @@ class FalkorDBCanvas extends HTMLElement {
       .height(this.config.height || 600)
       .backgroundColor(this.config.backgroundColor || "#FFFFFF")
       .graphData(this.data)
-      .nodeVal((node: GraphNode) => node.size)
+      .nodeRelSize(1)
+      .nodeVal((node: GraphNode) => {
+        const strokeWidth = this.config.isNodeSelected?.(node) ? 1.5 : 1;
+        const radius = node.size + strokeWidth;
+        return radius * radius;  // Return radius squared since force-graph does sqrt(val * relSize)
+      })
       .nodeCanvasObjectMode(() => this.nodeMode)
       .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
@@ -653,15 +658,18 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.strokeStyle = this.config.foregroundColor || "#1A1A1A";
     ctx.fillStyle = node.color;
 
-    const radius = node.size;
+    const radius = node.size + ctx.lineWidth / 2;
 
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
-    ctx.fill();
     ctx.stroke();
 
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, node.size, 0, 2 * Math.PI, false);
+    ctx.fill();
+
     // Draw text
-    ctx.fillStyle = "black";
+    ctx.fillStyle = getContrastTextColor(node.color);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "400 2px SofiaSans";
@@ -747,46 +755,46 @@ class FalkorDBCanvas extends HTMLElement {
 
     ctx.font = "400 2px SofiaSans";
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.textBaseline = "alphabetic";
 
     let cached = this.relationshipsTextCache.get(link.relationship);
 
     if (!cached) {
       const { width, actualBoundingBoxAscent, actualBoundingBoxDescent } =
         ctx.measureText(link.relationship);
+      // Calculate visual center offset from baseline
+      const visualCenter = (actualBoundingBoxAscent - actualBoundingBoxDescent) / 2;
       cached = {
         textWidth: width,
         textHeight: actualBoundingBoxAscent + actualBoundingBoxDescent,
-        textAscent: actualBoundingBoxAscent,
-        textDescent: actualBoundingBoxDescent,
+        textYOffset: visualCenter,
       };
       this.relationshipsTextCache.set(link.relationship, cached);
     }
 
-    const { textWidth, textHeight, textAscent, textDescent } = cached;
+    const { textWidth, textHeight, textYOffset } = cached;
 
     ctx.save();
     ctx.translate(textX, textY);
     ctx.rotate(angle);
 
-    // Draw background
+    // Draw background centered on the link line (y=0)
     ctx.fillStyle = this.config.backgroundColor || "#FFFFFF";
-    const backgroundHeight = textHeight * 0.7;
 
-    // Move background up to align with text that appears at top of bg
-    // Use the actual text metrics to calculate proper vertical offset
-    const bgOffsetY = -(textAscent - textDescent) - 0.18;
+    const bgWidth = textWidth * 0.6;
+    const bgHeight = textHeight * 0.6;
+    // Offset background to match text visual center
+    const bgYOffset = textYOffset - textHeight / 2;
     ctx.fillRect(
-      -textWidth / 2,
-      -backgroundHeight / 2 + bgOffsetY,
-      textWidth,
-      backgroundHeight
+      -bgWidth / 2,
+      bgYOffset,
+      bgWidth,
+      bgHeight
     );
 
-    // Draw text
-    ctx.fillStyle = this.config.foregroundColor || "#1A1A1A";
-    ctx.textBaseline = "middle";
-    ctx.fillText(link.relationship, 0, 0);
+    // Draw text with alphabetic baseline, positioned so visual center is at y=0
+    ctx.fillStyle = getContrastTextColor(this.config.backgroundColor || "#1A1A1A");
+    ctx.fillText(link.relationship, 0, textYOffset);
     ctx.restore();
   }
 
@@ -822,7 +830,7 @@ class FalkorDBCanvas extends HTMLElement {
         // Stop the simulation
         this.config.cooldownTicks = 0;
         this.graph.cooldownTicks(0);
-        
+
         // Update simulation state
         this.updateCanvasSimulationAttribute(false);
       }, 1000);
@@ -923,7 +931,7 @@ class FalkorDBCanvas extends HTMLElement {
 
   private updateTooltipStyles() {
     if (!this.shadowRoot) return;
-    
+
     const existingStyle = this.shadowRoot.querySelector('style');
     if (existingStyle) {
       const newStyle = createStyles(this.config.backgroundColor, this.config.foregroundColor);
