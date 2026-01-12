@@ -36,13 +36,23 @@ export function dataToGraphData(data: Data): GraphData {
     const sourceNode = nodeMap.get(link.source);
     const targetNode = nodeMap.get(link.target);
 
+    if (!sourceNode) {
+      console.error(`Link with id ${link.id} has invalid source node ${link.source}.`);
+    }
+    
+    if (!targetNode) {
+      console.error(`Link with id ${link.id} has invalid target node ${link.target}.`);
+    }
+
+    if (!sourceNode || !targetNode) return
+
     return {
       ...link,
-      source: sourceNode!,
-      target: targetNode!,
+      source: sourceNode,
+      target: targetNode,
       curve: 0,
     };
-  });
+  }).filter((link) => link !== undefined);
 
   return { nodes, links };
 }
