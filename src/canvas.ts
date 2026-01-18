@@ -12,6 +12,7 @@ import {
   ViewportState,
   Transform,
   CanvasRenderMode,
+  InternalForceGraphConfig,
 } from "./canvas-types.js";
 import {
   dataToGraphData,
@@ -37,7 +38,7 @@ const DEGREE_STRENGTH_DECAY = 15;
 const CROWDING_THRESHOLD = 20;
 
 // Create styles for the web component
-function createStyles(backgroundColor?: string, foregroundColor?: string): HTMLStyleElement {
+function createStyles(backgroundColor: string, foregroundColor: string): HTMLStyleElement {
   const style = document.createElement("style");
   style.textContent = `
     :host {
@@ -57,8 +58,8 @@ function createStyles(backgroundColor?: string, foregroundColor?: string): HTMLS
     .float-tooltip-kap {
       position: absolute;
       pointer-events: none;
-      background-color: ${backgroundColor || '#FFFFFF'};
-      color: ${foregroundColor || '#000000'};
+      background-color: ${backgroundColor};
+      color: ${foregroundColor};
       padding: 4px 8px;
       border-radius: 4px;
       font-size: 12px;
@@ -80,7 +81,10 @@ class FalkorDBCanvas extends HTMLElement {
 
   private data: GraphData = { nodes: [], links: [] };
 
-  private config: ForceGraphConfig = {};
+  private config: InternalForceGraphConfig = {
+    backgroundColor: '#FFFFFF',
+    foregroundColor: '#1A1A1A',
+  };
 
   private nodeMode: CanvasRenderMode = 'after';
 
@@ -353,7 +357,7 @@ class FalkorDBCanvas extends HTMLElement {
       display: none;
       align-items: center;
       justify-content: center;
-      background: ${this.config.backgroundColor || "#FFFFFF"};
+      background: ${this.config.backgroundColor};
       z-index: 10;
     `;
 
@@ -460,7 +464,7 @@ class FalkorDBCanvas extends HTMLElement {
     this.graph = (ForceGraph as any)()(this.container)
       .width(this.config.width || 800)
       .height(this.config.height || 600)
-      .backgroundColor(this.config.backgroundColor || "#FFFFFF")
+      .backgroundColor(this.config.backgroundColor)
       .graphData(this.data)
       .nodeRelSize(1)
       .nodeVal((node: GraphNode) => {
@@ -655,7 +659,7 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     ctx.lineWidth = this.config.isNodeSelected?.(node) ? 1.5 : 1;
-    ctx.strokeStyle = this.config.foregroundColor || "#1A1A1A";
+    ctx.strokeStyle = this.config.foregroundColor;
     ctx.fillStyle = node.color;
 
     const radius = node.size + ctx.lineWidth / 2;
@@ -779,7 +783,7 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.rotate(angle);
 
     // Draw background centered on the link line (y=0)
-    ctx.fillStyle = this.config.backgroundColor || "#FFFFFF";
+    ctx.fillStyle = this.config.backgroundColor;
 
     const bgWidth = textWidth * 0.6;
     const bgHeight = textHeight * 0.6;
@@ -793,7 +797,7 @@ class FalkorDBCanvas extends HTMLElement {
     );
 
     // Draw text with alphabetic baseline, positioned so visual center is at y=0
-    ctx.fillStyle = getContrastTextColor(this.config.backgroundColor || "#1A1A1A");
+    ctx.fillStyle = getContrastTextColor(this.config.backgroundColor);
     ctx.fillText(link.relationship, 0, textYOffset);
     ctx.restore();
   }
