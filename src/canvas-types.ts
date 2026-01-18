@@ -32,6 +32,11 @@ export interface ForceGraphConfig {
   };
 }
 
+export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor'> {
+  backgroundColor: string;
+  foregroundColor: string;
+}
+
 export type GraphNode = NodeObject & {
   id: number;
   labels: string[];
