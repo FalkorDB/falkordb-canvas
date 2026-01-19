@@ -35,7 +35,7 @@ const CHARGE_STRENGTH = -5;
 const CENTER_STRENGTH = 0.4;
 const HIGH_DEGREE_PADDING = 1.25;
 const DEGREE_STRENGTH_DECAY = 15;
-const CROWDING_THRESHOLD = 20;
+const CROWDING_THRESHOLD = 10;
 
 // Create styles for the web component
 function createStyles(backgroundColor: string, foregroundColor: string): HTMLStyleElement {
@@ -594,7 +594,13 @@ class FalkorDBCanvas extends HTMLElement {
             MAX_LINK_DISTANCE - LINK_DISTANCE,
             (maxDegree - CROWDING_THRESHOLD) * 1.5
           );
-          return LINK_DISTANCE + extraDistance;
+          const sumDegree = LINK_DISTANCE + extraDistance;
+          
+          if (sourceDegree >= CROWDING_THRESHOLD && targetDegree >= CROWDING_THRESHOLD) {
+            return sumDegree * 2;
+          }
+          
+          return sumDegree;
         }
 
         return LINK_DISTANCE;
