@@ -491,7 +491,7 @@ class FalkorDBCanvas extends HTMLElement {
       .linkVisibility("visible")
       .nodeVisibility("visible")
       .cooldownTicks(this.config.cooldownTicks ?? Infinity) // undefined = infinite
-      .cooldownTime(this.config.cooldownTime ?? 1000)
+      .cooldownTime(this.config.cooldownTime ?? 2000)
       .enableNodeDrag(true)
       .enableZoomInteraction(true)
       .enablePanInteraction(true)
