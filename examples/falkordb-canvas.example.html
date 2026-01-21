@@ -103,6 +103,69 @@
   <script type="module">
     import 'https://cdn.jsdelivr.net/npm/@falkordb/canvas@0.0.16/dist/index.js';
 
+    // Define control functions FIRST so they're available immediately for onclick handlers
+    let canvas;
+    let nodeCounter = 1;
+    let linkCounter = 1;
+
+    window.addNode = () => {
+      if (!canvas) {
+        alert('Graph not loaded yet, please wait...');
+        return;
+      }
+      const data = canvas.getData();
+      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#96CEB4'];
+      data.nodes.push({
+        id: nodeCounter,
+        labels: ['Person'],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        visible: true,
+        data: { name: `Person ${nodeCounter}` }
+      });
+      nodeCounter++;
+      canvas.setData(data);
+    };
+
+    window.addLink = () => {
+      if (!canvas) {
+        alert('Graph not loaded yet, please wait...');
+        return;
+      }
+      const data = canvas.getData();
+      if (data.nodes.length < 2) {
+        alert('Need at least 2 nodes to create a link');
+        return;
+      }
+      const sourceIdx = Math.floor(Math.random() * data.nodes.length);
+      let targetIdx = Math.floor(Math.random() * data.nodes.length);
+      while (targetIdx === sourceIdx && data.nodes.length > 1) {
+        targetIdx = Math.floor(Math.random() * data.nodes.length);
+      }
+      data.links.push({
+        id: linkCounter,
+        relationship: 'CONNECTS',
+        color: '#999',
+        source: data.nodes[sourceIdx].id,
+        target: data.nodes[targetIdx].id,
+        visible: true,
+        data: {}
+      });
+      linkCounter++;
+      canvas.setData(data);
+    };
+
+    let isLoading = false;
+    window.toggleLoading = () => {
+      if (!canvas) {
+        alert('Graph not loaded yet, please wait...');
+        return;
+      }
+      isLoading = !isLoading;
+      canvas.setIsLoading(isLoading);
+      canvas.setCooldownTicks(isLoading ? undefined : 300);
+    };
+
+    // Now load the graph data
     const API_TOKEN = 'your-api-token';
     const graphName = 'your-graph';
     const query = 'your-query'; // MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN * LIMIT 100
@@ -155,114 +218,118 @@
       return relationshipColors[type];
     };
 
-    // Use fetch with manual SSE parsing (simpler than polyfill)
-    await new Promise(async (resolve, reject) => {
-      try {
-        const response = await fetch(url, {
-          headers: {
-            'Authorization': `Bearer ${API_TOKEN}`,
-          }
-        });
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          // Process complete events
-          const events = buffer.split('\n\n');
-          buffer = events.pop(); // Keep incomplete event in buffer
-
-          for (const event of events) {
-            if (!event.trim()) continue;
-
-            const lines = event.split('\n');
-            let eventType = '';
-            let data = '';
-
-            for (const line of lines) {
-              if (line.startsWith('event:')) {
-                eventType = line.substring(6).trim();
-              } else if (line.startsWith('data:')) {
-                data += line.substring(5);
-              }
+    try {
+      // Use fetch with manual SSE parsing (simpler than polyfill)
+      await new Promise(async (resolve, reject) => {
+        try {
+          const response = await fetch(url, {
+            headers: {
+              'Authorization': `Bearer ${API_TOKEN}`,
             }
+          });
 
-            if (eventType === 'result' && data) {
-              const result = JSON.parse(data);
-              console.log('Query result:', result);
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
 
-              // Convert to falkordb-canvas format
-              if (result.data && Array.isArray(result.data)) {
-                result.data.forEach(row => {
-                  if (row.n) {
-                    const primaryLabel = row.n.labels[0] || 'Unknown';
-                    const node = {
-                      id: row.n.id,
-                      labels: row.n.labels,
-                      data: row.n.properties,
-                      visible: true,
-                      color: getColorForLabel(primaryLabel)
-                    };
-                    // Avoid duplicates
-                    if (!graphData.nodes.find(n => n.id === node.id)) {
-                      graphData.nodes.push(node);
-                    }
-                  }
-                  // Add target node if present
-                  if (row.m) {
-                    const primaryLabel = row.m.labels[0] || 'Unknown';
-                    const targetNode = {
-                      id: row.m.id,
-                      labels: row.m.labels,
-                      data: row.m.properties,
-                      visible: true,
-                      color: getColorForLabel(primaryLabel)
-                    };
-                    if (!graphData.nodes.find(n => n.id === targetNode.id)) {
-                      graphData.nodes.push(targetNode);
-                    }
-                  }
-                  // Add links if relationship present
-                  if (row.e && row.n && row.m) {
-                    const relType = row.e.relationshipType || 'RELATED';
-                    const link = {
-                      id: row.e.id,
-                      source: row.e.sourceId,
-                      target: row.e.destinationId,
-                      relationship: relType,
-                      data: row.e.properties || {},
-                      color: getColorForRelationship(relType),
-                      visible: true
-                    };
-                    if (!graphData.links.find(l => l.id === link.id)) {
-                      graphData.links.push(link);
-                    }
-                  }
-                });
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process complete events
+            const events = buffer.split('\n\n');
+            buffer = events.pop(); // Keep incomplete event in buffer
+
+            for (const event of events) {
+              if (!event.trim()) continue;
+
+              const lines = event.split('\n');
+              let eventType = '';
+              let data = '';
+
+              for (const line of lines) {
+                if (line.startsWith('event:')) {
+                  eventType = line.substring(6).trim();
+                } else if (line.startsWith('data:')) {
+                  data += line.substring(5);
+                }
               }
 
-              resolve(result);
-            } else if (eventType === 'error' && data) {
-              const { message } = JSON.parse(data);
-              console.error('Error:', message);
-              reject(new Error(message));
+              if (eventType === 'result' && data) {
+                const result = JSON.parse(data);
+                console.log('Query result:', result);
+
+                // Convert to falkordb-canvas format
+                if (result.data && Array.isArray(result.data)) {
+                  result.data.forEach(row => {
+                    if (row.n) {
+                      const primaryLabel = row.n.labels[0] || 'Unknown';
+                      const node = {
+                        id: row.n.id,
+                        labels: row.n.labels,
+                        data: row.n.properties,
+                        visible: true,
+                        color: getColorForLabel(primaryLabel)
+                      };
+                      // Avoid duplicates
+                      if (!graphData.nodes.find(n => n.id === node.id)) {
+                        graphData.nodes.push(node);
+                      }
+                    }
+                    // Add target node if present
+                    if (row.m) {
+                      const primaryLabel = row.m.labels[0] || 'Unknown';
+                      const targetNode = {
+                        id: row.m.id,
+                        labels: row.m.labels,
+                        data: row.m.properties,
+                        visible: true,
+                        color: getColorForLabel(primaryLabel)
+                      };
+                      if (!graphData.nodes.find(n => n.id === targetNode.id)) {
+                        graphData.nodes.push(targetNode);
+                      }
+                    }
+                    // Add links if relationship present
+                    if (row.e && row.n && row.m) {
+                      const relType = row.e.relationshipType || 'RELATED';
+                      const link = {
+                        id: row.e.id,
+                        source: row.e.sourceId,
+                        target: row.e.destinationId,
+                        relationship: relType,
+                        data: row.e.properties || {},
+                        color: getColorForRelationship(relType),
+                        visible: true
+                      };
+                      if (!graphData.links.find(l => l.id === link.id)) {
+                        graphData.links.push(link);
+                      }
+                    }
+                  });
+                }
+
+                resolve(result);
+              } else if (eventType === 'error' && data) {
+                const { message } = JSON.parse(data);
+                console.error('Error:', message);
+                reject(new Error(message));
+              }
             }
           }
+        } catch (error) {
+          console.error('Fetch error:', error);
+          reject(error);
         }
-      } catch (error) {
-        console.error('Fetch error:', error);
-        reject(error);
-      }
-    });
+      });
+    } catch (error) {
+      alert(error.message);
+    }
 
     // Get the graph element
-    const canvas = document.getElementById('graph');
+    canvas = document.getElementById('graph');
 
     // Wait for the element to be defined
     await customElements.whenDefined('falkordb-canvas');
@@ -317,55 +384,9 @@
       isLinkSelected: (link) => false,
     });
 
-    // Control functions
-    let nodeCounter = 5;
-    let linkCounter = 5;
-
-    window.addNode = () => {
-      const data = canvas.getData();
-      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#96CEB4'];
-      data.nodes.push({
-        id: nodeCounter,
-        labels: ['Person'],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        visible: true,
-        data: { name: `Person ${nodeCounter}` }
-      });
-      nodeCounter++;
-      canvas.setData(data);
-    };
-
-    window.addLink = () => {
-      const data = canvas.getData();
-      if (data.nodes.length < 2) {
-        alert('Need at least 2 nodes to create a link');
-        return;
-      }
-      const sourceIdx = Math.floor(Math.random() * data.nodes.length);
-      let targetIdx = Math.floor(Math.random() * data.nodes.length);
-      while (targetIdx === sourceIdx && data.nodes.length > 1) {
-        targetIdx = Math.floor(Math.random() * data.nodes.length);
-      }
-      data.links.push({
-        id: linkCounter,
-        relationship: 'CONNECTS',
-        color: '#999',
-        source: data.nodes[sourceIdx].id,
-        target: data.nodes[targetIdx].id,
-        visible: true,
-        data: {}
-      });
-      linkCounter++;
-      canvas.setData(data);
-    };
-
-    let isLoading = false;
-    window.toggleLoading = () => {
-      isLoading = !isLoading;
-      // Use individual setters for better performance
-      canvas.setIsLoading(isLoading);
-      canvas.setCooldownTicks(isLoading ? undefined : 300);
-    };
+    // Update counters based on loaded data
+    nodeCounter = Math.max(...graphData.nodes.map(n => n.id), 0) + 1;
+    linkCounter = Math.max(...graphData.links.map(l => l.id), 0) + 1;
   </script>
 </body>
 
