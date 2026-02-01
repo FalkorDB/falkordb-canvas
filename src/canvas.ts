@@ -595,11 +595,11 @@ class FalkorDBCanvas extends HTMLElement {
             (maxDegree - CROWDING_THRESHOLD) * 1.5
           );
           const sumDegree = LINK_DISTANCE + extraDistance;
-          
+
           if (sourceDegree >= CROWDING_THRESHOLD && targetDegree >= CROWDING_THRESHOLD) {
             return sumDegree * 2;
           }
-          
+
           return sumDegree;
         }
 

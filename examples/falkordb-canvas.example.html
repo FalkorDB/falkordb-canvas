@@ -170,23 +170,7 @@
     const graphName = 'your-graph';
     const query = 'your-query'; // MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN * LIMIT 100
 
-    // when using localhost, make sure to run the browser with CORS disabled or use a CORS proxy
-    /*
-      // CORS headers helper
-      function corsHeaders() {
-        return {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        };
-      }
-
-      // Handle preflight requests
-      export async function OPTIONS() {
-        return NextResponse.json({}, { headers: corsHeaders() });
-      }
-    */
-    const url = `http://localhost:3000/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
+    const url = `https://browser.falkordb.com/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
 
     let graphData = { nodes: [], links: [] };
 
@@ -223,6 +207,7 @@
       await new Promise(async (resolve, reject) => {
         try {
           const response = await fetch(url, {
+            method: 'GET',
             headers: {
               'Authorization': `Bearer ${API_TOKEN}`,
             }
@@ -345,6 +330,7 @@
 
     // Set event handlers using setConfig (for callbacks)
     canvas.setConfig({
+      cooldownTicks: undefined,
       autoStopOnSettle: false,
       onNodeClick: (node, event) => {
         console.log('Node clicked:', node);
