@@ -259,9 +259,6 @@ class FalkorDBCanvas extends HTMLElement {
   setGraphData(data: GraphData) {
     this.data = data;
 
-    this.config.cooldownTicks = 0;
-    this.config.isLoading = false;
-
     if (!this.graph) return;
 
     this.calculateNodeDegree();
@@ -269,15 +266,12 @@ class FalkorDBCanvas extends HTMLElement {
 
     this.graph
       .graphData(this.data)
-      .cooldownTicks(this.config.cooldownTicks ?? Infinity);
 
     if (this.viewport) {
       this.graph.zoom(this.viewport.zoom, 0);
       this.graph.centerAt(this.viewport.centerX, this.viewport.centerY, 0);
       this.viewport = undefined;
     }
-
-    this.updateLoadingState();
   }
 
   getGraph(): ForceGraphInstance | undefined {
