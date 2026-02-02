@@ -835,8 +835,6 @@ class FalkorDBCanvas extends HTMLElement {
     // If already stopped, don't do anything
     if (this.config.cooldownTicks === 0) return;
     
-    console.log(this.config.skipNextZoomToFit);
-
     // Check if we should skip zoom this time
     const shouldSkipZoom = this.config.skipNextZoomToFit === true;
 
