@@ -106,8 +106,10 @@ class FalkorDBCanvas extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+  }
 
-    // Read mode attributes once at initialization
+  connectedCallback() {
+    // Read mode attributes when element is connected to DOM
     const nodeModeAttr = this.getAttribute('node-mode');
     if (nodeModeAttr === 'before' || nodeModeAttr === 'after' || nodeModeAttr === 'replace') {
       this.nodeMode = nodeModeAttr;
@@ -117,9 +119,7 @@ class FalkorDBCanvas extends HTMLElement {
     if (linkModeAttr === 'before' || linkModeAttr === 'after' || linkModeAttr === 'replace') {
       this.linkMode = linkModeAttr;
     }
-  }
 
-  connectedCallback() {
     this.render();
   }
 
@@ -303,6 +303,10 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Use the force-graph's built-in zoomToFit method
     this.graph.zoomToFit(500, padding * paddingMultiplier, filter);
+  }
+
+  public setSkipNextZoomToFit(skip: boolean): void {
+    this.config.skipNextZoomToFit = skip;
   }
 
   private triggerRender() {
@@ -626,16 +630,29 @@ class FalkorDBCanvas extends HTMLElement {
       "collision",
       d3
         .forceCollide((node: GraphNode) => {
-          // Use node.size as base
           const baseSize = node.size;
-
-          // Add extra radius based on node degree (connections)
           const degree = this.nodeDegreeMap.get(node.id) || 0;
+          
+          // For high-degree cluster nodes, create a force radius that matches the link distance
+          // This creates a clean circular boundary where connected nodes form a ring
+          if (degree >= CROWDING_THRESHOLD) {
+            // Calculate the link distance for this node
+            const extraDistance = Math.min(
+              MAX_LINK_DISTANCE - LINK_DISTANCE,
+              (degree - CROWDING_THRESHOLD) * 1.5
+            );
+            const linkDist = LINK_DISTANCE + extraDistance;
+            
+            // Set collision radius to match the link distance minus base size
+            // This allows nodes to settle at exactly the link distance
+            return linkDist - baseSize;
+          }
+          
           return baseSize + Math.sqrt(degree) * HIGH_DEGREE_PADDING;
         })
-        .strength(COLLISION_STRENGTH)
+        .strength(COLLISION_STRENGTH * 1.5)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .iterations(2) as any
+        .iterations(3) as any
     );
 
     // Center force
@@ -817,10 +834,22 @@ class FalkorDBCanvas extends HTMLElement {
 
     // If already stopped, don't do anything
     if (this.config.cooldownTicks === 0) return;
+    
+    console.log(this.config.skipNextZoomToFit);
 
-    const nodeCount = this.data.nodes.length;
-    const paddingMultiplier = nodeCount < 2 ? 4 : 1;
-    this.zoomToFit(paddingMultiplier);
+    // Check if we should skip zoom this time
+    const shouldSkipZoom = this.config.skipNextZoomToFit === true;
+
+    // Reset the flag immediately after checking
+    if (shouldSkipZoom) {
+      this.config.skipNextZoomToFit = false;
+    }
+
+    if (!shouldSkipZoom) {
+      const nodeCount = this.data.nodes.length;
+      const paddingMultiplier = nodeCount < 2 ? 4 : 1;
+      this.zoomToFit(paddingMultiplier);
+    }
 
     // Stop the force simulation after centering (only if autoStopOnSettle is true)
     if (this.config.autoStopOnSettle !== false) {

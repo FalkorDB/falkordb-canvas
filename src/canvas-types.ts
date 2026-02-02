@@ -19,6 +19,7 @@ export interface ForceGraphConfig {
   cooldownTicks?: number | undefined;
   cooldownTime?: number;
   autoStopOnSettle?: boolean;
+  skipNextZoomToFit?: boolean;
   isLinkSelected?: (link: GraphLink) => boolean;
   isNodeSelected?: (node: GraphNode) => boolean;
   isLoading?: boolean;
