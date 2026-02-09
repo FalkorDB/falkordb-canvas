@@ -26,14 +26,14 @@ const NODE_SIZE = 6;
 const PADDING = 2;
 
 // Force constants
-const LINK_DISTANCE = 50;
-const MAX_LINK_DISTANCE = 80;
-const LINK_STRENGTH = 0.5;
-const MIN_LINK_STRENGTH = 0.3;
-const COLLISION_STRENGTH = 1.35;
-const CHARGE_STRENGTH = -5;
-const CENTER_STRENGTH = 0.4;
-const HIGH_DEGREE_PADDING = 1.25;
+const LINK_DISTANCE = 80;
+const MAX_LINK_DISTANCE = 150;
+const LINK_STRENGTH = 0.7;
+const MIN_LINK_STRENGTH = 0.4;
+const COLLISION_STRENGTH = 1.0;
+const CHARGE_STRENGTH = -300;
+const CENTER_STRENGTH = 0.1;
+const HIGH_DEGREE_PADDING = 1.5;
 const DEGREE_STRENGTH_DECAY = 15;
 const CROWDING_THRESHOLD = 10;
 
@@ -632,25 +632,18 @@ class FalkorDBCanvas extends HTMLElement {
         .forceCollide((node: GraphNode) => {
           const baseSize = node.size;
           const degree = this.nodeDegreeMap.get(node.id) || 0;
-          
-          // For high-degree cluster nodes, create a force radius that matches the link distance
-          // This creates a clean circular boundary where connected nodes form a ring
+
+          // For high-degree nodes, increase collision radius to prevent overlap
           if (degree >= CROWDING_THRESHOLD) {
-            // Calculate the link distance for this node
-            const extraDistance = Math.min(
-              MAX_LINK_DISTANCE - LINK_DISTANCE,
-              (degree - CROWDING_THRESHOLD) * 1.5
-            );
-            const linkDist = LINK_DISTANCE + extraDistance;
-            
-            // Set collision radius to match the link distance minus base size
-            // This allows nodes to settle at exactly the link distance
-            return linkDist - baseSize;
+            // Scale collision radius based on degree to create breathing room
+            const degreeMultiplier = 1 + Math.log(degree) / Math.log(CROWDING_THRESHOLD);
+            return baseSize * degreeMultiplier + HIGH_DEGREE_PADDING * Math.sqrt(degree);
           }
-          
-          return baseSize + Math.sqrt(degree) * HIGH_DEGREE_PADDING;
+
+          // For normal nodes, use standard collision with slight padding
+          return baseSize + HIGH_DEGREE_PADDING;
         })
-        .strength(COLLISION_STRENGTH * 1.5)
+        .strength(COLLISION_STRENGTH)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .iterations(3) as any
     );
@@ -664,7 +657,7 @@ class FalkorDBCanvas extends HTMLElement {
     // Charge force
     const chargeForce = this.graph.d3Force("charge");
     if (chargeForce) {
-      chargeForce.strength(CHARGE_STRENGTH).distanceMax(300);
+      chargeForce.strength(CHARGE_STRENGTH);
     }
   }
 
