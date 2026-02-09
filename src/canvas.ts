@@ -26,11 +26,24 @@ const NODE_SIZE = 6;
 const PADDING = 2;
 
 // Force constants
+<<<<<<< HEAD
 const LINK_DISTANCE = 45;
 const CHARGE_STRENGTH = -400;
 const CENTER_STRENGTH = 0.03;
 const VELOCITY_DECAY = 0.4;
 const ALPHA_MIN = 0.05;
+=======
+const LINK_DISTANCE = 50;
+const MAX_LINK_DISTANCE = 80;
+const LINK_STRENGTH = 0.5;
+const MIN_LINK_STRENGTH = 0.3;
+const COLLISION_STRENGTH = 1.35;
+const CHARGE_STRENGTH = -5;
+const CENTER_STRENGTH = 0.4;
+const HIGH_DEGREE_PADDING = 1.25;
+const DEGREE_STRENGTH_DECAY = 15;
+const CROWDING_THRESHOLD = 10;
+>>>>>>> parent of 92ed471 (Fix visual graph clustering issue with improved force simulation)
 
 // Create styles for the web component
 function createStyles(backgroundColor: string, foregroundColor: string): HTMLStyleElement {
@@ -590,8 +603,37 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Collision force - node size + padding
     this.graph.d3Force(
+<<<<<<< HEAD
       "collide",
       d3.forceCollide((node: GraphNode) => node.size + 25)
+=======
+      "collision",
+      d3
+        .forceCollide((node: GraphNode) => {
+          const baseSize = node.size;
+          const degree = this.nodeDegreeMap.get(node.id) || 0;
+          
+          // For high-degree cluster nodes, create a force radius that matches the link distance
+          // This creates a clean circular boundary where connected nodes form a ring
+          if (degree >= CROWDING_THRESHOLD) {
+            // Calculate the link distance for this node
+            const extraDistance = Math.min(
+              MAX_LINK_DISTANCE - LINK_DISTANCE,
+              (degree - CROWDING_THRESHOLD) * 1.5
+            );
+            const linkDist = LINK_DISTANCE + extraDistance;
+            
+            // Set collision radius to match the link distance minus base size
+            // This allows nodes to settle at exactly the link distance
+            return linkDist - baseSize;
+          }
+          
+          return baseSize + Math.sqrt(degree) * HIGH_DEGREE_PADDING;
+        })
+        .strength(COLLISION_STRENGTH * 1.5)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .iterations(3) as any
+>>>>>>> parent of 92ed471 (Fix visual graph clustering issue with improved force simulation)
     );
 
     // Center forces - separate X and Y forces
@@ -608,7 +650,7 @@ class FalkorDBCanvas extends HTMLElement {
     // Charge force
     const chargeForce = this.graph.d3Force("charge");
     if (chargeForce) {
-      chargeForce.strength(CHARGE_STRENGTH);
+      chargeForce.strength(CHARGE_STRENGTH).distanceMax(300);
     }
 
     // Set velocity decay and alpha min
