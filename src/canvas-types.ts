@@ -56,6 +56,7 @@ export type GraphNode = NodeObject & {
   vy?: number;
   fx?: number;
   fy?: number;
+  initialPositionCalculated?: boolean;
 };
 
 export type GraphLink = {
@@ -79,7 +80,7 @@ export interface GraphData {
 
 export type Node = Omit<
   GraphNode,
-  "x" | "y" | "vx" | "vy" | "fx" | "fy" | "displayName" | "size"
+  "x" | "y" | "vx" | "vy" | "fx" | "fy" | "initialPositionCalculated" | "displayName" | "size"
 > & {
   size?: number;
 }

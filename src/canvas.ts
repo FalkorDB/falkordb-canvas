@@ -26,16 +26,11 @@ const NODE_SIZE = 6;
 const PADDING = 2;
 
 // Force constants
-const LINK_DISTANCE = 80;
-const MAX_LINK_DISTANCE = 150;
-const LINK_STRENGTH = 0.7;
-const MIN_LINK_STRENGTH = 0.4;
-const COLLISION_STRENGTH = 1.0;
-const CHARGE_STRENGTH = -300;
-const CENTER_STRENGTH = 0.1;
-const HIGH_DEGREE_PADDING = 1.5;
-const DEGREE_STRENGTH_DECAY = 15;
-const CROWDING_THRESHOLD = 10;
+const LINK_DISTANCE = 45;
+const CHARGE_STRENGTH = -400;
+const CENTER_STRENGTH = 0.03;
+const VELOCITY_DECAY = 0.4;
+const ALPHA_MIN = 0.05;
 
 // Create styles for the web component
 function createStyles(backgroundColor: string, foregroundColor: string): HTMLStyleElement {
@@ -205,9 +200,16 @@ class FalkorDBCanvas extends HTMLElement {
     return graphDataToData(this.data);
   }
 
-
   setData(data: Data) {
-    this.data = dataToGraphData(data);
+    // Create a map of old nodes to preserve positions
+    const oldNodesMap = new Map<number, GraphNode>();
+    this.data.nodes.forEach(node => {
+      oldNodesMap.set(node.id, node);
+    });
+
+    // Convert data and apply circular layout to new nodes only
+    this.data = dataToGraphData(data, undefined, oldNodesMap);
+
     this.config.cooldownTicks = this.data.nodes.length > 0 ? undefined : 0;
     this.config.isLoading = this.data.nodes.length > 0;
     this.config.onLoadingChange?.(this.config.isLoading);
@@ -578,86 +580,45 @@ class FalkorDBCanvas extends HTMLElement {
     if (!linkForce) return;
     if (!this.graph) return;
 
-    // Link force with dynamic distance and strength
+    // distance based on node size + constant
     linkForce
       .distance((link: GraphLink) => {
-        const sourceId = link.source.id;
-        const targetId = link.target.id;
-        const sourceDegree = this.nodeDegreeMap.get(sourceId) || 0;
-        const targetDegree = this.nodeDegreeMap.get(targetId) || 0;
-        const maxDegree = Math.max(sourceDegree, targetDegree);
-
-        if (maxDegree >= CROWDING_THRESHOLD) {
-          const extraDistance = Math.min(
-            MAX_LINK_DISTANCE - LINK_DISTANCE,
-            (maxDegree - CROWDING_THRESHOLD) * 1.5
-          );
-          const sumDegree = LINK_DISTANCE + extraDistance;
-
-          if (sourceDegree >= CROWDING_THRESHOLD && targetDegree >= CROWDING_THRESHOLD) {
-            return sumDegree * 2;
-          }
-
-          return sumDegree;
-        }
-
-        return LINK_DISTANCE;
-      })
-      .strength((link: GraphLink) => {
-        const sourceId = link.source.id;
-        const targetId = link.target.id;
-        const sourceDegree = this.nodeDegreeMap.get(sourceId) || 0;
-        const targetDegree = this.nodeDegreeMap.get(targetId) || 0;
-        const maxDegree = Math.max(sourceDegree, targetDegree);
-
-        if (maxDegree <= DEGREE_STRENGTH_DECAY) {
-          return LINK_STRENGTH;
-        }
-
-        const strengthReduction = Math.max(
-          0,
-          (maxDegree - DEGREE_STRENGTH_DECAY) / DEGREE_STRENGTH_DECAY
-        );
-        const scaledStrength =
-          MIN_LINK_STRENGTH +
-          (LINK_STRENGTH - MIN_LINK_STRENGTH) * Math.exp(-strengthReduction);
-
-        return Math.max(MIN_LINK_STRENGTH, scaledStrength);
+        const sourceSize = link.source.size;
+        const targetSize = link.target.size;
+        return sourceSize + targetSize + LINK_DISTANCE * 2;
       });
 
-    // Collision force
+    // Collision force - node size + padding
     this.graph.d3Force(
-      "collision",
-      d3
-        .forceCollide((node: GraphNode) => {
-          const baseSize = node.size;
-          const degree = this.nodeDegreeMap.get(node.id) || 0;
-
-          // For high-degree nodes, increase collision radius to prevent overlap
-          if (degree >= CROWDING_THRESHOLD) {
-            // Scale collision radius based on degree to create breathing room
-            const degreeMultiplier = 1 + Math.log(degree) / Math.log(CROWDING_THRESHOLD);
-            return baseSize * degreeMultiplier + HIGH_DEGREE_PADDING * Math.sqrt(degree);
-          }
-
-          // For normal nodes, use standard collision with slight padding
-          return baseSize + HIGH_DEGREE_PADDING;
-        })
-        .strength(COLLISION_STRENGTH)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .iterations(3) as any
+      "collide",
+      d3.forceCollide((node: GraphNode) => node.size + 25)
     );
 
-    // Center force
-    const centerForce = this.graph.d3Force("center");
-    if (centerForce) {
-      centerForce.strength(CENTER_STRENGTH);
-    }
+    // Center forces - separate X and Y forces
+    this.graph.d3Force(
+      "centerX",
+      d3.forceX(0).strength(CENTER_STRENGTH)
+    );
+
+    this.graph.d3Force(
+      "centerY",
+      d3.forceY(0).strength(CENTER_STRENGTH)
+    );
 
     // Charge force
     const chargeForce = this.graph.d3Force("charge");
     if (chargeForce) {
       chargeForce.strength(CHARGE_STRENGTH);
+    }
+
+    // Set velocity decay and alpha min
+    // Access the underlying d3 simulation
+    const simulation = this.graph.d3Force('simulation');
+    if (simulation && typeof simulation === 'object') {
+      // @ts-ignore - accessing d3 simulation methods
+      if (simulation.velocityDecay) simulation.velocityDecay(VELOCITY_DECAY);
+      // @ts-ignore
+      if (simulation.alphaMin) simulation.alphaMin(ALPHA_MIN);
     }
   }
 
@@ -827,7 +788,7 @@ class FalkorDBCanvas extends HTMLElement {
 
     // If already stopped, don't do anything
     if (this.config.cooldownTicks === 0) return;
-    
+
     // Check if we should skip zoom this time
     const shouldSkipZoom = this.config.skipNextZoomToFit === true;
 
