@@ -8,23 +8,51 @@ import {
 } from "./canvas-types.js";
 
 const DEFAULT_NODE_SIZE = 6;
+const LINK_DISTANCE = 45;
+
+/**
+ * Applies circular layout to nodes (neo4j-style)
+ * Only positions nodes that haven't been positioned yet
+ */
+function circularLayout(nodes: GraphNode[], center: { x: number; y: number }, radius: number): void {
+  const unlocatedNodes = nodes.filter(node => !node.initialPositionCalculated);
+
+  unlocatedNodes.forEach((node, i) => {
+    node.x = center.x + radius * Math.sin((2 * Math.PI * i) / unlocatedNodes.length);
+    node.y = center.y + radius * Math.cos((2 * Math.PI * i) / unlocatedNodes.length);
+    node.initialPositionCalculated = true;
+  });
+}
 
 /**
  * Converts Data format to GraphData format
  * Adds runtime properties (x, y, vx, vy, fx, fy, displayName, curve)
  */
-export function dataToGraphData(data: Data, position?: { x?: number, y?: number }, oldNodesMap?: Map<number, GraphNode>): GraphData {
-  const nodes: GraphNode[] = data.nodes.map((node) => ({
-    ...node,
-    size: node.size ?? DEFAULT_NODE_SIZE,
-    displayName: ["", ""] as [string, string],
-    x: position?.x,
-    y: position?.y,
-    vx: undefined,
-    vy: undefined,
-    fx: undefined,
-    fy: undefined,
-  }));
+export function dataToGraphData(
+  data: Data, 
+  position?: { x?: number, y?: number }, 
+  oldNodesMap?: Map<number, GraphNode>
+): GraphData {
+  const nodes: GraphNode[] = data.nodes.map((node) => {
+    const oldNode = oldNodesMap?.get(node.id);
+    return {
+      ...node,
+      size: node.size ?? DEFAULT_NODE_SIZE,
+      displayName: ["", ""] as [string, string],
+      x: oldNode?.x ?? position?.x,
+      y: oldNode?.y ?? position?.y,
+      vx: undefined,
+      vy: undefined,
+      fx: undefined,
+      fy: undefined,
+      initialPositionCalculated: oldNode?.initialPositionCalculated ?? false,
+    };
+  });
+
+  // Apply circular layout to nodes that haven't been positioned yet
+  const radius = (nodes.length * LINK_DISTANCE) / (Math.PI * 2);
+  const center = { x: 0, y: 0 };
+  circularLayout(nodes, center, radius);
 
   // Create a Map for O(1) node lookups by id
   const nodeMap = new Map<number, GraphNode>();
