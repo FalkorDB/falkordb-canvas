@@ -201,14 +201,8 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   setData(data: Data) {
-    // Create a map of old nodes to preserve positions
-    const oldNodesMap = new Map<number, GraphNode>();
-    this.data.nodes.forEach(node => {
-      oldNodesMap.set(node.id, node);
-    });
-
     // Convert data and apply circular layout to new nodes only
-    this.data = dataToGraphData(data, undefined, oldNodesMap);
+    this.data = dataToGraphData(data);
 
     this.config.cooldownTicks = this.data.nodes.length > 0 ? undefined : 0;
     this.config.isLoading = this.data.nodes.length > 0;
