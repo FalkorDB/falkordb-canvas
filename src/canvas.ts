@@ -111,7 +111,8 @@ class FalkorDBCanvas extends HTMLElement {
    */
   setDebug(enabled: boolean) {
     this.debugEnabled = enabled;
-    this.log('Debug mode', enabled ? 'enabled' : 'disabled');
+    // Always use console.log directly for the toggle message so it appears regardless of previous state
+    console.log('[FalkorDBCanvas] Debug mode', enabled ? 'enabled' : 'disabled');
   }
 
   /**
