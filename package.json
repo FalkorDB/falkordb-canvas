@@ -27,7 +27,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/FalkorDB/falkordb-canvas"
+    "url": "git+https://github.com/FalkorDB/falkordb-canvas.git"
   },
   "bugs": {
     "url": "https://github.com/FalkorDB/falkordb-canvas/issues"
