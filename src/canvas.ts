@@ -165,12 +165,6 @@ class FalkorDBCanvas extends HTMLElement {
       config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.node || config.link) {
       this.log('Updating event handlers');
       this.updateEventHandlers();
-
-      // If node or link rendering functions changed, trigger a canvas refresh
-      if (config.node || config.link) {
-        this.log('Triggering render due to node/link config change');
-        this.triggerRender();
-      }
     }
   }
 
