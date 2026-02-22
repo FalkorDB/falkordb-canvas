@@ -121,6 +121,7 @@ function GraphVisualization() {
 | **setForegroundColor**(*color*) | | Set foreground color for text and borders. |
 | **setIsLoading**(*isLoading*) | | Show/hide loading skeleton. |
 | **setCooldownTicks**(*ticks*) | | Set simulation ticks before stopping (undefined = infinite). |
+| **setDebug**(*enabled*) | `false` | Enable or disable debug logging to console. All log messages are prefixed with `[FalkorDBCanvas]`. |
 | **getViewport**() | | Get current zoom and center position as `ViewportState`. |
 | **setViewport**(*viewport*) | | Restore a previously saved viewport state. |
 | **getZoom**() | | Get current zoom level. |
@@ -363,6 +364,65 @@ while (true) {
 2. **Static graphs**: Set `cooldownTicks: 0` after initial layout
 3. **Custom rendering**: Optimize your custom `nodeCanvasObject` and `linkCanvasObject` functions
 4. **Viewport**: Use `getViewport()` and `setViewport()` to preserve user's view when updating data
+
+## Debugging
+
+The canvas component includes a debug logging system that can be enabled to help troubleshoot issues or understand the internal behavior of the graph visualization.
+
+### Enable Debug Mode
+
+```typescript
+const canvas = document.getElementById('graph');
+
+// Enable debug logging
+canvas.setDebug(true);
+
+// Disable debug logging
+canvas.setDebug(false);
+```
+
+### Debug Output
+
+When debug mode is enabled, the canvas will log detailed information to the console including:
+
+- Component lifecycle events (connected, disconnected)
+- Data updates (setData, setGraphData)
+- Configuration changes (colors, dimensions, render modes)
+- Force simulation state (initialization, setup, engine stop)
+- Viewport operations (zoom, pan, fit)
+- Loading state transitions
+- Node degree calculations
+- Canvas resizing
+
+All debug messages are prefixed with `[FalkorDBCanvas]` for easy filtering.
+
+### Example Debug Session
+
+```typescript
+const canvas = document.getElementById('graph');
+canvas.setDebug(true);
+
+canvas.setData({
+  nodes: [{ id: 1, labels: ['Person'], color: '#FF6B6B', visible: true, data: { name: 'Alice' } }],
+  links: []
+});
+
+// Console output:
+// [FalkorDBCanvas] Debug mode enabled
+// [FalkorDBCanvas] setData called with 1 nodes and 0 links
+// [FalkorDBCanvas] Loading state: true
+// [FalkorDBCanvas] Initializing graph
+// [FalkorDBCanvas] Calculating node degrees for 1 nodes
+// [FalkorDBCanvas] Setting up force simulation
+// ... and more
+```
+
+### Tips for Debugging
+
+- Enable debug mode early in development to understand component behavior
+- Use browser console filtering (`[FalkorDBCanvas]`) to focus on canvas logs
+- Debug mode has minimal performance impact but should be disabled in production
+- Combine with browser DevTools to inspect graph state and performance
 
 ## Examples
 
