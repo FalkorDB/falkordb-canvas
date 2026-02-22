@@ -7,3 +7,4 @@ dist/
 *.d.ts
 *.d.ts.map
 !dist/**
+*.dic
