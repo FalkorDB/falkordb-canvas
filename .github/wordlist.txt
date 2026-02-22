@@ -19,3 +19,15 @@ config
 CHANGELOG
 md
 Customizable
+customizable
+TypeScript
+Viewport
+viewport
+GraphNode
+GraphLink
+ViewportState
+DOM
+lifecycle
+setData
+setGraphData
+DevTools

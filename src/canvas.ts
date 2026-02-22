@@ -12,9 +12,11 @@ import {
   ViewportState,
   Transform,
   CanvasRenderMode,
+  InternalForceGraphConfig,
 } from "./canvas-types.js";
 import {
   dataToGraphData,
+  getContrastTextColor,
   getNodeDisplayText,
   graphDataToData,
   wrapTextForCircularNode,
@@ -24,19 +26,14 @@ const NODE_SIZE = 6;
 const PADDING = 2;
 
 // Force constants
-const LINK_DISTANCE = 50;
-const MAX_LINK_DISTANCE = 80;
-const LINK_STRENGTH = 0.5;
-const MIN_LINK_STRENGTH = 0.3;
-const COLLISION_STRENGTH = 1.35;
-const CHARGE_STRENGTH = -5;
-const CENTER_STRENGTH = 0.4;
-const HIGH_DEGREE_PADDING = 1.25;
-const DEGREE_STRENGTH_DECAY = 15;
-const CROWDING_THRESHOLD = 20;
+const LINK_DISTANCE = 45;
+const CHARGE_STRENGTH = -400;
+const CENTER_STRENGTH = 0.03;
+const VELOCITY_DECAY = 0.4;
+const ALPHA_MIN = 0.05;
 
 // Create styles for the web component
-function createStyles(backgroundColor?: string, foregroundColor?: string): HTMLStyleElement {
+function createStyles(backgroundColor: string, foregroundColor: string): HTMLStyleElement {
   const style = document.createElement("style");
   style.textContent = `
     :host {
@@ -56,8 +53,8 @@ function createStyles(backgroundColor?: string, foregroundColor?: string): HTMLS
     .float-tooltip-kap {
       position: absolute;
       pointer-events: none;
-      background-color: ${backgroundColor || '#FFFFFF'};
-      color: ${foregroundColor || '#000000'};
+      background-color: ${backgroundColor};
+      color: ${foregroundColor};
       padding: 4px 8px;
       border-radius: 4px;
       font-size: 12px;
@@ -79,9 +76,16 @@ class FalkorDBCanvas extends HTMLElement {
 
   private data: GraphData = { nodes: [], links: [] };
 
-  private config: ForceGraphConfig = {};
+  private debugEnabled: boolean = false;
 
-  private nodeMode: CanvasRenderMode = 'replace';
+  private config: InternalForceGraphConfig = {
+    backgroundColor: '#FFFFFF',
+    foregroundColor: '#1A1A1A',
+    captionsKeys: [],
+    showPropertyKeyPrefix: false,
+  };
+
+  private nodeMode: CanvasRenderMode = 'after';
 
   private linkMode: CanvasRenderMode = 'after';
 
@@ -92,8 +96,7 @@ class FalkorDBCanvas extends HTMLElement {
     {
       textWidth: number;
       textHeight: number;
-      textAscent: number;
-      textDescent: number;
+      textYOffset: number;
     }
   > = new Map();
 
@@ -102,24 +105,48 @@ class FalkorDBCanvas extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+  }
 
-    // Read mode attributes once at initialization
+  /**
+   * Enable or disable debug logging
+   * @param enabled - Whether to enable debug logs
+   */
+  setDebug(enabled: boolean) {
+    this.debugEnabled = enabled;
+    // Always use console.log directly for the toggle message so it appears regardless of previous state
+    console.log('[FalkorDBCanvas] Debug mode', enabled ? 'enabled' : 'disabled');
+  }
+
+  /**
+   * Internal logging method that only logs when debug is enabled
+   * @param args - Arguments to pass to console.log
+   */
+  private log(...args: unknown[]) {
+    if (this.debugEnabled) {
+      console.log('[FalkorDBCanvas]', ...args);
+    }
+  }
+
+  connectedCallback() {
+    // Read mode attributes when element is connected to DOM
     const nodeModeAttr = this.getAttribute('node-mode');
     if (nodeModeAttr === 'before' || nodeModeAttr === 'after' || nodeModeAttr === 'replace') {
       this.nodeMode = nodeModeAttr;
+      this.log('Node render mode set to:', this.nodeMode);
     }
 
     const linkModeAttr = this.getAttribute('link-mode');
     if (linkModeAttr === 'before' || linkModeAttr === 'after' || linkModeAttr === 'replace') {
       this.linkMode = linkModeAttr;
+      this.log('Link render mode set to:', this.linkMode);
     }
-  }
 
-  connectedCallback() {
+    this.log('Component connected to DOM');
     this.render();
   }
 
   disconnectedCallback() {
+    this.log('Component disconnected from DOM');
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
@@ -131,23 +158,21 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   setConfig(config: Partial<ForceGraphConfig>) {
+    this.log('Setting config:', config);
     Object.assign(this.config, config);
 
     // Update event handlers if they were provided
     if (config.onNodeClick || config.onLinkClick || config.onNodeRightClick || config.onLinkRightClick ||
       config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick || config.onZoom ||
       config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.node || config.link) {
+      this.log('Updating event handlers');
       this.updateEventHandlers();
-
-      // If node or link rendering functions changed, trigger a canvas refresh
-      if (config.node || config.link) {
-        this.triggerRender();
-      }
     }
   }
 
   setWidth(width: number) {
     if (this.config.width === width) return;
+    this.log('Setting width to:', width);
     this.config.width = width;
     if (this.graph) {
       this.graph.width(width);
@@ -156,6 +181,7 @@ class FalkorDBCanvas extends HTMLElement {
 
   setHeight(height: number) {
     if (this.config.height === height) return;
+    this.log('Setting height to:', height);
     this.config.height = height;
     if (this.graph) {
       this.graph.height(height);
@@ -164,6 +190,7 @@ class FalkorDBCanvas extends HTMLElement {
 
   setBackgroundColor(color: string) {
     if (this.config.backgroundColor === color) return;
+    this.log('Setting background color to:', color);
     this.config.backgroundColor = color;
     if (this.graph) {
       this.graph.backgroundColor(color);
@@ -176,6 +203,7 @@ class FalkorDBCanvas extends HTMLElement {
 
   setForegroundColor(color: string) {
     if (this.config.foregroundColor === color) return;
+    this.log('Setting foreground color to:', color);
     this.config.foregroundColor = color;
     this.updateTooltipStyles();
     this.triggerRender();
@@ -183,12 +211,14 @@ class FalkorDBCanvas extends HTMLElement {
 
   setIsLoading(isLoading: boolean) {
     if (this.config.isLoading === isLoading) return;
+    this.log('Setting loading state to:', isLoading);
     this.config.isLoading = isLoading;
     this.updateLoadingState();
   }
 
   setCooldownTicks(ticks: number | undefined) {
     if (this.config.cooldownTicks === ticks) return;
+    this.log('Setting cooldown ticks to:', ticks);
     this.config.cooldownTicks = ticks;
     if (this.graph) {
       this.graph.cooldownTicks(ticks ?? Infinity);
@@ -201,11 +231,14 @@ class FalkorDBCanvas extends HTMLElement {
     return graphDataToData(this.data);
   }
 
-
   setData(data: Data) {
+    this.log('setData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
+    // Convert data and apply circular layout to new nodes only
     this.data = dataToGraphData(data);
+
     this.config.cooldownTicks = this.data.nodes.length > 0 ? undefined : 0;
     this.config.isLoading = this.data.nodes.length > 0;
+    this.log('Loading state:', this.config.isLoading);
     this.config.onLoadingChange?.(this.config.isLoading);
 
     // Update simulation state
@@ -215,11 +248,13 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Initialize graph if it hasn't been initialized yet
     if (!this.graph && this.container) {
+      this.log('Initializing graph');
       this.initGraph();
     }
 
     if (!this.graph) return;
 
+    this.log('Calculating node degrees and setting up forces');
     this.calculateNodeDegree();
     this.setupForces();
 
@@ -237,6 +272,7 @@ class FalkorDBCanvas extends HTMLElement {
     const { x: centerX, y: centerY } = this.graph.centerAt();
     const zoom = this.graph.zoom();
 
+    this.log('Getting viewport - zoom:', zoom, 'center:', centerX, centerY);
     return {
       zoom,
       centerX,
@@ -245,6 +281,7 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   setViewport(viewport: ViewportState) {
+    this.log('Setting viewport:', viewport);
     this.viewport = viewport;
   }
 
@@ -253,27 +290,23 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   setGraphData(data: GraphData) {
+    this.log('setGraphData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
     this.data = data;
-
-    this.config.cooldownTicks = 0;
-    this.config.isLoading = false;
 
     if (!this.graph) return;
 
     this.calculateNodeDegree();
     this.setupForces();
-    
+
     this.graph
       .graphData(this.data)
-      .cooldownTicks(this.config.cooldownTicks ?? Infinity);
 
     if (this.viewport) {
+      this.log('Applying viewport:', this.viewport);
       this.graph.zoom(this.viewport.zoom, 0);
       this.graph.centerAt(this.viewport.centerX, this.viewport.centerY, 0);
       this.viewport = undefined;
     }
-
-    this.updateLoadingState();
   }
 
   getGraph(): ForceGraphInstance | undefined {
@@ -287,6 +320,7 @@ class FalkorDBCanvas extends HTMLElement {
   public zoom(zoomLevel: number): ForceGraphInstance | undefined {
     if (!this.graph) return;
 
+    this.log('Setting zoom level to:', zoomLevel);
     return this.graph.zoom(zoomLevel);
   }
 
@@ -303,6 +337,7 @@ class FalkorDBCanvas extends HTMLElement {
     const minDimension = Math.min(rect.width, rect.height);
     const padding = minDimension * 0.1;
 
+    this.log('Zooming to fit with padding multiplier:', paddingMultiplier, 'padding:', padding * paddingMultiplier);
     // Use the force-graph's built-in zoomToFit method
     this.graph.zoomToFit(500, padding * paddingMultiplier, filter);
   }
@@ -316,15 +351,16 @@ class FalkorDBCanvas extends HTMLElement {
 
   private updateCanvasSimulationAttribute(isRunning: boolean) {
     if (!this.shadowRoot) return;
-    
+
     const canvas = this.shadowRoot.querySelector("canvas") as HTMLCanvasElement;
-    
+
     if (canvas) {
       canvas.setAttribute('data-engine-status', isRunning ? "running" : "stopped");
     }
   }
 
   private calculateNodeDegree() {
+    this.log('Calculating node degrees for', this.data.nodes.length, 'nodes');
     this.nodeDegreeMap.clear();
     const { nodes, links } = this.data;
 
@@ -353,7 +389,7 @@ class FalkorDBCanvas extends HTMLElement {
       display: none;
       align-items: center;
       justify-content: center;
-      background: ${this.config.backgroundColor || "#FFFFFF"};
+      background: ${this.config.backgroundColor};
       z-index: 10;
     `;
 
@@ -415,6 +451,7 @@ class FalkorDBCanvas extends HTMLElement {
   private render() {
     if (!this.shadowRoot) return;
 
+    this.log('Rendering canvas component');
     // Create container
     this.container = document.createElement("div");
     this.container.style.width = "100%";
@@ -437,10 +474,12 @@ class FalkorDBCanvas extends HTMLElement {
   private setupResizeObserver() {
     if (!this.container) return;
 
+    this.log('Setting up resize observer');
     this.resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         if (this.graph && width > 0 && height > 0) {
+          this.log('Container resized to:', width, 'x', height);
           this.graph.width(width).height(height);
         }
       }
@@ -452,6 +491,7 @@ class FalkorDBCanvas extends HTMLElement {
   private initGraph() {
     if (!this.container) return;
 
+    this.log('Initializing force graph with', this.data.nodes.length, 'nodes and', this.data.links.length, 'links');
     this.calculateNodeDegree();
 
     // Initialize force-graph
@@ -460,13 +500,18 @@ class FalkorDBCanvas extends HTMLElement {
     this.graph = (ForceGraph as any)()(this.container)
       .width(this.config.width || 800)
       .height(this.config.height || 600)
-      .backgroundColor(this.config.backgroundColor || "#FFFFFF")
+      .backgroundColor(this.config.backgroundColor)
       .graphData(this.data)
-      .nodeVal((node: GraphNode) => node.size)
+      .nodeRelSize(1)
+      .nodeVal((node: GraphNode) => {
+        const strokeWidth = this.config.isNodeSelected?.(node) ? 1.5 : 1;
+        const radius = node.size + strokeWidth;
+        return radius * radius;  // Return radius squared since force-graph does sqrt(val * relSize)
+      })
       .nodeCanvasObjectMode(() => this.nodeMode)
       .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
-        getNodeDisplayText(node)
+        getNodeDisplayText(node, this.config.captionsKeys, this.config.showPropertyKeyPrefix)
       )
       .linkLabel((link: GraphLink) => link.relationship)
       .linkDirectionalArrowRelPos(1)
@@ -482,7 +527,7 @@ class FalkorDBCanvas extends HTMLElement {
       .linkVisibility("visible")
       .nodeVisibility("visible")
       .cooldownTicks(this.config.cooldownTicks ?? Infinity) // undefined = infinite
-      .cooldownTime(this.config.cooldownTime ?? 1000)
+      .cooldownTime(this.config.cooldownTime ?? 2000)
       .enableNodeDrag(true)
       .enableZoomInteraction(true)
       .enablePanInteraction(true)
@@ -563,83 +608,57 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Setup forces
     this.setupForces();
+    this.log('Force graph initialization complete');
   }
 
   private setupForces() {
+    this.log('Setting up force simulation');
     const linkForce = this.graph?.d3Force("link");
 
     if (!linkForce) return;
     if (!this.graph) return;
 
-    // Link force with dynamic distance and strength
+    // distance based on node size + constant
     linkForce
       .distance((link: GraphLink) => {
-        const sourceId = link.source.id;
-        const targetId = link.target.id;
-        const sourceDegree = this.nodeDegreeMap.get(sourceId) || 0;
-        const targetDegree = this.nodeDegreeMap.get(targetId) || 0;
-        const maxDegree = Math.max(sourceDegree, targetDegree);
-
-        if (maxDegree >= CROWDING_THRESHOLD) {
-          const extraDistance = Math.min(
-            MAX_LINK_DISTANCE - LINK_DISTANCE,
-            (maxDegree - CROWDING_THRESHOLD) * 1.5
-          );
-          return LINK_DISTANCE + extraDistance;
-        }
-
-        return LINK_DISTANCE;
-      })
-      .strength((link: GraphLink) => {
-        const sourceId = link.source.id;
-        const targetId = link.target.id;
-        const sourceDegree = this.nodeDegreeMap.get(sourceId) || 0;
-        const targetDegree = this.nodeDegreeMap.get(targetId) || 0;
-        const maxDegree = Math.max(sourceDegree, targetDegree);
-
-        if (maxDegree <= DEGREE_STRENGTH_DECAY) {
-          return LINK_STRENGTH;
-        }
-
-        const strengthReduction = Math.max(
-          0,
-          (maxDegree - DEGREE_STRENGTH_DECAY) / DEGREE_STRENGTH_DECAY
-        );
-        const scaledStrength =
-          MIN_LINK_STRENGTH +
-          (LINK_STRENGTH - MIN_LINK_STRENGTH) * Math.exp(-strengthReduction);
-
-        return Math.max(MIN_LINK_STRENGTH, scaledStrength);
+        const sourceSize = link.source.size;
+        const targetSize = link.target.size;
+        return sourceSize + targetSize + LINK_DISTANCE * 2;
       });
 
-    // Collision force
+    // Collision force - node size + padding
     this.graph.d3Force(
-      "collision",
-      d3
-        .forceCollide((node: GraphNode) => {
-          // Use node.size as base
-          const baseSize = node.size;
-
-          // Add extra radius based on node degree (connections)
-          const degree = this.nodeDegreeMap.get(node.id) || 0;
-          return baseSize + Math.sqrt(degree) * HIGH_DEGREE_PADDING;
-        })
-        .strength(COLLISION_STRENGTH)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .iterations(2) as any
+      "collide",
+      d3.forceCollide((node: GraphNode) => node.size + 25)
     );
 
-    // Center force
-    const centerForce = this.graph.d3Force("center");
-    if (centerForce) {
-      centerForce.strength(CENTER_STRENGTH);
-    }
+    // Center forces - separate X and Y forces
+    this.graph.d3Force(
+      "centerX",
+      d3.forceX(0).strength(CENTER_STRENGTH)
+    );
+
+    this.graph.d3Force(
+      "centerY",
+      d3.forceY(0).strength(CENTER_STRENGTH)
+    );
 
     // Charge force
     const chargeForce = this.graph.d3Force("charge");
     if (chargeForce) {
-      chargeForce.strength(CHARGE_STRENGTH).distanceMax(300);
+      chargeForce.strength(CHARGE_STRENGTH);
     }
+
+    // Set velocity decay and alpha min
+    // Access the underlying d3 simulation
+    const simulation = this.graph.d3Force('simulation');
+    if (simulation && typeof simulation === 'object') {
+      // @ts-ignore - accessing d3 simulation methods
+      if (simulation.velocityDecay) simulation.velocityDecay(VELOCITY_DECAY);
+      // @ts-ignore
+      if (simulation.alphaMin) simulation.alphaMin(ALPHA_MIN);
+    }
+    this.log('Force simulation setup complete');
   }
 
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
@@ -650,18 +669,21 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     ctx.lineWidth = this.config.isNodeSelected?.(node) ? 1.5 : 1;
-    ctx.strokeStyle = this.config.foregroundColor || "#1A1A1A";
+    ctx.strokeStyle = this.config.foregroundColor;
     ctx.fillStyle = node.color;
 
-    const radius = node.size;
+    const radius = node.size + ctx.lineWidth / 2;
 
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
-    ctx.fill();
     ctx.stroke();
 
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, node.size, 0, 2 * Math.PI, false);
+    ctx.fill();
+
     // Draw text
-    ctx.fillStyle = "black";
+    ctx.fillStyle = getContrastTextColor(node.color);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "400 2px SofiaSans";
@@ -669,7 +691,7 @@ class FalkorDBCanvas extends HTMLElement {
     let [line1, line2] = node.displayName;
 
     if (!line1 && !line2) {
-      const text = getNodeDisplayText(node);
+      const text = getNodeDisplayText(node, this.config.captionsKeys, this.config.showPropertyKeyPrefix);
       const textRadius = NODE_SIZE - PADDING / 2;
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
       node.displayName = [line1, line2];
@@ -747,46 +769,46 @@ class FalkorDBCanvas extends HTMLElement {
 
     ctx.font = "400 2px SofiaSans";
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.textBaseline = "alphabetic";
 
     let cached = this.relationshipsTextCache.get(link.relationship);
 
     if (!cached) {
       const { width, actualBoundingBoxAscent, actualBoundingBoxDescent } =
         ctx.measureText(link.relationship);
+      // Calculate visual center offset from baseline
+      const visualCenter = (actualBoundingBoxAscent - actualBoundingBoxDescent) / 2;
       cached = {
         textWidth: width,
         textHeight: actualBoundingBoxAscent + actualBoundingBoxDescent,
-        textAscent: actualBoundingBoxAscent,
-        textDescent: actualBoundingBoxDescent,
+        textYOffset: visualCenter,
       };
       this.relationshipsTextCache.set(link.relationship, cached);
     }
 
-    const { textWidth, textHeight, textAscent, textDescent } = cached;
+    const { textWidth, textHeight, textYOffset } = cached;
 
     ctx.save();
     ctx.translate(textX, textY);
     ctx.rotate(angle);
 
-    // Draw background
-    ctx.fillStyle = this.config.backgroundColor || "#FFFFFF";
-    const backgroundHeight = textHeight * 0.7;
+    // Draw background centered on the link line (y=0)
+    ctx.fillStyle = this.config.backgroundColor;
 
-    // Move background up to align with text that appears at top of bg
-    // Use the actual text metrics to calculate proper vertical offset
-    const bgOffsetY = -(textAscent - textDescent) - 0.18;
+    const bgWidth = textWidth * 0.6;
+    const bgHeight = textHeight * 0.6;
+    // Offset background to match text visual center
+    const bgYOffset = textYOffset - textHeight / 2;
     ctx.fillRect(
-      -textWidth / 2,
-      -backgroundHeight / 2 + bgOffsetY,
-      textWidth,
-      backgroundHeight
+      -bgWidth / 2,
+      bgYOffset,
+      bgWidth,
+      bgHeight
     );
 
-    // Draw text
-    ctx.fillStyle = this.config.foregroundColor || "#1A1A1A";
-    ctx.textBaseline = "middle";
-    ctx.fillText(link.relationship, 0, 0);
+    // Draw text with alphabetic baseline, positioned so visual center is at y=0
+    ctx.fillStyle = getContrastTextColor(this.config.backgroundColor);
+    ctx.fillText(link.relationship, 0, textYOffset);
     ctx.restore();
   }
 
@@ -794,8 +816,10 @@ class FalkorDBCanvas extends HTMLElement {
     if (!this.loadingOverlay) return;
 
     if (this.config.isLoading) {
+      this.log('Showing loading overlay');
       this.loadingOverlay.style.display = "flex";
     } else {
+      this.log('Hiding loading overlay');
       this.loadingOverlay.style.display = "none";
     }
   }
@@ -803,15 +827,18 @@ class FalkorDBCanvas extends HTMLElement {
   private handleEngineStop() {
     if (!this.graph) return;
 
+    this.log('Engine stopped');
     // If already stopped, don't do anything
     if (this.config.cooldownTicks === 0) return;
 
-    const nodeCount = this.data.nodes.length;
-    const paddingMultiplier = nodeCount < 2 ? 4 : 1;
-    this.zoomToFit(paddingMultiplier);
+      const nodeCount = this.data.nodes.length;
+      const paddingMultiplier = nodeCount < 2 ? 4 : 1;
+      this.log('Auto-zooming to fit with padding multiplier:', paddingMultiplier);
+      this.zoomToFit(paddingMultiplier);
 
     // Stop the force simulation after centering (only if autoStopOnSettle is true)
     if (this.config.autoStopOnSettle !== false) {
+      this.log('Auto-stopping simulation on settle');
       setTimeout(() => {
         if (!this.graph) return;
         // Stop loading
@@ -822,11 +849,13 @@ class FalkorDBCanvas extends HTMLElement {
         // Stop the simulation
         this.config.cooldownTicks = 0;
         this.graph.cooldownTicks(0);
-        
+
         // Update simulation state
         this.updateCanvasSimulationAttribute(false);
+        this.log('Simulation stopped');
       }, 1000);
     } else {
+      this.log('Not auto-stopping simulation (autoStopOnSettle is false)');
       // Just update loading state without stopping
       this.config.isLoading = false;
       this.config.onLoadingChange?.(this.config.isLoading);
@@ -923,7 +952,7 @@ class FalkorDBCanvas extends HTMLElement {
 
   private updateTooltipStyles() {
     if (!this.shadowRoot) return;
-    
+
     const existingStyle = this.shadowRoot.querySelector('style');
     if (existingStyle) {
       const newStyle = createStyles(this.config.backgroundColor, this.config.foregroundColor);
