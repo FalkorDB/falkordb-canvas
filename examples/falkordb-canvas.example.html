@@ -166,9 +166,9 @@
     };
 
     // Now load the graph data
-    const API_TOKEN = 'your-api-token';
-    const graphName = 'your-graph';
-    const query = 'your-query'; // MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN * LIMIT 100
+    const API_TOKEN = 'your_api_token_here'; // Replace with your actual API token
+    const graphName = 'your_graph_name_here'; // Replace with your actual graph name
+    const query = 'your_query_here'; // Replace with your actual query
 
     const url = `https://browser.falkordb.com/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
 

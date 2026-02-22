@@ -19,7 +19,8 @@ export interface ForceGraphConfig {
   cooldownTicks?: number | undefined;
   cooldownTime?: number;
   autoStopOnSettle?: boolean;
-  skipNextZoomToFit?: boolean;
+  captionsKeys?: string[];
+  showPropertyKeyPrefix?: boolean;
   isLinkSelected?: (link: GraphLink) => boolean;
   isNodeSelected?: (node: GraphNode) => boolean;
   isLoading?: boolean;
@@ -33,9 +34,11 @@ export interface ForceGraphConfig {
   };
 }
 
-export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor'> {
+export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix'> {
   backgroundColor: string;
   foregroundColor: string;
+  captionsKeys: string[];
+  showPropertyKeyPrefix: boolean;
 }
 
 export type GraphNode = NodeObject & {
@@ -45,7 +48,6 @@ export type GraphNode = NodeObject & {
   displayName: [string, string];
   color: string;
   size: number;
-  caption?: string;
   data: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
@@ -56,6 +58,7 @@ export type GraphNode = NodeObject & {
   vy?: number;
   fx?: number;
   fy?: number;
+  initialPositionCalculated?: boolean;
 };
 
 export type GraphLink = {
@@ -79,7 +82,7 @@ export interface GraphData {
 
 export type Node = Omit<
   GraphNode,
-  "x" | "y" | "vx" | "vy" | "fx" | "fy" | "displayName" | "size"
+  "x" | "y" | "vx" | "vy" | "fx" | "fy" | "initialPositionCalculated" | "displayName" | "size"
 > & {
   size?: number;
 }
