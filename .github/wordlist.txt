@@ -27,3 +27,7 @@ GraphNode
 GraphLink
 ViewportState
 DOM
+lifecycle
+setData
+setGraphData
+DevTools
