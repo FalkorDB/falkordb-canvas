@@ -29,8 +29,8 @@ function circularLayout(nodes: GraphNode[], center: { x: number; y: number }, ra
  * Adds runtime properties (x, y, vx, vy, fx, fy, displayName, curve)
  */
 export function dataToGraphData(
-  data: Data, 
-  position?: { x?: number, y?: number }, 
+  data: Data,
+  position?: { x?: number, y?: number },
   oldNodesMap?: Map<number, GraphNode>
 ): GraphData {
   const nodes: GraphNode[] = data.nodes.map((node) => {
@@ -176,23 +176,21 @@ export const getContrastTextColor = (bgColor: string): string => {
 
 export const getNodeDisplayText = (
   node: Node,
+  captionKeys: string[]
 ) => {
-  if (node.caption && node.caption.trim().length > 0) {
-    return String(node.data[node.caption]);
-  }
+  const key = captionKeys.find((key) => node.data[key] && String(node.data[key]).trim().length > 0);
 
-  return String(node.id);
+  return key ? String(node.data[key]) : String(node.id);
 };
 
 export const getNodeDisplayKey = (
   node: Node,
+  captionKeys: string[]
 ) => {
-  if (node.caption && node.caption.trim().length > 0) {
-    return node.caption;
-  }
+  const key = captionKeys.find((key) => node.data[key] && String(node.data[key]).trim().length > 0);
 
-  return "id";
-};
+  return key || "id";
+}
 
 /**
  * Wraps text into two lines with ellipsis handling for circular nodes

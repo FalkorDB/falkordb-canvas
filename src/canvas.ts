@@ -81,6 +81,7 @@ class FalkorDBCanvas extends HTMLElement {
   private config: InternalForceGraphConfig = {
     backgroundColor: '#FFFFFF',
     foregroundColor: '#1A1A1A',
+    captionsKeys: [],
   };
 
   private nodeMode: CanvasRenderMode = 'after';
@@ -340,10 +341,6 @@ class FalkorDBCanvas extends HTMLElement {
     this.graph.zoomToFit(500, padding * paddingMultiplier, filter);
   }
 
-  public setSkipNextZoomToFit(skip: boolean): void {
-    this.config.skipNextZoomToFit = skip;
-  }
-
   private triggerRender() {
     if (!this.graph || this.graph.cooldownTicks() !== 0) return;
 
@@ -513,7 +510,7 @@ class FalkorDBCanvas extends HTMLElement {
       .nodeCanvasObjectMode(() => this.nodeMode)
       .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
-        getNodeDisplayText(node)
+        getNodeDisplayText(node, this.config.captionsKeys)
       )
       .linkLabel((link: GraphLink) => link.relationship)
       .linkDirectionalArrowRelPos(1)
@@ -693,7 +690,7 @@ class FalkorDBCanvas extends HTMLElement {
     let [line1, line2] = node.displayName;
 
     if (!line1 && !line2) {
-      const text = getNodeDisplayText(node);
+      const text = getNodeDisplayText(node, this.config.captionsKeys);
       const textRadius = NODE_SIZE - PADDING / 2;
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
       node.displayName = [line1, line2];
@@ -833,21 +830,10 @@ class FalkorDBCanvas extends HTMLElement {
     // If already stopped, don't do anything
     if (this.config.cooldownTicks === 0) return;
 
-    // Check if we should skip zoom this time
-    const shouldSkipZoom = this.config.skipNextZoomToFit === true;
-
-    // Reset the flag immediately after checking
-    if (shouldSkipZoom) {
-      this.log('Skipping zoom to fit');
-      this.config.skipNextZoomToFit = false;
-    }
-
-    if (!shouldSkipZoom) {
       const nodeCount = this.data.nodes.length;
       const paddingMultiplier = nodeCount < 2 ? 4 : 1;
       this.log('Auto-zooming to fit with padding multiplier:', paddingMultiplier);
       this.zoomToFit(paddingMultiplier);
-    }
 
     // Stop the force simulation after centering (only if autoStopOnSettle is true)
     if (this.config.autoStopOnSettle !== false) {
