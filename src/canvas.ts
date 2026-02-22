@@ -82,6 +82,7 @@ class FalkorDBCanvas extends HTMLElement {
     backgroundColor: '#FFFFFF',
     foregroundColor: '#1A1A1A',
     captionsKeys: [],
+    showPropertyKeyPrefix: false,
   };
 
   private nodeMode: CanvasRenderMode = 'after';
@@ -510,7 +511,7 @@ class FalkorDBCanvas extends HTMLElement {
       .nodeCanvasObjectMode(() => this.nodeMode)
       .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
-        getNodeDisplayText(node, this.config.captionsKeys)
+        getNodeDisplayText(node, this.config.captionsKeys, this.config.showPropertyKeyPrefix)
       )
       .linkLabel((link: GraphLink) => link.relationship)
       .linkDirectionalArrowRelPos(1)
@@ -690,7 +691,7 @@ class FalkorDBCanvas extends HTMLElement {
     let [line1, line2] = node.displayName;
 
     if (!line1 && !line2) {
-      const text = getNodeDisplayText(node, this.config.captionsKeys);
+      const text = getNodeDisplayText(node, this.config.captionsKeys, this.config.showPropertyKeyPrefix);
       const textRadius = NODE_SIZE - PADDING / 2;
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
       node.displayName = [line1, line2];

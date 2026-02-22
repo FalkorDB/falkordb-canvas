@@ -176,11 +176,16 @@ export const getContrastTextColor = (bgColor: string): string => {
 
 export const getNodeDisplayText = (
   node: Node,
-  captionKeys: string[]
+  captionKeys: string[],
+  showPropertyKeyPrefix: boolean
 ) => {
   const key = captionKeys.find((key) => node.data[key] && String(node.data[key]).trim().length > 0);
 
-  return key ? String(node.data[key]) : String(node.id);
+  if (key) {
+    return showPropertyKeyPrefix ? `${key}: ${String(node.data[key])}` : String(node.data[key]);
+  }
+
+  return showPropertyKeyPrefix ? `ID: ${String(node.id)}` : String(node.id);
 };
 
 export const getNodeDisplayKey = (
