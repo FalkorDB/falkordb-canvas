@@ -19,14 +19,13 @@ import {
   getContrastTextColor,
   getNodeDisplayText,
   graphDataToData,
+  LINK_DISTANCE,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
 
-const NODE_SIZE = 6;
 const PADDING = 2;
 
 // Force constants
-const LINK_DISTANCE = 45;
 const CHARGE_STRENGTH = -400;
 const CENTER_STRENGTH = 0.03;
 const VELOCITY_DECAY = 0.4;
@@ -692,7 +691,7 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (!line1 && !line2) {
       const text = getNodeDisplayText(node, this.config.captionsKeys, this.config.showPropertyKeyPrefix);
-      const textRadius = NODE_SIZE - PADDING / 2;
+      const textRadius = node.size - PADDING / 2;
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
       node.displayName = [line1, line2];
     }
@@ -727,7 +726,7 @@ class FalkorDBCanvas extends HTMLElement {
     let angle;
 
     if (start.id === end.id) {
-      const radius = NODE_SIZE * (link.curve || 0) * 6.2;
+      const radius = start.size * (link.curve || 0) * 6.2;
       const angleOffset = -Math.PI / 4;
       textX = start.x + radius * Math.cos(angleOffset);
       textY = start.y + radius * Math.sin(angleOffset);
