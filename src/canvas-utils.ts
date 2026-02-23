@@ -100,7 +100,7 @@ export function dataToGraphData(
       console.error(`Link with id ${link.id} has invalid target node ${link.target}.`);
     }
 
-    if (!sourceNode || !targetNode) return undefined
+    if (!sourceNode || !targetNode) return undefined;
 
     const [pairMinId, pairMaxId] = getPairIds(sourceNode.id, targetNode.id);
     let pairMap = linksByPairCount.get(pairMinId);
