@@ -20,10 +20,6 @@ function getPairIds(source: number, target: number): NodePair {
   return [target, source];
 }
 
-function isSamePair(a: NodePair, b: NodePair): boolean {
-  return a[0] === b[0] && a[1] === b[1];
-}
-
 function calculateLinkCurve(index: number, isSelfLoop: boolean): number {
   const even = index % 2 === 0;
 
@@ -90,7 +86,7 @@ export function dataToGraphData(
     nodeMap.set(node.id, node);
   });
 
-  const linksByPairCount: Array<{ pair: NodePair; count: number }> = [];
+  const linksByPairCount = new Map<number, Map<number, number>>();
 
   const links: GraphLink[] = data.links.map((link) => {
     const sourceNode = nodeMap.get(link.source) || oldNodesMap?.get(link.source);
@@ -104,20 +100,17 @@ export function dataToGraphData(
       console.error(`Link with id ${link.id} has invalid target node ${link.target}.`);
     }
 
-    if (!sourceNode || !targetNode) return
+    if (!sourceNode || !targetNode) return undefined
 
-    const pairIds = getPairIds(sourceNode.id, targetNode.id);
-    const existingPair = linksByPairCount.find(({ pair }) => isSamePair(pair, pairIds));
-
-    if (!existingPair) {
-      linksByPairCount.push({ pair: pairIds, count: 1 });
+    const [pairMinId, pairMaxId] = getPairIds(sourceNode.id, targetNode.id);
+    let pairMap = linksByPairCount.get(pairMinId);
+    if (!pairMap) {
+      pairMap = new Map<number, number>();
+      linksByPairCount.set(pairMinId, pairMap);
     }
 
-    const duplicateIndex = existingPair ? existingPair.count : 0;
-
-    if (existingPair) {
-      existingPair.count += 1;
-    }
+    const duplicateIndex = pairMap.get(pairMaxId) ?? 0;
+    pairMap.set(pairMaxId, duplicateIndex + 1);
 
     return {
       ...link,
