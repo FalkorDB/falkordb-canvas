@@ -104,6 +104,7 @@ export function dataToGraphData(
 
     const [pairMinId, pairMaxId] = getPairIds(sourceNode.id, targetNode.id);
     let pairMap = linksByPairCount.get(pairMinId);
+    
     if (!pairMap) {
       pairMap = new Map<number, number>();
       linksByPairCount.set(pairMinId, pairMap);
