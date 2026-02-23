@@ -7,8 +7,38 @@ import {
   GraphLink,
 } from "./canvas-types.js";
 
-const DEFAULT_NODE_SIZE = 6;
-const LINK_DISTANCE = 45;
+export const NODE_SIZE = 6;
+export const LINK_DISTANCE = 45;
+const LINK_CURVE_MULTIPLIER = 0.4;
+
+type NodePair = [number, number];
+
+function getPairIds(source: number, target: number): NodePair {
+  if (source <= target) {
+    return [source, target];
+  }
+  return [target, source];
+}
+
+function isSamePair(a: NodePair, b: NodePair): boolean {
+  return a[0] === b[0] && a[1] === b[1];
+}
+
+function calculateLinkCurve(index: number, isSelfLoop: boolean): number {
+  const even = index % 2 === 0;
+
+  if (isSelfLoop) {
+    if (even) {
+      return (Math.floor(-(index / 2)) - 3) * LINK_CURVE_MULTIPLIER;
+    }
+    return (Math.floor((index + 1) / 2) + 2) * LINK_CURVE_MULTIPLIER;
+  }
+
+  if (even) {
+    return Math.floor(-(index / 2)) * LINK_CURVE_MULTIPLIER;
+  }
+  return Math.floor((index + 1) / 2) * LINK_CURVE_MULTIPLIER;
+}
 
 /**
  * Applies circular layout to nodes (neo4j-style)
@@ -37,7 +67,7 @@ export function dataToGraphData(
     const oldNode = oldNodesMap?.get(node.id);
     return {
       ...node,
-      size: node.size ?? DEFAULT_NODE_SIZE,
+      size: node.size ?? NODE_SIZE,
       displayName: ["", ""] as [string, string],
       x: oldNode?.x ?? position?.x,
       y: oldNode?.y ?? position?.y,
@@ -60,6 +90,8 @@ export function dataToGraphData(
     nodeMap.set(node.id, node);
   });
 
+  const linksByPairCount: Array<{ pair: NodePair; count: number }> = [];
+
   const links: GraphLink[] = data.links.map((link) => {
     const sourceNode = nodeMap.get(link.source) || oldNodesMap?.get(link.source);
     const targetNode = nodeMap.get(link.target) || oldNodesMap?.get(link.target);
@@ -74,11 +106,24 @@ export function dataToGraphData(
 
     if (!sourceNode || !targetNode) return
 
+    const pairIds = getPairIds(sourceNode.id, targetNode.id);
+    const existingPair = linksByPairCount.find(({ pair }) => isSamePair(pair, pairIds));
+
+    if (!existingPair) {
+      linksByPairCount.push({ pair: pairIds, count: 1 });
+    }
+
+    const duplicateIndex = existingPair ? existingPair.count : 0;
+
+    if (existingPair) {
+      existingPair.count += 1;
+    }
+
     return {
       ...link,
       source: sourceNode,
       target: targetNode,
-      curve: 0,
+      curve: calculateLinkCurve(duplicateIndex, sourceNode.id === targetNode.id),
     };
   }).filter((link) => link !== undefined);
 

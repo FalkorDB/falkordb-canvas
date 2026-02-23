@@ -19,14 +19,14 @@ import {
   getContrastTextColor,
   getNodeDisplayText,
   graphDataToData,
+  LINK_DISTANCE,
+  NODE_SIZE,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
 
-const NODE_SIZE = 6;
 const PADDING = 2;
 
 // Force constants
-const LINK_DISTANCE = 45;
 const CHARGE_STRENGTH = -400;
 const CENTER_STRENGTH = 0.03;
 const VELOCITY_DECAY = 0.4;
