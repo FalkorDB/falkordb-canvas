@@ -728,7 +728,17 @@ class FalkorDBCanvas extends HTMLElement {
     let angle;
 
     if (start.id === end.id) {
-      const d = (link.curve || 0) * 70;
+      const nodeSize = start.size || 6;
+      const d = (link.curve || 0) * nodeSize * 11.67;
+
+      // Draw the self-loop bezier curve
+      ctx.strokeStyle = link.color || 'gray';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
+      ctx.stroke();
+
       // Midpoint of cubic bezier: P0=(sx,sy), P1=(sx,sy-d), P2=(sx+d,sy), P3=(sx,sy)
       textX = start.x + 0.375 * d;
       textY = start.y - 0.375 * d;
