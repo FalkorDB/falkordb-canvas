@@ -163,7 +163,7 @@ class FalkorDBCanvas extends HTMLElement {
     // Update event handlers if they were provided
     if (config.onNodeClick || config.onLinkClick || config.onNodeRightClick || config.onLinkRightClick ||
       config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick || config.onZoom ||
-      config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.node || config.link) {
+      config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.linkLineDash || config.node || config.link) {
       this.log('Updating event handlers');
       this.updateEventHandlers();
     }
@@ -522,6 +522,7 @@ class FalkorDBCanvas extends HTMLElement {
       .linkWidth((link: GraphLink) =>
         this.config.isLinkSelected?.(link) ? 2 : 1
       )
+      .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .linkCurvature("curve")
       .linkVisibility("visible")
       .nodeVisibility("visible")
@@ -581,6 +582,7 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onEngineStop();
         }
       })
+      .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
         if (this.config.node) {
           this.config.node.nodeCanvasObject(node, ctx);
@@ -827,13 +829,21 @@ class FalkorDBCanvas extends HTMLElement {
     if (!this.graph) return;
 
     this.log('Engine stopped');
-    // If already stopped, don't do anything
-    if (this.config.cooldownTicks === 0) return;
+    // If already stopped, just ensure any leftover loading state is cleared and return
+    if (this.config.cooldownTicks === 0) {
+      if (this.config.isLoading) {
+        this.log('Clearing leftover loading state on already-stopped engine');
+        this.config.isLoading = false;
+        this.config.onLoadingChange?.(this.config.isLoading);
+        this.updateLoadingState();
+      }
+      return;
+    }
 
-      const nodeCount = this.data.nodes.length;
-      const paddingMultiplier = nodeCount < 2 ? 4 : 1;
-      this.log('Auto-zooming to fit with padding multiplier:', paddingMultiplier);
-      this.zoomToFit(paddingMultiplier);
+    const nodeCount = this.data.nodes.length;
+    const paddingMultiplier = nodeCount < 2 ? 4 : 1;
+    this.log('Auto-zooming to fit with padding multiplier:', paddingMultiplier);
+    this.zoomToFit(paddingMultiplier);
 
     // Stop the force simulation after centering (only if autoStopOnSettle is true)
     if (this.config.autoStopOnSettle !== false) {
@@ -917,6 +927,7 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onEngineStop();
         }
       })
+      .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
         if (this.config.node) {
           this.config.node.nodeCanvasObject(node, ctx);
