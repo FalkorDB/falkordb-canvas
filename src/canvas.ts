@@ -728,11 +728,14 @@ class FalkorDBCanvas extends HTMLElement {
     let angle;
 
     if (start.id === end.id) {
-      const radius = start.size * (link.curve || 0) * 6.2;
-      const angleOffset = -Math.PI / 4;
-      textX = start.x + radius * Math.cos(angleOffset);
-      textY = start.y + radius * Math.sin(angleOffset);
-      angle = -angleOffset;
+      const d = (link.curve || 0) * 70;
+      // Midpoint of cubic bezier: P0=(sx,sy), P1=(sx,sy-d), P2=(sx+d,sy), P3=(sx,sy)
+      textX = start.x + 0.375 * d;
+      textY = start.y - 0.375 * d;
+      // Tangent at midpoint is (0.75d, 0.75d), angle always resolves to PI/4
+      angle = Math.atan2(0.75 * d, 0.75 * d);
+      if (angle > Math.PI / 2) angle = -(Math.PI - angle);
+      if (angle < -Math.PI / 2) angle = -(-Math.PI - angle);
     } else {
       const dx = end.x - start.x;
       const dy = end.y - start.y;
