@@ -732,7 +732,7 @@ class FalkorDBCanvas extends HTMLElement {
       const d = (link.curve || 0) * nodeSize * 11.67;
 
       // Draw the self-loop bezier curve
-      ctx.strokeStyle = link.color || 'gray';
+      ctx.strokeStyle = link.color;
       ctx.lineWidth = 0.5;
       ctx.beginPath();
       ctx.moveTo(start.x, start.y);
