@@ -766,23 +766,30 @@ class FalkorDBCanvas extends HTMLElement {
       const tipX = start.x + 3 * uArrow * tArrow * tArrow * d;
       const tipY = start.y - 3 * uArrow * uArrow * tArrow * d;
 
-      // Clip the bezier stroke at tArrow using De Casteljau subdivision so the
-      // stroke stops exactly at the arrowhead tip and does not continue through it.
-      // Split control points for the [0, tArrow] segment:
-      //   CP1 = (sx,           sy - tArrow*d)
-      //   CP2 = (sx + tArrow²*d,  sy - 2*tArrow*(1-tArrow)*d)
-      //   End = B(tArrow) = (tipX, tipY)
       ctx.strokeStyle = link.color;
       ctx.beginPath();
       ctx.moveTo(start.x, start.y);
-      ctx.bezierCurveTo(
-        start.x,
-        start.y - tArrow * d,
-        start.x + tArrow * tArrow * d,
-        start.y - 2 * tArrow * uArrow * d,
-        tipX,
-        tipY,
-      );
+      if (canReachBorder) {
+        // Clip the bezier stroke at tArrow using De Casteljau subdivision so
+        // the stroke stops exactly at the arrowhead tip and does not continue
+        // through it. Split control points for the [0, tArrow] segment:
+        //   CP1 = (sx,              sy - tArrow*d)
+        //   CP2 = (sx + tArrow²*d,  sy - 2*tArrow*(1-tArrow)*d)
+        //   End = B(tArrow) = (tipX, tipY)
+        ctx.bezierCurveTo(
+          start.x,
+          start.y - tArrow * d,
+          start.x + tArrow * tArrow * d,
+          start.y - 2 * tArrow * uArrow * d,
+          tipX,
+          tipY,
+        );
+      } else {
+        // d is too small to reach the node border — draw the full self-loop
+        // back to the source node (t=1.0) so the loop is always complete.
+        // Full bezier: P0=(sx,sy), P1=(sx,sy-d), P2=(sx+d,sy), P3=(sx,sy)
+        ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
+      }
       ctx.stroke();
 
       // Tangent at tArrow (direction the curve travels toward the node)
