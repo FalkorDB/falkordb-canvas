@@ -748,12 +748,18 @@ class FalkorDBCanvas extends HTMLElement {
       const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
       let lo = 0.5, hi = 1.0;
       const absD = Math.abs(d);
-      for (let i = 0; i < 20; i++) {
-        const mid = (lo + hi) / 2;
-        const um = 1 - mid;
-        const dist = 3 * um * mid * absD * Math.sqrt(mid * mid + um * um);
-        if (dist > borderRadius) lo = mid;
-        else hi = mid;
+      // Max reachable distance in [0.5, 1.0] is ≈ 0.53 * |d| (at t = 0.5).
+      // If |d| is too small to reach borderRadius, skip the arrowhead entirely.
+      const maxReachableDist = 3 * 0.5 * 0.5 * absD * Math.sqrt(0.5);
+      const canReachBorder = absD > 0 && maxReachableDist >= borderRadius;
+      if (canReachBorder) {
+        for (let i = 0; i < 20; i++) {
+          const mid = (lo + hi) / 2;
+          const um = 1 - mid;
+          const dist = 3 * um * mid * absD * Math.sqrt(mid * mid + um * um);
+          if (dist > borderRadius) lo = mid;
+          else hi = mid;
+        }
       }
       const tArrow = (lo + hi) / 2;
       const uArrow = 1 - tArrow;
@@ -783,16 +789,31 @@ class FalkorDBCanvas extends HTMLElement {
       const tdx = 3 * d * tArrow * (2 - 3 * tArrow);
       const tdy = -3 * d * uArrow * (1 - 3 * tArrow);
       const tLen = Math.sqrt(tdx * tdx + tdy * tdy);
-      const nx = tdx / tLen;
-      const ny = tdy / tLen;
 
-      ctx.fillStyle = link.color;
-      ctx.beginPath();
-      ctx.moveTo(tipX, tipY);
-      ctx.lineTo(tipX - nx * arrowLen + ny * arrowHalfWidth, tipY - ny * arrowLen - nx * arrowHalfWidth);
-      ctx.lineTo(tipX - nx * arrowLen * (1 - ARROW_VLEN_RATIO), tipY - ny * arrowLen * (1 - ARROW_VLEN_RATIO));
-      ctx.lineTo(tipX - nx * arrowLen - ny * arrowHalfWidth, tipY - ny * arrowLen + nx * arrowHalfWidth);
-      ctx.fill();
+      // Guard against zero-length tangent vector (e.g. when d ≈ 0) to avoid NaN
+      // normals and invalid arrowhead geometry. Also skip when d is too small to
+      // place the arrowhead at the node border (canReachBorder is false).
+      if (tLen !== 0 && canReachBorder) {
+        const nx = tdx / tLen;
+        const ny = tdy / tLen;
+
+        ctx.fillStyle = link.color;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(
+          tipX - nx * arrowLen + ny * arrowHalfWidth,
+          tipY - ny * arrowLen - nx * arrowHalfWidth,
+        );
+        ctx.lineTo(
+          tipX - nx * arrowLen * (1 - ARROW_VLEN_RATIO),
+          tipY - ny * arrowLen * (1 - ARROW_VLEN_RATIO),
+        );
+        ctx.lineTo(
+          tipX - nx * arrowLen - ny * arrowHalfWidth,
+          tipY - ny * arrowLen + nx * arrowHalfWidth,
+        );
+        ctx.fill();
+      }
 
       // Midpoint of cubic bezier: P0=(sx,sy), P1=(sx,sy-d), P2=(sx+d,sy), P3=(sx,sy)
       textX = start.x + 0.375 * d;
