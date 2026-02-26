@@ -19,14 +19,13 @@ import {
   getContrastTextColor,
   getNodeDisplayText,
   graphDataToData,
+  LINK_DISTANCE,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
 
-const NODE_SIZE = 6;
 const PADDING = 2;
 
 // Force constants
-const LINK_DISTANCE = 45;
 const CHARGE_STRENGTH = -400;
 const CENTER_STRENGTH = 0.03;
 const VELOCITY_DECAY = 0.4;
@@ -164,7 +163,7 @@ class FalkorDBCanvas extends HTMLElement {
     // Update event handlers if they were provided
     if (config.onNodeClick || config.onLinkClick || config.onNodeRightClick || config.onLinkRightClick ||
       config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick || config.onZoom ||
-      config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.node || config.link) {
+      config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.linkLineDash || config.node || config.link) {
       this.log('Updating event handlers');
       this.updateEventHandlers();
     }
@@ -523,6 +522,7 @@ class FalkorDBCanvas extends HTMLElement {
       .linkWidth((link: GraphLink) =>
         this.config.isLinkSelected?.(link) ? 2 : 1
       )
+      .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .linkCurvature("curve")
       .linkVisibility("visible")
       .nodeVisibility("visible")
@@ -582,6 +582,7 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onEngineStop();
         }
       })
+      .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
         if (this.config.node) {
           this.config.node.nodeCanvasObject(node, ctx);
@@ -589,11 +590,11 @@ class FalkorDBCanvas extends HTMLElement {
           this.drawNode(node, ctx);
         }
       })
-      .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D) => {
+      .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
         if (this.config.link) {
           this.config.link.linkCanvasObject(link, ctx);
         } else {
-          this.drawLink(link, ctx);
+          this.drawLink(link, ctx, globalScale);
         }
       });
 
@@ -692,7 +693,7 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (!line1 && !line2) {
       const text = getNodeDisplayText(node, this.config.captionsKeys, this.config.showPropertyKeyPrefix);
-      const textRadius = NODE_SIZE - PADDING / 2;
+      const textRadius = node.size - PADDING / 2;
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
       node.displayName = [line1, line2];
     }
@@ -711,7 +712,7 @@ class FalkorDBCanvas extends HTMLElement {
     }
   }
 
-  private drawLink(link: GraphLink, ctx: CanvasRenderingContext2D) {
+  private drawLink(link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) {
     const start = link.source;
     const end = link.target;
 
@@ -727,11 +728,107 @@ class FalkorDBCanvas extends HTMLElement {
     let angle;
 
     if (start.id === end.id) {
-      const radius = NODE_SIZE * (link.curve || 0) * 6.2;
-      const angleOffset = -Math.PI / 4;
-      textX = start.x + radius * Math.cos(angleOffset);
-      textY = start.y + radius * Math.sin(angleOffset);
-      angle = -angleOffset;
+      const nodeSize = start.size || 6;
+      const d = (link.curve || 0) * nodeSize * 11.67;
+
+      ctx.lineWidth = (this.config.isLinkSelected?.(link) ? 2 : 1) / globalScale;
+
+      // The visible outer edge of the node border is nodeSize + strokeWidth
+      // (stroke is centered on nodeSize + strokeWidth/2, so outer edge = nodeSize + strokeWidth).
+      const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? 1.5 : 1;
+      const borderRadius = nodeSize + nodeStrokeWidth;
+
+      // Binary search for tArrow near 1.0 where the curve is at distance borderRadius
+      // from the node center (i.e. on the outer edge of the node border stroke).
+      // Bezier parametric form: Bx(t)=sx+3(1-t)t²d, By(t)=sy-3(1-t)²td
+      // dist(t) = 3*(1-t)*t*|d|*sqrt(t² + (1-t)²)
+      const ARROW_WH_RATIO = 1.6;
+      const ARROW_VLEN_RATIO = 0.2;
+      const arrowLen = this.config.isLinkSelected?.(link) ? 4 : 2;
+      const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
+      let lo = 0.5, hi = 1.0;
+      const absD = Math.abs(d);
+      // Max reachable distance in [0.5, 1.0] is ≈ 0.53 * |d| (at t = 0.5).
+      // If |d| is too small to reach borderRadius, skip the arrowhead entirely.
+      const maxReachableDist = 3 * 0.5 * 0.5 * absD * Math.sqrt(0.5);
+      const canReachBorder = absD > 0 && maxReachableDist >= borderRadius;
+      if (canReachBorder) {
+        for (let i = 0; i < 20; i++) {
+          const mid = (lo + hi) / 2;
+          const um = 1 - mid;
+          const dist = 3 * um * mid * absD * Math.sqrt(mid * mid + um * um);
+          if (dist > borderRadius) lo = mid;
+          else hi = mid;
+        }
+      }
+      const tArrow = (lo + hi) / 2;
+      const uArrow = 1 - tArrow;
+      const tipX = start.x + 3 * uArrow * tArrow * tArrow * d;
+      const tipY = start.y - 3 * uArrow * uArrow * tArrow * d;
+
+      ctx.strokeStyle = link.color;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      if (canReachBorder) {
+        // Clip the bezier stroke at tArrow using De Casteljau subdivision so
+        // the stroke stops exactly at the arrowhead tip and does not continue
+        // through it. Split control points for the [0, tArrow] segment:
+        //   CP1 = (sx,              sy - tArrow*d)
+        //   CP2 = (sx + tArrow²*d,  sy - 2*tArrow*(1-tArrow)*d)
+        //   End = B(tArrow) = (tipX, tipY)
+        ctx.bezierCurveTo(
+          start.x,
+          start.y - tArrow * d,
+          start.x + tArrow * tArrow * d,
+          start.y - 2 * tArrow * uArrow * d,
+          tipX,
+          tipY,
+        );
+      } else {
+        // d is too small to reach the node border — draw the full self-loop
+        // back to the source node (t=1.0) so the loop is always complete.
+        // Full bezier: P0=(sx,sy), P1=(sx,sy-d), P2=(sx+d,sy), P3=(sx,sy)
+        ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
+      }
+      ctx.stroke();
+
+      // Tangent at tArrow (direction the curve travels toward the node)
+      const tdx = 3 * d * tArrow * (2 - 3 * tArrow);
+      const tdy = -3 * d * uArrow * (1 - 3 * tArrow);
+      const tLen = Math.sqrt(tdx * tdx + tdy * tdy);
+
+      // Guard against zero-length tangent vector (e.g. when d ≈ 0) to avoid NaN
+      // normals and invalid arrowhead geometry. Also skip when d is too small to
+      // place the arrowhead at the node border (canReachBorder is false).
+      if (tLen !== 0 && canReachBorder) {
+        const nx = tdx / tLen;
+        const ny = tdy / tLen;
+
+        ctx.fillStyle = link.color;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(
+          tipX - nx * arrowLen + ny * arrowHalfWidth,
+          tipY - ny * arrowLen - nx * arrowHalfWidth,
+        );
+        ctx.lineTo(
+          tipX - nx * arrowLen * (1 - ARROW_VLEN_RATIO),
+          tipY - ny * arrowLen * (1 - ARROW_VLEN_RATIO),
+        );
+        ctx.lineTo(
+          tipX - nx * arrowLen - ny * arrowHalfWidth,
+          tipY - ny * arrowLen + nx * arrowHalfWidth,
+        );
+        ctx.fill();
+      }
+
+      // Midpoint of cubic bezier: P0=(sx,sy), P1=(sx,sy-d), P2=(sx+d,sy), P3=(sx,sy)
+      textX = start.x + 0.375 * d;
+      textY = start.y - 0.375 * d;
+      // Tangent at midpoint is (0.75d, 0.75d), angle always resolves to PI/4
+      angle = Math.atan2(0.75 * d, 0.75 * d);
+      if (angle > Math.PI / 2) angle = -(Math.PI - angle);
+      if (angle < -Math.PI / 2) angle = -(-Math.PI - angle);
     } else {
       const dx = end.x - start.x;
       const dy = end.y - start.y;
@@ -769,18 +866,21 @@ class FalkorDBCanvas extends HTMLElement {
 
     ctx.font = "400 2px SofiaSans";
     ctx.textAlign = "center";
+    // Draw text with alphabetic baseline, positioned so visual center is at y=0
     ctx.textBaseline = "alphabetic";
 
     let cached = this.relationshipsTextCache.get(link.relationship);
 
     if (!cached) {
-      const { width, actualBoundingBoxAscent, actualBoundingBoxDescent } =
-        ctx.measureText(link.relationship);
-      // Calculate visual center offset from baseline
-      const visualCenter = (actualBoundingBoxAscent - actualBoundingBoxDescent) / 2;
+      const metrics = ctx.measureText(link.relationship);
+      // Use font-level metrics for consistent height across all texts
+      const fontAscent = metrics.fontBoundingBoxAscent ?? metrics.actualBoundingBoxAscent;
+      const fontDescent = metrics.fontBoundingBoxDescent ?? metrics.actualBoundingBoxDescent;
+      // Calculate visual center offset from baseline using font-level metrics
+      const visualCenter = (fontAscent - fontDescent) / 2;
       cached = {
-        textWidth: width,
-        textHeight: actualBoundingBoxAscent + actualBoundingBoxDescent,
+        textWidth: metrics.width,
+        textHeight: fontAscent + fontDescent,
         textYOffset: visualCenter,
       };
       this.relationshipsTextCache.set(link.relationship, cached);
@@ -795,18 +895,14 @@ class FalkorDBCanvas extends HTMLElement {
     // Draw background centered on the link line (y=0)
     ctx.fillStyle = this.config.backgroundColor;
 
-    const bgWidth = textWidth * 0.6;
-    const bgHeight = textHeight * 0.6;
     // Offset background to match text visual center
-    const bgYOffset = textYOffset - textHeight / 2;
     ctx.fillRect(
-      -bgWidth / 2,
-      bgYOffset,
-      bgWidth,
-      bgHeight
+      -textWidth / 2,
+      -textHeight / 2,
+      textWidth,
+      textHeight
     );
 
-    // Draw text with alphabetic baseline, positioned so visual center is at y=0
     ctx.fillStyle = getContrastTextColor(this.config.backgroundColor);
     ctx.fillText(link.relationship, 0, textYOffset);
     ctx.restore();
@@ -828,13 +924,21 @@ class FalkorDBCanvas extends HTMLElement {
     if (!this.graph) return;
 
     this.log('Engine stopped');
-    // If already stopped, don't do anything
-    if (this.config.cooldownTicks === 0) return;
+    // If already stopped, just ensure any leftover loading state is cleared and return
+    if (this.config.cooldownTicks === 0) {
+      if (this.config.isLoading) {
+        this.log('Clearing leftover loading state on already-stopped engine');
+        this.config.isLoading = false;
+        this.config.onLoadingChange?.(this.config.isLoading);
+        this.updateLoadingState();
+      }
+      return;
+    }
 
-      const nodeCount = this.data.nodes.length;
-      const paddingMultiplier = nodeCount < 2 ? 4 : 1;
-      this.log('Auto-zooming to fit with padding multiplier:', paddingMultiplier);
-      this.zoomToFit(paddingMultiplier);
+    const nodeCount = this.data.nodes.length;
+    const paddingMultiplier = nodeCount < 2 ? 4 : 1;
+    this.log('Auto-zooming to fit with padding multiplier:', paddingMultiplier);
+    this.zoomToFit(paddingMultiplier);
 
     // Stop the force simulation after centering (only if autoStopOnSettle is true)
     if (this.config.autoStopOnSettle !== false) {
@@ -918,6 +1022,7 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onEngineStop();
         }
       })
+      .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
         if (this.config.node) {
           this.config.node.nodeCanvasObject(node, ctx);
@@ -925,11 +1030,11 @@ class FalkorDBCanvas extends HTMLElement {
           this.drawNode(node, ctx);
         }
       })
-      .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D) => {
+      .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
         if (this.config.link) {
           this.config.link.linkCanvasObject(link, ctx);
         } else {
-          this.drawLink(link, ctx);
+          this.drawLink(link, ctx, globalScale);
         }
       });
 

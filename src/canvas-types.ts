@@ -23,6 +23,7 @@ export interface ForceGraphConfig {
   showPropertyKeyPrefix?: boolean;
   isLinkSelected?: (link: GraphLink) => boolean;
   isNodeSelected?: (node: GraphNode) => boolean;
+  linkLineDash?: (link: GraphLink) => number[] | null;
   isLoading?: boolean;
   node?: {
     nodeCanvasObject: (node: GraphNode, ctx: CanvasRenderingContext2D) => void;
