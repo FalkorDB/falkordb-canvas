@@ -501,12 +501,6 @@ class FalkorDBCanvas extends HTMLElement {
       .height(this.config.height || 600)
       .backgroundColor(this.config.backgroundColor)
       .graphData(this.data)
-      .nodeRelSize(1)
-      .nodeVal((node: GraphNode) => {
-        const strokeWidth = this.config.isNodeSelected?.(node) ? 1.5 : 1;
-        const radius = node.size + strokeWidth;
-        return radius * radius;  // Return radius squared since force-graph does sqrt(val * relSize)
-      })
       .nodeCanvasObjectMode(() => this.nodeMode)
       .linkCanvasObjectMode(() => this.linkMode)
       .nodeLabel((node: GraphNode) =>
@@ -748,7 +742,7 @@ class FalkorDBCanvas extends HTMLElement {
 
       // The visible outer edge of the node border is nodeSize + strokeWidth
       // (stroke is centered on nodeSize + strokeWidth/2, so outer edge = nodeSize + strokeWidth).
-      const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? 1.5 : 1;
+      const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? 1 : 0.5;
       const borderRadius = nodeSize + nodeStrokeWidth;
 
       // Binary search for tArrow near 1.0 where the curve is at distance borderRadius
@@ -886,7 +880,7 @@ class FalkorDBCanvas extends HTMLElement {
       // Q(t) = (1-t)²·start + 2(1-t)t·control + t²·end
       // is at distance borderRadius from the target node centre.
       const endNodeSize = end.size || 6;
-      const endNodeStrokeWidth = this.config.isNodeSelected?.(end) ? 1.5 : 1;
+      const endNodeStrokeWidth = this.config.isNodeSelected?.(end) ? 1 : 0.5;
       const borderRadius = endNodeSize + endNodeStrokeWidth;
 
       let lo = 0.5, hi = 1.0;
@@ -996,7 +990,16 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     ctx.strokeStyle = color;
-    ctx.lineWidth = 10; // Make the pointer area thicker for easier interaction
+    const basePointerWidth = 10; // Desired on-screen pointer area thickness
+    const transform = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+    if (transform) {
+      const scaleX = Math.hypot(transform.a, transform.c);
+      const scaleY = Math.hypot(transform.b, transform.d);
+      const avgScale = (scaleX + scaleY) / 2 || 1;
+      ctx.lineWidth = basePointerWidth / avgScale;
+    } else {
+      ctx.lineWidth = basePointerWidth;
+    }
     ctx.beginPath();
 
     if (start.id === end.id) {
@@ -1158,21 +1161,21 @@ class FalkorDBCanvas extends HTMLElement {
         }
       });
 
-    if (this.config.node) {
-      this.graph.nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
-        this.config.node!.nodePointerAreaPaint(node, color, ctx);
+    this.graph
+      .nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+        if (this.config.node) {
+          this.config.node.nodePointerAreaPaint(node, color, ctx);
+        } else {
+          this.pointerNode(node, color, ctx);
+        }
+      })
+      .linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
+        if (this.config.link) {
+          this.config.link.linkPointerAreaPaint(link, color, ctx);
+        } else {
+          this.pointerLink(link, color, ctx);
+        }
       });
-    } else {
-      this.graph.nodePointerAreaPaint();
-    }
-
-    if (this.config.link) {
-      this.graph.linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
-        this.config.link!.linkPointerAreaPaint(link, color, ctx);
-      });
-    } else {
-      this.graph.linkPointerAreaPaint();
-    }
   }
 
   private updateTooltipStyles() {
