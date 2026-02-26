@@ -1162,9 +1162,7 @@ class FalkorDBCanvas extends HTMLElement {
         } else {
           this.drawLink(link, ctx, globalScale);
         }
-      });
-
-    this.graph
+      })
       .nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
         if (this.config.node) {
           this.config.node.nodePointerAreaPaint(node, color, ctx);
