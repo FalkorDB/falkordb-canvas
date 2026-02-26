@@ -513,15 +513,8 @@ class FalkorDBCanvas extends HTMLElement {
         getNodeDisplayText(node, this.config.captionsKeys, this.config.showPropertyKeyPrefix)
       )
       .linkLabel((link: GraphLink) => link.relationship)
-      .linkDirectionalArrowRelPos(1)
-      .linkDirectionalArrowLength((link: GraphLink) => {
-        if (link.source === link.target) return 0;
-        return this.config.isLinkSelected?.(link) ? 4 : 2;
-      })
-      .linkDirectionalArrowColor((link: GraphLink) => link.color)
-      .linkWidth((link: GraphLink) =>
-        this.config.isLinkSelected?.(link) ? 2 : 1
-      )
+      .linkDirectionalArrowLength(0)
+      .linkWidth(0)
       .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .linkCurvature("curve")
       .linkVisibility("visible")
@@ -882,6 +875,69 @@ class FalkorDBCanvas extends HTMLElement {
 
       if (angle > Math.PI / 2) angle = -(Math.PI - angle);
       if (angle < -Math.PI / 2) angle = -(-Math.PI - angle);
+
+      // --- Draw the regular link line and arrowhead ---
+      const ARROW_WH_RATIO = 1.6;
+      const ARROW_VLEN_RATIO = 0.2;
+      const arrowLen = this.config.isLinkSelected?.(link) ? 4 : 2;
+      const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
+
+      // Binary-search for tArrow near 1.0 where the quadratic bezier
+      // Q(t) = (1-t)²·start + 2(1-t)t·control + t²·end
+      // is at distance borderRadius from the target node centre.
+      const endNodeSize = end.size || 6;
+      const endNodeStrokeWidth = this.config.isNodeSelected?.(end) ? 1.5 : 1;
+      const borderRadius = endNodeSize + endNodeStrokeWidth;
+
+      let lo = 0.5, hi = 1.0;
+      for (let i = 0; i < 20; i++) {
+        const mid = (lo + hi) / 2;
+        const um = 1 - mid;
+        const qx = um * um * start.x + 2 * um * mid * controlX + mid * mid * end.x;
+        const qy = um * um * start.y + 2 * um * mid * controlY + mid * mid * end.y;
+        const distToEnd = Math.sqrt((qx - end.x) ** 2 + (qy - end.y) ** 2);
+        if (distToEnd > borderRadius) lo = mid;
+        else hi = mid;
+      }
+      const tArrow = (lo + hi) / 2;
+      const uArrow = 1 - tArrow;
+
+      // Tip = Q(tArrow)
+      const tipX = uArrow * uArrow * start.x + 2 * uArrow * tArrow * controlX + tArrow * tArrow * end.x;
+      const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
+
+      // Clipped quadratic bezier [0, tArrow] via De Casteljau:
+      //   new control = lerp(start, control, tArrow)
+      const clippedCtrlX = start.x + tArrow * (controlX - start.x);
+      const clippedCtrlY = start.y + tArrow * (controlY - start.y);
+
+      ctx.strokeStyle = link.color;
+      ctx.lineWidth = (this.config.isLinkSelected?.(link) ? 2 : 1) / globalScale;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.quadraticCurveTo(clippedCtrlX, clippedCtrlY, tipX, tipY);
+      ctx.stroke();
+
+      // Arrowhead tangent at tArrow: Q'(t) = 2(1-t)(control-start) + 2t(end-control)
+      const atx = 2 * uArrow * (controlX - start.x) + 2 * tArrow * (end.x - controlX);
+      const aty = 2 * uArrow * (controlY - start.y) + 2 * tArrow * (end.y - controlY);
+      const atLen = Math.sqrt(atx * atx + aty * aty);
+
+      if (atLen !== 0) {
+        const nx = atx / atLen;
+        const ny = aty / atLen;
+
+        ctx.fillStyle = link.color;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(tipX - nx * arrowLen + ny * arrowHalfWidth, tipY - ny * arrowLen - nx * arrowHalfWidth);
+        ctx.lineTo(
+          tipX - nx * arrowLen * (1 - ARROW_VLEN_RATIO),
+          tipY - ny * arrowLen * (1 - ARROW_VLEN_RATIO),
+        );
+        ctx.lineTo(tipX - nx * arrowLen - ny * arrowHalfWidth, tipY - ny * arrowLen + nx * arrowHalfWidth);
+        ctx.fill();
+      }
     }
 
     ctx.font = "400 2px SofiaSans";
