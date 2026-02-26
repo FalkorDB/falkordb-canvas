@@ -657,10 +657,7 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
-    if (!node.x || !node.y) {
-      node.x = 0;
-      node.y = 0;
-    }
+    if (node.x == null || node.y == null) return;
 
     ctx.lineWidth = this.config.isNodeSelected?.(node) ? 1 : 0.5;
     ctx.strokeStyle = this.config.foregroundColor;
@@ -706,10 +703,7 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   private pointerNode(node: GraphNode, color: string, ctx: CanvasRenderingContext2D) {
-    if (!node.x || !node.y) {
-      node.x = 0;
-      node.y = 0;
-    }
+    if (node.x == null || node.y == null) return;
 
     const radius = node.size + PADDING;
 
@@ -723,12 +717,7 @@ class FalkorDBCanvas extends HTMLElement {
     const start = link.source;
     const end = link.target;
 
-    if (!start.x || !start.y || !end.x || !end.y) {
-      start.x = 0;
-      start.y = 0;
-      end.x = 0;
-      end.y = 0;
-    }
+    if (start.x == null || start.y == null || end.x == null || end.y == null) return;
 
     let textX;
     let textY;
@@ -1001,12 +990,7 @@ class FalkorDBCanvas extends HTMLElement {
     const start = link.source;
     const end = link.target;
 
-    if (!start.x || !start.y || !end.x || !end.y) {
-      start.x = 0;
-      start.y = 0;
-      end.x = 0;
-      end.y = 0;
-    }
+    if (start.x == null || start.y == null || end.x == null || end.y == null) return;
 
     ctx.strokeStyle = color;
     const basePointerWidth = 10; // Desired on-screen pointer area thickness
