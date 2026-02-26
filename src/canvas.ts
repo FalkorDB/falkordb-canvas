@@ -25,6 +25,12 @@ import {
 
 const PADDING = 2;
 
+// Arrow geometry constants (shared by self-loop and regular-link drawing paths)
+const ARROW_WH_RATIO = 1.6;
+const ARROW_VLEN_RATIO = 0.2;
+// Multiplier to convert node size → cubic bezier control-point distance for self-loops
+const SELF_LOOP_CURVE_FACTOR = 11.67;
+
 // Force constants
 const CHARGE_STRENGTH = -400;
 const CENTER_STRENGTH = 0.03;
@@ -586,15 +592,14 @@ class FalkorDBCanvas extends HTMLElement {
       })
       .nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
         if (this.config.node) {
-          this.config.node?.nodePointerAreaPaint(node, color, ctx);
+          this.config.node.nodePointerAreaPaint(node, color, ctx);
         } else {
           this.pointerNode(node, color, ctx);
         }
-
       })
       .linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
         if (this.config.link) {
-          this.config.link?.linkPointerAreaPaint(link, color, ctx);
+          this.config.link.linkPointerAreaPaint(link, color, ctx);
         } else {
           this.pointerLink(link, color, ctx);
         }
@@ -725,9 +730,10 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (start.id === end.id) {
       const nodeSize = start.size || 6;
-      const d = (link.curve || 0) * nodeSize * 11.67;
+      const d = (link.curve || 0) * nodeSize * SELF_LOOP_CURVE_FACTOR;
 
       ctx.lineWidth = (this.config.isLinkSelected?.(link) ? 2 : 1) / globalScale;
+      ctx.setLineDash(this.config.linkLineDash?.(link) ?? []);
 
       // The visible outer edge of the node border is nodeSize + strokeWidth
       // (stroke is centered on nodeSize + strokeWidth/2, so outer edge = nodeSize + strokeWidth).
@@ -738,8 +744,6 @@ class FalkorDBCanvas extends HTMLElement {
       // from the node center (i.e. on the outer edge of the node border stroke).
       // Bezier parametric form: Bx(t)=sx+3(1-t)t²d, By(t)=sy-3(1-t)²td
       // dist(t) = 3*(1-t)*t*|d|*sqrt(t² + (1-t)²)
-      const ARROW_WH_RATIO = 1.6;
-      const ARROW_VLEN_RATIO = 0.2;
       const arrowLen = this.config.isLinkSelected?.(link) ? 4 : 2;
       const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
       let lo = 0.5, hi = 1.0;
@@ -787,6 +791,7 @@ class FalkorDBCanvas extends HTMLElement {
         ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
       }
       ctx.stroke();
+      ctx.setLineDash([]);
 
       // Tangent at tArrow (direction the curve travels toward the node)
       const tdx = 3 * d * tArrow * (2 - 3 * tArrow);
@@ -865,8 +870,6 @@ class FalkorDBCanvas extends HTMLElement {
       if (angle < -Math.PI / 2) angle = -(-Math.PI - angle);
 
       // --- Draw the regular link line and arrowhead ---
-      const ARROW_WH_RATIO = 1.6;
-      const ARROW_VLEN_RATIO = 0.2;
       // Scale arrow geometry by 1/globalScale so arrowheads remain visually
       // consistent across zoom levels, matching ctx.lineWidth / globalScale.
       const baseArrowLen = this.config.isLinkSelected?.(link) ? 4 : 2;
@@ -915,10 +918,12 @@ class FalkorDBCanvas extends HTMLElement {
 
       ctx.strokeStyle = link.color;
       ctx.lineWidth = (this.config.isLinkSelected?.(link) ? 2 : 1) / globalScale;
+      ctx.setLineDash(this.config.linkLineDash?.(link) ?? []);
       ctx.beginPath();
       ctx.moveTo(start.x, start.y);
       ctx.quadraticCurveTo(clippedCtrlX, clippedCtrlY, tipX, tipY);
       ctx.stroke();
+      ctx.setLineDash([]);
 
       // Arrowhead tangent at tArrow: Q'(t) = 2(1-t)(control-start) + 2t(end-control)
       const atx = 2 * uArrow * (controlX - start.x) + 2 * tArrow * (end.x - controlX);
@@ -1008,7 +1013,7 @@ class FalkorDBCanvas extends HTMLElement {
     if (start.id === end.id) {
       // Self-loop: replicate the cubic bezier from drawLink
       const nodeSize = start.size || 6;
-      const d = (link.curve || 0) * nodeSize * 11.67;
+      const d = (link.curve || 0) * nodeSize * SELF_LOOP_CURVE_FACTOR;
       ctx.moveTo(start.x, start.y);
       ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
     } else {
@@ -1026,8 +1031,19 @@ class FalkorDBCanvas extends HTMLElement {
         const perpY = -dx / distance;
         const controlX = (start.x + end.x) / 2 + perpX * curvature * distance;
         const controlY = (start.y + end.y) / 2 + perpY * curvature * distance;
+
+        // Clip the pointer path to the target node border so hit testing
+        // doesn't extend underneath the target node, matching what drawLink renders.
+        const targetRadius = (end.size || 6) + PADDING;
+        const clampedT = Math.min(1, Math.max(0, 1 - targetRadius / distance));
+        const ct = clampedT;
+        const cu = 1 - ct;
+        const clippedCtrlX = start.x + ct * (controlX - start.x);
+        const clippedCtrlY = start.y + ct * (controlY - start.y);
+        const tipX = cu * cu * start.x + 2 * cu * ct * controlX + ct * ct * end.x;
+        const tipY = cu * cu * start.y + 2 * cu * ct * controlY + ct * ct * end.y;
         ctx.moveTo(start.x, start.y);
-        ctx.quadraticCurveTo(controlX, controlY, end.x, end.y);
+        ctx.quadraticCurveTo(clippedCtrlX, clippedCtrlY, tipX, tipY);
       }
     }
 
