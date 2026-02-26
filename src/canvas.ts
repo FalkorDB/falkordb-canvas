@@ -515,7 +515,6 @@ class FalkorDBCanvas extends HTMLElement {
       .linkLabel((link: GraphLink) => link.relationship)
       .linkDirectionalArrowLength(0)
       .linkWidth(0)
-      .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .linkCurvature("curve")
       .linkVisibility("visible")
       .nodeVisibility("visible")
