@@ -84,9 +84,9 @@ class FalkorDBCanvas extends HTMLElement {
     showPropertyKeyPrefix: false,
   };
 
-  private nodeMode: CanvasRenderMode = 'after';
+  private nodeMode: CanvasRenderMode = 'replace';
 
-  private linkMode: CanvasRenderMode = 'after';
+  private linkMode: CanvasRenderMode = 'replace';
 
   private nodeDegreeMap: Map<number, number> = new Map();
 
@@ -596,16 +596,23 @@ class FalkorDBCanvas extends HTMLElement {
         } else {
           this.drawLink(link, ctx, globalScale);
         }
+      })
+      .nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+        if (this.config.node) {
+          this.config.node?.nodePointerAreaPaint(node, color, ctx);
+        } else {
+          this.pointerNode(node, color, ctx);
+        }
+
+      })
+      .linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
+        if (this.config.link) {
+          this.config.link?.linkPointerAreaPaint(link, color, ctx);
+        } else {
+          this.pointerLink(link, color, ctx);
+        }
       });
 
-    // Only set pointer area paint if custom node/link configs are provided
-    if (this.config.node) {
-      this.graph?.nodePointerAreaPaint(this.config.node?.nodePointerAreaPaint);
-    }
-
-    if (this.config.link) {
-      this.graph?.linkPointerAreaPaint(this.config.link?.linkPointerAreaPaint);
-    };
 
     // Setup forces
     this.setupForces();
@@ -663,13 +670,12 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
-
     if (!node.x || !node.y) {
       node.x = 0;
       node.y = 0;
     }
 
-    ctx.lineWidth = this.config.isNodeSelected?.(node) ? 1.5 : 1;
+    ctx.lineWidth = this.config.isNodeSelected?.(node) ? 1 : 0.5;
     ctx.strokeStyle = this.config.foregroundColor;
     ctx.fillStyle = node.color;
 
@@ -710,6 +716,20 @@ class FalkorDBCanvas extends HTMLElement {
     if (line2) {
       ctx.fillText(line2, node.x, node.y + halfTextHeight);
     }
+  }
+
+  private pointerNode(node: GraphNode, color: string, ctx: CanvasRenderingContext2D) {
+    if (!node.x || !node.y) {
+      node.x = 0;
+      node.y = 0;
+    }
+
+    const radius = node.size + PADDING;
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+    ctx.fill();
   }
 
   private drawLink(link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) {
@@ -906,6 +926,50 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.fillStyle = getContrastTextColor(this.config.backgroundColor);
     ctx.fillText(link.relationship, 0, textYOffset);
     ctx.restore();
+  }
+
+  private pointerLink(link: GraphLink, color: string, ctx: CanvasRenderingContext2D) {
+    const start = link.source;
+    const end = link.target;
+
+    if (!start.x || !start.y || !end.x || !end.y) {
+      start.x = 0;
+      start.y = 0;
+      end.x = 0;
+      end.y = 0;
+    }
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 10; // Make the pointer area thicker for easier interaction
+    ctx.beginPath();
+
+    if (start.id === end.id) {
+      // Self-loop: replicate the cubic bezier from drawLink
+      const nodeSize = start.size || 6;
+      const d = (link.curve || 0) * nodeSize * 11.67;
+      ctx.moveTo(start.x, start.y);
+      ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
+    } else {
+      // Regular link: replicate the quadratic bezier from drawLink
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const curvature = link.curve || 0;
+
+      if (distance === 0) {
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+      } else {
+        const perpX = dy / distance;
+        const perpY = -dx / distance;
+        const controlX = (start.x + end.x) / 2 + perpX * curvature * distance;
+        const controlY = (start.y + end.y) / 2 + perpY * curvature * distance;
+        ctx.moveTo(start.x, start.y);
+        ctx.quadraticCurveTo(controlX, controlY, end.x, end.y);
+      }
+    }
+
+    ctx.stroke();
   }
 
   private updateLoadingState() {
