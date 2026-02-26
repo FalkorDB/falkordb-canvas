@@ -744,7 +744,7 @@ class FalkorDBCanvas extends HTMLElement {
       // from the node center (i.e. on the outer edge of the node border stroke).
       // Bezier parametric form: Bx(t)=sx+3(1-t)t²d, By(t)=sy-3(1-t)²td
       // dist(t) = 3*(1-t)*t*|d|*sqrt(t² + (1-t)²)
-      const arrowLen = this.config.isLinkSelected?.(link) ? 4 : 2;
+      const arrowLen = (this.config.isLinkSelected?.(link) ? 4 : 2) / globalScale;
       const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
       let lo = 0.5, hi = 1.0;
       const absD = Math.abs(d);
