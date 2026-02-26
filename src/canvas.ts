@@ -841,6 +841,11 @@ class FalkorDBCanvas extends HTMLElement {
       const dy = end.y - start.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
+      // Guard: skip drawing when source and target are co-located (e.g. during
+      // simulation start-up). perpX/perpY would be NaN and propagate through
+      // all downstream bezier and arrowhead calculations.
+      if (distance === 0) return;
+
       const perpX = dy / distance;
       const perpY = -dx / distance;
 
@@ -873,7 +878,10 @@ class FalkorDBCanvas extends HTMLElement {
       // --- Draw the regular link line and arrowhead ---
       const ARROW_WH_RATIO = 1.6;
       const ARROW_VLEN_RATIO = 0.2;
-      const arrowLen = this.config.isLinkSelected?.(link) ? 4 : 2;
+      // Scale arrow geometry by 1/globalScale so arrowheads remain visually
+      // consistent across zoom levels, matching ctx.lineWidth / globalScale.
+      const baseArrowLen = this.config.isLinkSelected?.(link) ? 4 : 2;
+      const arrowLen = baseArrowLen / globalScale;
       const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
 
       // Binary-search for tArrow near 1.0 where the quadratic bezier
@@ -882,18 +890,29 @@ class FalkorDBCanvas extends HTMLElement {
       const endNodeSize = end.size || 6;
       const endNodeStrokeWidth = this.config.isNodeSelected?.(end) ? 1 : 0.5;
       const borderRadius = endNodeSize + endNodeStrokeWidth;
+      const borderRadiusSq = borderRadius * borderRadius;
 
-      let lo = 0.5, hi = 1.0;
-      for (let i = 0; i < 20; i++) {
-        const mid = (lo + hi) / 2;
-        const um = 1 - mid;
-        const qx = um * um * start.x + 2 * um * mid * controlX + mid * mid * end.x;
-        const qy = um * um * start.y + 2 * um * mid * controlY + mid * mid * end.y;
-        const distToEnd = Math.sqrt((qx - end.x) ** 2 + (qy - end.y) ** 2);
-        if (distToEnd > borderRadius) lo = mid;
-        else hi = mid;
+      // When borderRadius is small relative to the chord length, the bezier and
+      // chord diverge only near t=1, so a linear approximation is accurate and
+      // avoids the per-frame search cost on large graphs.
+      let tArrow: number;
+      if (borderRadius / distance < 0.02) {
+        tArrow = Math.min(1, Math.max(0, 1 - borderRadius / distance));
+      } else {
+        let lo = 0.5, hi = 1.0;
+        for (let i = 0; i < 10; i++) {
+          const mid = (lo + hi) / 2;
+          const um = 1 - mid;
+          const qx = um * um * start.x + 2 * um * mid * controlX + mid * mid * end.x;
+          const qy = um * um * start.y + 2 * um * mid * controlY + mid * mid * end.y;
+          const dxEnd = qx - end.x;
+          const dyEnd = qy - end.y;
+          if (dxEnd * dxEnd + dyEnd * dyEnd > borderRadiusSq) lo = mid;
+          else hi = mid;
+          if (hi - lo < 1e-3) break;
+        }
+        tArrow = (lo + hi) / 2;
       }
-      const tArrow = (lo + hi) / 2;
       const uArrow = 1 - tArrow;
 
       // Tip = Q(tArrow)
