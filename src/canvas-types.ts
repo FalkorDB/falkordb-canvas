@@ -30,7 +30,7 @@ export interface ForceGraphConfig {
     nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void;
   };
   link?: {
-    linkCanvasObject: (link: GraphLink, ctx: CanvasRenderingContext2D) => void;
+    linkCanvasObject: (link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => void;
     linkPointerAreaPaint: (link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => void;
   };
 }
