@@ -24,12 +24,16 @@ import {
 } from "./canvas-utils.js";
 
 const PADDING = 2;
-
 // Arrow geometry constants (shared by self-loop and regular-link drawing paths)
 const ARROW_WH_RATIO = 1.6;
 const ARROW_VLEN_RATIO = 0.2;
 // Multiplier to convert node size → cubic bezier control-point distance for self-loops
 const SELF_LOOP_CURVE_FACTOR = 11.67;
+// Base font size used for the initial measurement and for two-line text.
+const NODE_FONT_SIZE_BASE = 2;
+// Fraction of the chord width that single-line text should fill (0–1).
+// Leaves (1 - ratio)/2 of the radius as horizontal padding on each side.
+const NODE_TEXT_FILL_RATIO = 0.85;
 
 // Force constants
 const CHARGE_STRENGTH = -400;
@@ -96,6 +100,9 @@ class FalkorDBCanvas extends HTMLElement {
 
   private nodeDegreeMap: Map<number, number> = new Map();
 
+  // Per-node font size cache: computed once per node, read every frame.
+  private nodeDisplayFontSize: Map<number, number> = new Map();
+
   private relationshipsTextCache: Map<
     string,
     {
@@ -104,6 +111,12 @@ class FalkorDBCanvas extends HTMLElement {
       textYOffset: number;
     }
   > = new Map();
+
+  private onFontsLoadingDone = () => {
+    this.relationshipsTextCache.clear();
+    this.nodeDisplayFontSize.clear();
+    this.triggerRender();
+  };
 
   private viewport: ViewportState;
 
@@ -148,10 +161,16 @@ class FalkorDBCanvas extends HTMLElement {
 
     this.log('Component connected to DOM');
     this.render();
+
+    // Text measurements taken before the custom font finishes loading use the
+    // fallback system font and produce wrong widths that get locked in the cache.
+    // Re-measure on every font-load batch (including the initial one).
+    document.fonts.addEventListener("loadingdone", this.onFontsLoadingDone);
   }
 
   disconnectedCallback() {
     this.log('Component disconnected from DOM');
+    document.fonts.removeEventListener("loadingdone", this.onFontsLoadingDone);
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
@@ -684,15 +703,34 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.fillStyle = getContrastTextColor(node.color);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = "400 2px SofiaSans";
 
     let [line1, line2] = node.displayName;
+    const textRadius = node.size - PADDING / 2;
 
     if (!line1 && !line2) {
       const text = getNodeDisplayText(node, this.config.captionsKeys, this.config.showPropertyKeyPrefix);
-      const textRadius = node.size - PADDING / 2;
+
+      // Measure at the base (smallest) size — one cheap measurement.
+      ctx.font = `400 ${NODE_FONT_SIZE_BASE}px SofiaSans`;
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
+
+      let chosenSize = NODE_FONT_SIZE_BASE;
+      if (!line2) {
+        // Single-line: scale up so the text fills NODE_TEXT_FILL_RATIO of the
+        // available chord. Font metrics scale linearly so this is exact.
+        const measuredWidth = ctx.measureText(line1).width;
+        if (measuredWidth > 0) {
+          chosenSize = NODE_FONT_SIZE_BASE * (NODE_TEXT_FILL_RATIO * 2 * textRadius / measuredWidth);
+        }
+      }
+
+      ctx.font = `400 ${chosenSize}px SofiaSans`;
       node.displayName = [line1, line2];
+      this.nodeDisplayFontSize.set(node.id, chosenSize);
+    } else {
+      // Cache hit: the font size was stored when displayName was first computed.
+      const chosenSize = this.nodeDisplayFontSize.get(node.id) ?? NODE_FONT_SIZE_BASE;
+      ctx.font = `400 ${chosenSize}px SofiaSans`;
     }
 
     const textMetrics = ctx.measureText(line1);
@@ -965,20 +1003,23 @@ class FalkorDBCanvas extends HTMLElement {
     // Draw text with alphabetic baseline, positioned so visual center is at y=0
     ctx.textBaseline = "alphabetic";
 
-    // Separate cache entries per font weight — each measures its own ink bounds
-    // so the background is always tight to the actual glyphs with equal padding.
-    const cacheKey = `${link.relationship}${isLinkSelected ? ':selected' : ''}`;
+    // Separate cache entries per weight so each state is measured with its own
+    // font, giving equal visual padding regardless of selection state.
+    const cacheKey = `${link.relationship}_${isLinkSelected ? "700" : "400"}`;
     let cached = this.relationshipsTextCache.get(cacheKey);
 
     if (!cached) {
-      // ctx.font is already set to the correct weight above — measure now.
+      // ctx.font is already set to the correct weight above; measure it directly.
       const metrics = ctx.measureText(link.relationship);
-      // Use actual ink bounds (not fontBoundingBox* which is the full line-box
-      // and leaves proportionally more empty space for lighter-weight text).
+      // Use actual ink bounds for vertical metrics; fontBoundingBox* is the full
+      // line-box and adds excessive space for lighter weights.
+      // Use metrics.width for horizontal extent: actualBoundingBoxLeft/Right are
+      // unreliable with textAlign="center" and can double the value on some engines.
       const inkAscent  = metrics.actualBoundingBoxAscent  ?? metrics.fontBoundingBoxAscent;
       const inkDescent = metrics.actualBoundingBoxDescent ?? metrics.fontBoundingBoxDescent;
-      const inkWidth   = (metrics.actualBoundingBoxLeft ?? 0) + (metrics.actualBoundingBoxRight ?? metrics.width);
+      const inkWidth   = metrics.width;
       const bgPadding = 0.3;
+
       cached = {
         textWidth:   inkWidth  + bgPadding * 2,
         textHeight:  inkAscent + inkDescent + bgPadding * 2,
