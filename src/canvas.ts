@@ -188,7 +188,7 @@ class FalkorDBCanvas extends HTMLElement {
     // Update event handlers if they were provided
     if (config.onNodeClick || config.onLinkClick || config.onNodeRightClick || config.onLinkRightClick ||
       config.onNodeHover || config.onLinkHover || config.onBackgroundClick || config.onBackgroundRightClick || config.onZoom ||
-      config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.linkLineDash || config.node || config.link) {
+      config.onEngineStop || config.isNodeSelected || config.isLinkSelected || config.node || config.link) {
       this.log('Updating event handlers');
       this.updateEventHandlers();
     }
@@ -593,7 +593,6 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onEngineStop();
         }
       })
-      .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
         if (this.config.node) {
           this.config.node.nodeCanvasObject(node, ctx);
@@ -789,7 +788,7 @@ class FalkorDBCanvas extends HTMLElement {
       const d = (link.curve || 0) * nodeSize * SELF_LOOP_CURVE_FACTOR;
 
       ctx.lineWidth = (isLinkSelected ? 2 : 1) / globalScale;
-      ctx.setLineDash(this.config.linkLineDash?.(link) ?? []);
+      if (this.config.linkLineDash) ctx.setLineDash(this.config.linkLineDash(link));
 
       // The visible outer edge of the node border is nodeSize + strokeWidth
       // (stroke is centered on nodeSize + strokeWidth/2, so outer edge = nodeSize + strokeWidth).
@@ -1317,7 +1316,6 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onEngineStop();
         }
       })
-      .linkLineDash((link: GraphLink) => this.config.linkLineDash?.(link) ?? null)
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
         if (this.config.node) {
           this.config.node.nodeCanvasObject(node, ctx);
