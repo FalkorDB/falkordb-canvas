@@ -43,6 +43,7 @@ export type {
 
 // Utils
 export {
+  NODE_SIZE,
   dataToGraphData,
   graphDataToData,
   getContrastTextColor,

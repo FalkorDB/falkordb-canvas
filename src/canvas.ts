@@ -24,12 +24,16 @@ import {
 } from "./canvas-utils.js";
 
 const PADDING = 2;
-
 // Arrow geometry constants (shared by self-loop and regular-link drawing paths)
 const ARROW_WH_RATIO = 1.6;
 const ARROW_VLEN_RATIO = 0.2;
 // Multiplier to convert node size → cubic bezier control-point distance for self-loops
 const SELF_LOOP_CURVE_FACTOR = 11.67;
+// Base font size used for the initial measurement and for two-line text.
+const NODE_FONT_SIZE_BASE = 2;
+// Fraction of the chord width that single-line text should fill (0–1).
+// Leaves (1 - ratio)/2 of the radius as horizontal padding on each side.
+const NODE_TEXT_FILL_RATIO = 0.85;
 
 // Force constants
 const CHARGE_STRENGTH = -400;
@@ -96,6 +100,9 @@ class FalkorDBCanvas extends HTMLElement {
 
   private nodeDegreeMap: Map<number, number> = new Map();
 
+  // Per-node font size cache: computed once per node, read every frame.
+  private nodeDisplayFontSize: Map<number, number> = new Map();
+
   private relationshipsTextCache: Map<
     string,
     {
@@ -104,6 +111,12 @@ class FalkorDBCanvas extends HTMLElement {
       textYOffset: number;
     }
   > = new Map();
+
+  private onFontsLoadingDone = () => {
+    this.relationshipsTextCache.clear();
+    this.nodeDisplayFontSize.clear();
+    this.triggerRender();
+  };
 
   private viewport: ViewportState;
 
@@ -148,10 +161,16 @@ class FalkorDBCanvas extends HTMLElement {
 
     this.log('Component connected to DOM');
     this.render();
+
+    // Text measurements taken before the custom font finishes loading use the
+    // fallback system font and produce wrong widths that get locked in the cache.
+    // Re-measure on every font-load batch (including the initial one).
+    document.fonts.addEventListener("loadingdone", this.onFontsLoadingDone);
   }
 
   disconnectedCallback() {
     this.log('Component disconnected from DOM');
+    document.fonts.removeEventListener("loadingdone", this.onFontsLoadingDone);
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
@@ -584,7 +603,7 @@ class FalkorDBCanvas extends HTMLElement {
       })
       .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
         if (this.config.link) {
-          this.config.link.linkCanvasObject(link, ctx);
+          this.config.link.linkCanvasObject(link, ctx, globalScale);
         } else {
           this.drawLink(link, ctx, globalScale);
         }
@@ -603,7 +622,6 @@ class FalkorDBCanvas extends HTMLElement {
           this.pointerLink(link, color, ctx);
         }
       });
-
 
     // Setup forces
     this.setupForces();
@@ -661,7 +679,11 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
-    if (node.x == null || node.y == null) return;
+
+    if (node.x === undefined || node.y === undefined) {
+      node.x = 0;
+      node.y = 0;
+    }
 
     ctx.lineWidth = this.config.isNodeSelected?.(node) ? 1 : 0.5;
     ctx.strokeStyle = this.config.foregroundColor;
@@ -681,15 +703,34 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.fillStyle = getContrastTextColor(node.color);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = "400 2px SofiaSans";
 
     let [line1, line2] = node.displayName;
+    const textRadius = node.size - PADDING / 2;
 
     if (!line1 && !line2) {
       const text = getNodeDisplayText(node, this.config.captionsKeys, this.config.showPropertyKeyPrefix);
-      const textRadius = node.size - PADDING / 2;
+
+      // Measure at the base (smallest) size — one cheap measurement.
+      ctx.font = `400 ${NODE_FONT_SIZE_BASE}px SofiaSans`;
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
+
+      let chosenSize = NODE_FONT_SIZE_BASE;
+      if (!line2) {
+        // Single-line: scale up so the text fills NODE_TEXT_FILL_RATIO of the
+        // available chord. Font metrics scale linearly so this is exact.
+        const measuredWidth = ctx.measureText(line1).width;
+        if (measuredWidth > 0) {
+          chosenSize = NODE_FONT_SIZE_BASE * (NODE_TEXT_FILL_RATIO * 2 * textRadius / measuredWidth);
+        }
+      }
+
+      ctx.font = `400 ${chosenSize}px SofiaSans`;
       node.displayName = [line1, line2];
+      this.nodeDisplayFontSize.set(node.id, chosenSize);
+    } else {
+      // Cache hit: the font size was stored when displayName was first computed.
+      const chosenSize = this.nodeDisplayFontSize.get(node.id) ?? NODE_FONT_SIZE_BASE;
+      ctx.font = `400 ${chosenSize}px SofiaSans`;
     }
 
     const textMetrics = ctx.measureText(line1);
@@ -707,7 +748,10 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   private pointerNode(node: GraphNode, color: string, ctx: CanvasRenderingContext2D) {
-    if (node.x == null || node.y == null) return;
+    if (node.x === undefined || node.y === undefined) {
+      node.x = 0;
+      node.y = 0;
+    };
 
     const radius = node.size + PADDING;
 
@@ -721,29 +765,41 @@ class FalkorDBCanvas extends HTMLElement {
     const start = link.source;
     const end = link.target;
 
-    if (start.x == null || start.y == null || end.x == null || end.y == null) return;
+    if (start.x === undefined || start.y === undefined || end.x === undefined || end.y === undefined) {
+      start.x = 0;
+      start.y = 0;
+      end.x = 0;
+      end.y = 0;
+    }
 
     let textX;
     let textY;
     let angle;
 
+    const isLinkSelected = this.config.isLinkSelected?.(link) ?? false;
+    const arrowLen = isLinkSelected ? 4 : 2;
+
+    // Deferred arrowhead — drawn after the label so it is never covered by
+    // the label background rect (which happens for short links where the
+    // bezier midpoint and the arrow tip are at almost the same position).
+    let pendingArrow: { tipX: number; tipY: number; nx: number; ny: number; arrowLen: number; arrowHalfWidth: number } | null = null;
+
     if (start.id === end.id) {
       const nodeSize = start.size || 6;
       const d = (link.curve || 0) * nodeSize * SELF_LOOP_CURVE_FACTOR;
 
-      ctx.lineWidth = (this.config.isLinkSelected?.(link) ? 2 : 1) / globalScale;
+      ctx.lineWidth = (isLinkSelected ? 2 : 1) / globalScale;
       ctx.setLineDash(this.config.linkLineDash?.(link) ?? []);
 
       // The visible outer edge of the node border is nodeSize + strokeWidth
       // (stroke is centered on nodeSize + strokeWidth/2, so outer edge = nodeSize + strokeWidth).
       const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? 1 : 0.5;
-      const borderRadius = nodeSize + nodeStrokeWidth;
+      const borderRadius = nodeSize + nodeStrokeWidth + PADDING;
 
       // Binary search for tArrow near 1.0 where the curve is at distance borderRadius
       // from the node center (i.e. on the outer edge of the node border stroke).
       // Bezier parametric form: Bx(t)=sx+3(1-t)t²d, By(t)=sy-3(1-t)²td
       // dist(t) = 3*(1-t)*t*|d|*sqrt(t² + (1-t)²)
-      const arrowLen = (this.config.isLinkSelected?.(link) ? 4 : 2) / globalScale;
       const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
       let lo = 0.5, hi = 1.0;
       const absD = Math.abs(d);
@@ -803,23 +859,7 @@ class FalkorDBCanvas extends HTMLElement {
       if (tLen !== 0 && canReachBorder) {
         const nx = tdx / tLen;
         const ny = tdy / tLen;
-
-        ctx.fillStyle = link.color;
-        ctx.beginPath();
-        ctx.moveTo(tipX, tipY);
-        ctx.lineTo(
-          tipX - nx * arrowLen + ny * arrowHalfWidth,
-          tipY - ny * arrowLen - nx * arrowHalfWidth,
-        );
-        ctx.lineTo(
-          tipX - nx * arrowLen * (1 - ARROW_VLEN_RATIO),
-          tipY - ny * arrowLen * (1 - ARROW_VLEN_RATIO),
-        );
-        ctx.lineTo(
-          tipX - nx * arrowLen - ny * arrowHalfWidth,
-          tipY - ny * arrowLen + nx * arrowHalfWidth,
-        );
-        ctx.fill();
+        pendingArrow = { tipX, tipY, nx, ny, arrowLen, arrowHalfWidth };
       }
 
       // Midpoint of cubic bezier: P0=(sx,sy), P1=(sx,sy-d), P2=(sx+d,sy), P3=(sx,sy)
@@ -868,24 +908,14 @@ class FalkorDBCanvas extends HTMLElement {
       if (angle > Math.PI / 2) angle = -(Math.PI - angle);
       if (angle < -Math.PI / 2) angle = -(-Math.PI - angle);
 
-      // --- Draw the regular link line and arrowhead ---
-      // Scale arrow geometry by 1/globalScale so arrowheads remain visually
-      // consistent across zoom levels, matching ctx.lineWidth / globalScale.
-      const baseArrowLen = this.config.isLinkSelected?.(link) ? 4 : 2;
-      const arrowLen = baseArrowLen / globalScale;
+      // Draw regular link line and arrowhead
       const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
 
-      // Binary-search for tArrow near 1.0 where the quadratic bezier
-      // Q(t) = (1-t)²·start + 2(1-t)t·control + t²·end
-      // is at distance borderRadius from the target node centre.
+      // Target-side clip: find t where bezier enters target node border + PADDING
       const endNodeSize = end.size || 6;
-      const endNodeStrokeWidth = this.config.isNodeSelected?.(end) ? 1 : 0.5;
-      const borderRadius = endNodeSize + endNodeStrokeWidth;
+      const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? 1 : 0.5) + PADDING;
       const borderRadiusSq = borderRadius * borderRadius;
 
-      // When borderRadius is small relative to the chord length, the bezier and
-      // chord diverge only near t=1, so a linear approximation is accurate and
-      // avoids the per-frame search cost on large graphs.
       let tArrow: number;
       if (borderRadius / distance < 0.02) {
         tArrow = Math.min(1, Math.max(0, 1 - borderRadius / distance));
@@ -906,25 +936,57 @@ class FalkorDBCanvas extends HTMLElement {
       }
       const uArrow = 1 - tArrow;
 
-      // Tip = Q(tArrow)
       const tipX = uArrow * uArrow * start.x + 2 * uArrow * tArrow * controlX + tArrow * tArrow * end.x;
       const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
 
-      // Clipped quadratic bezier [0, tArrow] via De Casteljau:
-      //   new control = lerp(start, control, tArrow)
-      const clippedCtrlX = start.x + tArrow * (controlX - start.x);
-      const clippedCtrlY = start.y + tArrow * (controlY - start.y);
+      // Source-side clip: find t where bezier exits source node border + PADDING
+      const startNodeSize = start.size || 6;
+      const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + PADDING;
+      const srcBorderRadiusSq = srcBorderRadius * srcBorderRadius;
+
+      let tStart = 0;
+      if (srcBorderRadius / distance < 0.02) {
+        tStart = Math.min(0.5, srcBorderRadius / distance);
+      } else {
+        let lo = 0.0, hi = 0.5;
+        for (let i = 0; i < 10; i++) {
+          const mid = (lo + hi) / 2;
+          const um = 1 - mid;
+          const qx = um * um * start.x + 2 * um * mid * controlX + mid * mid * end.x;
+          const qy = um * um * start.y + 2 * um * mid * controlY + mid * mid * end.y;
+          const dxSrc = qx - start.x;
+          const dySrc = qy - start.y;
+          if (dxSrc * dxSrc + dySrc * dySrc < srcBorderRadiusSq) lo = mid;
+          else hi = mid;
+          if (hi - lo < 1e-3) break;
+        }
+        tStart = (lo + hi) / 2;
+      }
+
+      // Gap start point: Q(tStart)
+      const uS = 1 - tStart;
+      const gapStartX = uS * uS * start.x + 2 * uS * tStart * controlX + tStart * tStart * end.x;
+      const gapStartY = uS * uS * start.y + 2 * uS * tStart * controlY + tStart * tStart * end.y;
+
+      // Sub-bezier [tStart, tArrow] control point via De Casteljau:
+      //   Right sub-bezier at tStart → NewP1 = lerp(control, end, tStart)
+      //   Left sub-curve at tArrow' = (tArrow-tStart)/(1-tStart) → ctrl = lerp(gapStart, NewP1, tArrow')
+      const tArrowPrime = tStart < tArrow ? (tArrow - tStart) / (1 - tStart) : 0;
+      const newP1X = (1 - tStart) * controlX + tStart * end.x;
+      const newP1Y = (1 - tStart) * controlY + tStart * end.y;
+      const subCtrlX = (1 - tArrowPrime) * gapStartX + tArrowPrime * newP1X;
+      const subCtrlY = (1 - tArrowPrime) * gapStartY + tArrowPrime * newP1Y;
 
       ctx.strokeStyle = link.color;
-      ctx.lineWidth = (this.config.isLinkSelected?.(link) ? 2 : 1) / globalScale;
+      ctx.lineWidth = (isLinkSelected ? 2 : 1) / globalScale;
+      
       ctx.setLineDash(this.config.linkLineDash?.(link) ?? []);
       ctx.beginPath();
-      ctx.moveTo(start.x, start.y);
-      ctx.quadraticCurveTo(clippedCtrlX, clippedCtrlY, tipX, tipY);
+      ctx.moveTo(gapStartX, gapStartY);
+      ctx.quadraticCurveTo(subCtrlX, subCtrlY, tipX, tipY);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Arrowhead tangent at tArrow: Q'(t) = 2(1-t)(control-start) + 2t(end-control)
       const atx = 2 * uArrow * (controlX - start.x) + 2 * tArrow * (end.x - controlX);
       const aty = 2 * uArrow * (controlY - start.y) + 2 * tArrow * (end.y - controlY);
       const atLen = Math.sqrt(atx * atx + aty * aty);
@@ -932,40 +994,39 @@ class FalkorDBCanvas extends HTMLElement {
       if (atLen !== 0) {
         const nx = atx / atLen;
         const ny = aty / atLen;
-
-        ctx.fillStyle = link.color;
-        ctx.beginPath();
-        ctx.moveTo(tipX, tipY);
-        ctx.lineTo(tipX - nx * arrowLen + ny * arrowHalfWidth, tipY - ny * arrowLen - nx * arrowHalfWidth);
-        ctx.lineTo(
-          tipX - nx * arrowLen * (1 - ARROW_VLEN_RATIO),
-          tipY - ny * arrowLen * (1 - ARROW_VLEN_RATIO),
-        );
-        ctx.lineTo(tipX - nx * arrowLen - ny * arrowHalfWidth, tipY - ny * arrowLen + nx * arrowHalfWidth);
-        ctx.fill();
+        pendingArrow = { tipX, tipY, nx, ny, arrowLen, arrowHalfWidth };
       }
     }
 
-    ctx.font = "400 2px SofiaSans";
+    ctx.font = isLinkSelected ? "700 2px SofiaSans" : "400 2px SofiaSans";
     ctx.textAlign = "center";
     // Draw text with alphabetic baseline, positioned so visual center is at y=0
     ctx.textBaseline = "alphabetic";
 
-    let cached = this.relationshipsTextCache.get(link.relationship);
+    // Separate cache entries per weight so each state is measured with its own
+    // font, giving equal visual padding regardless of selection state.
+    const cacheKey = `${link.relationship}_${isLinkSelected ? "700" : "400"}`;
+    let cached = this.relationshipsTextCache.get(cacheKey);
 
     if (!cached) {
+      // ctx.font is already set to the correct weight above; measure it directly.
       const metrics = ctx.measureText(link.relationship);
-      // Use font-level metrics for consistent height across all texts
-      const fontAscent = metrics.fontBoundingBoxAscent ?? metrics.actualBoundingBoxAscent;
-      const fontDescent = metrics.fontBoundingBoxDescent ?? metrics.actualBoundingBoxDescent;
-      // Calculate visual center offset from baseline using font-level metrics
-      const visualCenter = (fontAscent - fontDescent) / 2;
+      // Use actual ink bounds for vertical metrics; fontBoundingBox* is the full
+      // line-box and adds excessive space for lighter weights.
+      // Use metrics.width for horizontal extent: actualBoundingBoxLeft/Right are
+      // unreliable with textAlign="center" and can double the value on some engines.
+      const inkAscent  = metrics.actualBoundingBoxAscent  ?? metrics.fontBoundingBoxAscent;
+      const inkDescent = metrics.actualBoundingBoxDescent ?? metrics.fontBoundingBoxDescent;
+      const inkWidth   = metrics.width;
+      const bgPadding = 0.3;
+
       cached = {
-        textWidth: metrics.width,
-        textHeight: fontAscent + fontDescent,
-        textYOffset: visualCenter,
+        textWidth:   inkWidth  + bgPadding * 2,
+        textHeight:  inkAscent + inkDescent + bgPadding * 2,
+        // Shift baseline up so the ink block is centred inside the bg rect.
+        textYOffset: (inkAscent - inkDescent) / 2,
       };
-      this.relationshipsTextCache.set(link.relationship, cached);
+      this.relationshipsTextCache.set(cacheKey, cached);
     }
 
     const { textWidth, textHeight, textYOffset } = cached;
@@ -988,6 +1049,18 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.fillStyle = getContrastTextColor(this.config.backgroundColor);
     ctx.fillText(link.relationship, 0, textYOffset);
     ctx.restore();
+
+    // Draw arrowhead last so it always appears on top of the label background.
+    if (pendingArrow) {
+      const { tipX, tipY, nx, ny, arrowLen: aLen, arrowHalfWidth: aHW } = pendingArrow;
+      ctx.fillStyle = link.color;
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX - nx * aLen + ny * aHW, tipY - ny * aLen - nx * aHW);
+      ctx.lineTo(tipX - nx * aLen * (1 - ARROW_VLEN_RATIO), tipY - ny * aLen * (1 - ARROW_VLEN_RATIO));
+      ctx.lineTo(tipX - nx * aLen - ny * aHW, tipY - ny * aLen + nx * aHW);
+      ctx.fill();
+    }
   }
 
   private pointerLink(link: GraphLink, color: string, ctx: CanvasRenderingContext2D) {
@@ -1010,13 +1083,43 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.beginPath();
 
     if (start.id === end.id) {
-      // Self-loop: replicate the cubic bezier from drawLink
+      // Self-loop: replicate exact cubic bezier clip from drawLink
       const nodeSize = start.size || 6;
       const d = (link.curve || 0) * nodeSize * SELF_LOOP_CURVE_FACTOR;
+
+      const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? 1 : 0.5;
+      const borderRadius = nodeSize + nodeStrokeWidth + PADDING;
+      const absD = Math.abs(d);
+      const maxReachableDist = 3 * 0.5 * 0.5 * absD * Math.sqrt(0.5);
+      const canReachBorder = absD > 0 && maxReachableDist >= borderRadius;
+
       ctx.moveTo(start.x, start.y);
-      ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
+      if (canReachBorder) {
+        let lo = 0.5, hi = 1.0;
+        for (let i = 0; i < 20; i++) {
+          const mid = (lo + hi) / 2;
+          const um = 1 - mid;
+          const dist = 3 * um * mid * absD * Math.sqrt(mid * mid + um * um);
+          if (dist > borderRadius) lo = mid;
+          else hi = mid;
+        }
+        const tArrow = (lo + hi) / 2;
+        const uArrow = 1 - tArrow;
+        const tipX = start.x + 3 * uArrow * tArrow * tArrow * d;
+        const tipY = start.y - 3 * uArrow * uArrow * tArrow * d;
+        ctx.bezierCurveTo(
+          start.x,
+          start.y - tArrow * d,
+          start.x + tArrow * tArrow * d,
+          start.y - 2 * tArrow * uArrow * d,
+          tipX,
+          tipY,
+        );
+      } else {
+        ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
+      }
     } else {
-      // Regular link: replicate the quadratic bezier from drawLink
+      // Regular link: replicate exact quadratic bezier clip from drawLink
       const dx = end.x - start.x;
       const dy = end.y - start.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
@@ -1031,18 +1134,69 @@ class FalkorDBCanvas extends HTMLElement {
         const controlX = (start.x + end.x) / 2 + perpX * curvature * distance;
         const controlY = (start.y + end.y) / 2 + perpY * curvature * distance;
 
-        // Clip the pointer path to the target node border so hit testing
-        // doesn't extend underneath the target node, matching what drawLink renders.
-        const targetRadius = (end.size || 6) + PADDING;
-        const clampedT = Math.min(1, Math.max(0, 1 - targetRadius / distance));
-        const ct = clampedT;
-        const cu = 1 - ct;
-        const clippedCtrlX = start.x + ct * (controlX - start.x);
-        const clippedCtrlY = start.y + ct * (controlY - start.y);
-        const tipX = cu * cu * start.x + 2 * cu * ct * controlX + ct * ct * end.x;
-        const tipY = cu * cu * start.y + 2 * cu * ct * controlY + ct * ct * end.y;
-        ctx.moveTo(start.x, start.y);
-        ctx.quadraticCurveTo(clippedCtrlX, clippedCtrlY, tipX, tipY);
+        // Use the same borderRadius and binary-search clip as drawLink
+        const endNodeSize = end.size || 6;
+        const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? 1 : 0.5) + PADDING;
+        const borderRadiusSq = borderRadius * borderRadius;
+
+        let tArrow: number;
+        if (borderRadius / distance < 0.02) {
+          tArrow = Math.min(1, Math.max(0, 1 - borderRadius / distance));
+        } else {
+          let lo = 0.5, hi = 1.0;
+          for (let i = 0; i < 10; i++) {
+            const mid = (lo + hi) / 2;
+            const um = 1 - mid;
+            const qx = um * um * start.x + 2 * um * mid * controlX + mid * mid * end.x;
+            const qy = um * um * start.y + 2 * um * mid * controlY + mid * mid * end.y;
+            const dxEnd = qx - end.x;
+            const dyEnd = qy - end.y;
+            if (dxEnd * dxEnd + dyEnd * dyEnd > borderRadiusSq) lo = mid;
+            else hi = mid;
+            if (hi - lo < 1e-3) break;
+          }
+          tArrow = (lo + hi) / 2;
+        }
+        const uArrow = 1 - tArrow;
+        const tipX = uArrow * uArrow * start.x + 2 * uArrow * tArrow * controlX + tArrow * tArrow * end.x;
+        const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
+
+        // Source-side clip: mirror of drawLink source gap
+        const startNodeSize = start.size || 6;
+        const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + PADDING;
+        const srcBorderRadiusSq = srcBorderRadius * srcBorderRadius;
+
+        let tStart = 0;
+        if (srcBorderRadius / distance < 0.02) {
+          tStart = Math.min(0.5, srcBorderRadius / distance);
+        } else {
+          let lo = 0.0, hi = 0.5;
+          for (let i = 0; i < 10; i++) {
+            const mid = (lo + hi) / 2;
+            const um = 1 - mid;
+            const qx = um * um * start.x + 2 * um * mid * controlX + mid * mid * end.x;
+            const qy = um * um * start.y + 2 * um * mid * controlY + mid * mid * end.y;
+            const dxSrc = qx - start.x;
+            const dySrc = qy - start.y;
+            if (dxSrc * dxSrc + dySrc * dySrc < srcBorderRadiusSq) lo = mid;
+            else hi = mid;
+            if (hi - lo < 1e-3) break;
+          }
+          tStart = (lo + hi) / 2;
+        }
+
+        const uS = 1 - tStart;
+        const gapStartX = uS * uS * start.x + 2 * uS * tStart * controlX + tStart * tStart * end.x;
+        const gapStartY = uS * uS * start.y + 2 * uS * tStart * controlY + tStart * tStart * end.y;
+
+        const tArrowPrime = tStart < tArrow ? (tArrow - tStart) / (1 - tStart) : 0;
+        const newP1X = (1 - tStart) * controlX + tStart * end.x;
+        const newP1Y = (1 - tStart) * controlY + tStart * end.y;
+        const subCtrlX = (1 - tArrowPrime) * gapStartX + tArrowPrime * newP1X;
+        const subCtrlY = (1 - tArrowPrime) * gapStartY + tArrowPrime * newP1Y;
+
+        ctx.moveTo(gapStartX, gapStartY);
+        ctx.quadraticCurveTo(subCtrlX, subCtrlY, tipX, tipY);
       }
     }
 
@@ -1173,25 +1327,27 @@ class FalkorDBCanvas extends HTMLElement {
       })
       .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
         if (this.config.link) {
-          this.config.link.linkCanvasObject(link, ctx);
+          this.config.link.linkCanvasObject(link, ctx, globalScale);
         } else {
           this.drawLink(link, ctx, globalScale);
         }
-      })
-      .nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
-        if (this.config.node) {
-          this.config.node.nodePointerAreaPaint(node, color, ctx);
-        } else {
-          this.pointerNode(node, color, ctx);
-        }
-      })
-      .linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
-        if (this.config.link) {
-          this.config.link.linkPointerAreaPaint(link, color, ctx);
-        } else {
-          this.pointerLink(link, color, ctx);
-        }
       });
+
+    if (this.config.node) {
+      this.graph.nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+        this.config.node!.nodePointerAreaPaint(node, color, ctx);
+      });
+    } else {
+      this.graph.nodePointerAreaPaint();
+    }
+
+    if (this.config.link) {
+      this.graph.linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
+        this.config.link!.linkPointerAreaPaint(link, color, ctx);
+      });
+    } else {
+      this.graph.linkPointerAreaPaint();
+    }
   }
 
   private updateTooltipStyles() {
