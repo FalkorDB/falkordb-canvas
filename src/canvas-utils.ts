@@ -8,7 +8,7 @@ import {
 } from "./canvas-types.js";
 
 export const LINK_DISTANCE = 45;
-const NODE_SIZE = 6;
+export const NODE_SIZE = 9;
 const LINK_CURVE_MULTIPLIER = 0.4;
 
 type NodePair = [number, number];
