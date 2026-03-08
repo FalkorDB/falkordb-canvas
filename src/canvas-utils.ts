@@ -218,14 +218,10 @@ export const getNodeDisplayText = (
   captionKeys: string[],
   showPropertyKeyPrefix: boolean
 ) => {
-  const key = captionKeys.find((k) => {
-    const match = Object.keys(node.data).find((dk) => dk.toLowerCase() === k.toLowerCase());
-    return match && String(node.data[match]).trim().length > 0;
-  });
+  const key = captionKeys.find((key) => node.data[key] && String(node.data[key]).trim().length > 0);
 
   if (key) {
-    const actualKey = Object.keys(node.data).find((dk) => dk.toLowerCase() === key.toLowerCase())!;
-    return showPropertyKeyPrefix ? `${key}: ${String(node.data[actualKey])}` : String(node.data[actualKey]);
+    return showPropertyKeyPrefix ? `${key}: ${String(node.data[key])}` : String(node.data[key]);
   }
 
   return showPropertyKeyPrefix ? `ID: ${String(node.id)}` : String(node.id);
@@ -235,10 +231,7 @@ export const getNodeDisplayKey = (
   node: Node,
   captionKeys: string[]
 ) => {
-  const key = captionKeys.find((k) => {
-    const match = Object.keys(node.data).find((dk) => dk.toLowerCase() === k.toLowerCase());
-    return match && String(node.data[match]).trim().length > 0;
-  });
+  const key = captionKeys.find((key) => node.data[key] && String(node.data[key]).trim().length > 0);
 
   return key || "id";
 }
