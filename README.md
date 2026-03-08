@@ -7,7 +7,7 @@ A standalone web component for visualizing FalkorDB graphs using force-directed 
 - 🎨 **Force-directed graph layout** - Automatic positioning using D3 force simulation with smart collision detection
 - 🎯 **Interactive** - Click, hover, right-click interactions on nodes, links, and background
 - 🌓 **Theme support** - Light and dark mode compatible with customizable colors
-- ⚡ **Performance** - Optimized rendering with HTML5 canvas
+- ⚡ **Performance** - Optimized rendering with HTML5 canvas, including viewport culling and low-zoom draw skipping for large graphs
 - 💫 **Loading states** - Built-in skeleton loading with pulse animation
 - 🎨 **Customizable** - Colors, sizes, behaviors, and custom rendering functions
 - 📦 **TypeScript support** - Full type definitions included
@@ -156,6 +156,7 @@ function GraphVisualization() {
 | `isLinkSelected` | | Function to determine if a link is selected. Signature: `(link: GraphLink) => boolean` |
 | `node` | | Custom node rendering functions (see Custom Rendering) |
 | `link` | | Custom link rendering functions (see Custom Rendering) |
+| `largeGraph` | | Large-graph rendering optimisations (see [Large-Graph Optimisations](#large-graph-optimisations)) |
 
 ### Data Types
 
@@ -364,6 +365,58 @@ while (true) {
 2. **Static graphs**: Set `cooldownTicks: 0` after initial layout
 3. **Custom rendering**: Optimize your custom `nodeCanvasObject` and `linkCanvasObject` functions
 4. **Viewport**: Use `getViewport()` and `setViewport()` to preserve user's view when updating data
+5. **Very large graphs**: Enable viewport culling via the `largeGraph` option (see below)
+
+## Large-Graph Optimisations
+
+For graphs with thousands of nodes and links, enable the built-in viewport culling and low-zoom draw-skipping optimisations via the `largeGraph` configuration option.
+
+```typescript
+canvas.setConfig({
+  largeGraph: {
+    enabled: true,           // master switch (false by default – no behavioural change unless true)
+    viewportPadding: 50,     // world-unit padding around the visible viewport (default: 0)
+    lowZoomThreshold: 0.5,  // zoom level below which expensive details are skipped
+    skipLabelsAtLowZoom: true,      // skip node labels at low zoom (default: true)
+    skipArrowsAtLowZoom: true,      // skip link arrowheads at low zoom (default: true)
+    skipLinkLabelsAtLowZoom: true,  // skip link relationship labels at low zoom (default: true)
+  }
+});
+```
+
+### How it works
+
+**Viewport culling** – before each node or link is drawn, the renderer checks whether its world-space bounding box overlaps the currently visible area (with optional extra `viewportPadding`).  Elements that are entirely offscreen are skipped without any canvas work.
+
+- For **nodes**: the bounding box is a circle of radius `node.size + 2`.
+- For **links**: the bounding box is the convex-hull axis-aligned rectangle of the Bezier curve's control points (source, control point, target).  This is a conservative bound – it never produces false negatives.
+- For **self-loops**: the bounding box is a square centred on the node with a side length derived from the loop curvature.
+
+**Low-zoom draw skipping** – when the current zoom level drops below `lowZoomThreshold`, expensive per-element details that would be too small to read are skipped:
+
+- Node labels (text inside nodes) – controlled by `skipLabelsAtLowZoom`
+- Link arrowheads – controlled by `skipArrowsAtLowZoom`
+- Link relationship labels – controlled by `skipLinkLabelsAtLowZoom`
+
+Node and link shapes are always drawn so the overall graph structure remains visible.
+
+### Recommended settings for large graphs
+
+```typescript
+// Good starting point for graphs with 1,000 – 10,000+ elements
+canvas.setConfig({
+  cooldownTicks: 300,   // limit physics simulation ticks
+  largeGraph: {
+    enabled: true,
+    viewportPadding: 100,  // pre-render elements slightly off-screen to avoid pop-in
+    lowZoomThreshold: 0.4, // tune to match your typical minimum zoom
+  }
+});
+```
+
+### Backward compatibility
+
+The feature is **disabled by default** (`enabled: false` / property absent).  Existing code that does not set `largeGraph` is completely unaffected.
 
 ## Debugging
 

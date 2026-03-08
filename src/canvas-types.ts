@@ -1,5 +1,52 @@
 import { NodeObject } from "force-graph";
 
+/**
+ * Configuration for large-graph rendering optimisations.
+ * All options are optional; the feature is disabled by default (`enabled: false`).
+ */
+export interface LargeGraphConfig {
+  /**
+   * Master switch. When `false` (default) the component behaves exactly as before –
+   * no culling is applied and no draw calls are skipped.
+   */
+  enabled?: boolean;
+
+  /**
+   * Extra padding added around the visible viewport (in world-space units) when
+   * deciding whether a node or link is offscreen.  Increase this to pre-render
+   * elements just outside the visible area and avoid pop-in during fast panning.
+   * Default: `0`.
+   */
+  viewportPadding?: number;
+
+  /**
+   * Zoom level below which expensive per-element details are skipped.
+   * At a zoom of `1` each world-unit covers one screen pixel; at `0.5` elements
+   * are drawn at half size, making labels and arrows too small to be useful.
+   * Default: `0.5`.
+   */
+  lowZoomThreshold?: number;
+
+  /**
+   * Skip drawing node labels when the current zoom is below `lowZoomThreshold`.
+   * Node circles are still drawn so the graph shape remains visible.
+   * Default: `true`.
+   */
+  skipLabelsAtLowZoom?: boolean;
+
+  /**
+   * Skip drawing link arrowheads when the current zoom is below `lowZoomThreshold`.
+   * Default: `true`.
+   */
+  skipArrowsAtLowZoom?: boolean;
+
+  /**
+   * Skip drawing link relationship labels when the current zoom is below `lowZoomThreshold`.
+   * Default: `true`.
+   */
+  skipLinkLabelsAtLowZoom?: boolean;
+}
+
 export interface ForceGraphConfig {
   width?: number;
   height?: number;
@@ -33,6 +80,8 @@ export interface ForceGraphConfig {
     linkCanvasObject: (link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => void;
     linkPointerAreaPaint: (link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => void;
   };
+  /** Large-graph rendering optimisations (viewport culling and low-zoom draw skipping). */
+  largeGraph?: LargeGraphConfig;
 }
 
 export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix'> {
