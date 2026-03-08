@@ -30,6 +30,7 @@ export type {
 
 export type {
   ForceGraphConfig,
+  LargeGraphConfig,
   GraphNode,
   GraphLink,
   GraphData,

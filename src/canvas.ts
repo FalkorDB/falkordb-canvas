@@ -41,6 +41,14 @@ const CENTER_STRENGTH = 0.03;
 const VELOCITY_DECAY = 0.4;
 const ALPHA_MIN = 0.05;
 
+/** Axis-aligned bounding box in world-space coordinates. */
+type WorldBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+};
+
 // Create styles for the web component
 function createStyles(backgroundColor: string, foregroundColor: string): HTMLStyleElement {
   const style = document.createElement("style");
@@ -111,6 +119,16 @@ class FalkorDBCanvas extends HTMLElement {
       textYOffset: number;
     }
   > = new Map();
+
+  /**
+   * Cached world-space axis-aligned bounding box of the currently visible
+   * viewport.  Updated on every zoom/pan event.  `null` means not yet
+   * computed (no culling applied until the first pan/zoom fires).
+   */
+  private cullingBounds: WorldBounds | null = null;
+
+  /** Current zoom level, cached alongside cullingBounds. */
+  private cullingZoom: number = 1;
 
   private onFontsLoadingDone = () => {
     this.relationshipsTextCache.clear();
@@ -594,6 +612,7 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .onZoom((transform: Transform) => {
+        this.updateCullingBounds(transform);
         if (this.config.onZoom) {
           this.config.onZoom(transform);
         }
@@ -688,12 +707,112 @@ class FalkorDBCanvas extends HTMLElement {
     this.log('Force simulation setup complete');
   }
 
+  /**
+   * Recompute the world-space culling bounds from the d3-zoom transform delivered
+   * by force-graph's `onZoom` callback.
+   *
+   * The d3-zoom transform maps world → screen as:
+   *   screen_x = world_x * k + tx
+   *   screen_y = world_y * k + ty
+   * Inverting for the canvas edges (screen_x ∈ [0, W], screen_y ∈ [0, H]):
+   *   world_x ∈ [(0 − tx) / k,  (W − tx) / k]
+   *   world_y ∈ [(0 − ty) / k,  (H − ty) / k]
+   */
+  private updateCullingBounds(transform: Transform) {
+    if (!this.config.largeGraph?.enabled) return;
+
+    const w = this.graph?.width() ?? 0;
+    const h = this.graph?.height() ?? 0;
+    const { k, x: tx, y: ty } = transform;
+
+    if (k <= 0 || w <= 0 || h <= 0) return;
+
+    const padding = this.config.largeGraph?.viewportPadding ?? 0;
+
+    this.cullingBounds = {
+      minX: -tx / k - padding,
+      maxX: (w - tx) / k + padding,
+      minY: -ty / k - padding,
+      maxY: (h - ty) / k + padding,
+    };
+    this.cullingZoom = k;
+  }
+
+  /**
+   * Returns `true` when the node is (at least partially) inside the current
+   * culling viewport, or when culling is disabled / bounds are not yet known.
+   */
+  private isNodeInCullingBounds(node: GraphNode): boolean {
+    if (!this.cullingBounds) return true;
+    const { minX, maxX, minY, maxY } = this.cullingBounds;
+    const r = node.size + PADDING;
+    const x = node.x ?? 0;
+    const y = node.y ?? 0;
+    return x + r >= minX && x - r <= maxX && y + r >= minY && y - r <= maxY;
+  }
+
+  /**
+   * Returns `true` when a link's visual representation overlaps the current
+   * culling viewport, or when culling is disabled / bounds are not yet known.
+   *
+   * For straight / quadratic-bezier links the test uses the convex-hull bounding
+   * box of (source, control point, target), which is always a conservative
+   * (never-false-negative) bound.  For self-loops the test uses a square of
+   * side ≈ the loop diameter centred on the node.
+   */
+  private isLinkInCullingBounds(link: GraphLink): boolean {
+    if (!this.cullingBounds) return true;
+    const { minX, maxX, minY, maxY } = this.cullingBounds;
+
+    const sx = link.source.x ?? 0;
+    const sy = link.source.y ?? 0;
+    const ex = link.target.x ?? 0;
+    const ey = link.target.y ?? 0;
+
+    if (link.source.id === link.target.id) {
+      // Self-loop: the cubic bezier extends roughly |curve| * nodeSize * factor
+      // away from the node centre. Use that as a conservative radius.
+      const nodeSize = link.source.size || 6;
+      const loopRadius = Math.abs(link.curve || 1) * nodeSize * SELF_LOOP_CURVE_FACTOR;
+      return (
+        sx + loopRadius >= minX && sx - loopRadius <= maxX &&
+        sy + loopRadius >= minY && sy - loopRadius <= maxY
+      );
+    }
+
+    // Compute quadratic-bezier control point (same formula as drawLink).
+    const dx = ex - sx;
+    const dy = ey - sy;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance === 0) {
+      // Co-located nodes: just check the point.
+      return sx >= minX && sx <= maxX && sy >= minY && sy <= maxY;
+    }
+
+    const curvature = link.curve ?? 0;
+    const perpX = dy / distance;
+    const perpY = -dx / distance;
+    const cx = (sx + ex) / 2 + perpX * curvature * distance;
+    const cy = (sy + ey) / 2 + perpY * curvature * distance;
+
+    // Convex-hull AABB of the three control points.
+    const lMinX = Math.min(sx, ex, cx);
+    const lMaxX = Math.max(sx, ex, cx);
+    const lMinY = Math.min(sy, ey, cy);
+    const lMaxY = Math.max(sy, ey, cy);
+
+    return lMaxX >= minX && lMinX <= maxX && lMaxY >= minY && lMinY <= maxY;
+  }
+
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
 
     if (node.x === undefined || node.y === undefined) {
       node.x = 0;
       node.y = 0;
     }
+
+    // Viewport culling: skip nodes that are entirely outside the visible area.
+    if (this.config.largeGraph?.enabled && !this.isNodeInCullingBounds(node)) return;
 
     ctx.lineWidth = this.config.isNodeSelected?.(node) ? 1 : 0.5;
     ctx.strokeStyle = this.config.foregroundColor;
@@ -708,6 +827,12 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.beginPath();
     ctx.arc(node.x, node.y, node.size, 0, 2 * Math.PI, false);
     ctx.fill();
+
+    // Low-zoom optimisation: skip labels when they would be too small to read.
+    const skipLabels = this.config.largeGraph?.enabled &&
+      (this.config.largeGraph?.skipLabelsAtLowZoom ?? true) &&
+      this.cullingZoom < (this.config.largeGraph?.lowZoomThreshold ?? 0.5);
+    if (skipLabels) return;
 
     // Draw text
     ctx.fillStyle = getContrastTextColor(node.color);
@@ -807,12 +932,23 @@ class FalkorDBCanvas extends HTMLElement {
       end.y = 0;
     }
 
+    // Viewport culling: skip links whose visual extent is entirely outside the
+    // visible area.  The check is conservative (convex-hull AABB) so it never
+    // produces false negatives.
+    if (this.config.largeGraph?.enabled && !this.isLinkInCullingBounds(link)) return;
+
     let textX;
     let textY;
     let angle;
 
     const isLinkSelected = this.config.isLinkSelected?.(link) ?? false;
     const arrowLen = isLinkSelected ? 4 : 2;
+
+    // Low-zoom flags – evaluated once per link draw.
+    const lowZoomThreshold = this.config.largeGraph?.lowZoomThreshold ?? 0.5;
+    const atLowZoom = this.config.largeGraph?.enabled && this.cullingZoom < lowZoomThreshold;
+    const skipArrows = atLowZoom && (this.config.largeGraph?.skipArrowsAtLowZoom ?? true);
+    const skipLinkLabels = atLowZoom && (this.config.largeGraph?.skipLinkLabelsAtLowZoom ?? true);
 
     // Deferred arrowhead — drawn after the label so it is never covered by
     // the label background rect (which happens for short links where the
@@ -891,7 +1027,7 @@ class FalkorDBCanvas extends HTMLElement {
       // Guard against zero-length tangent vector (e.g. when d ≈ 0) to avoid NaN
       // normals and invalid arrowhead geometry. Also skip when d is too small to
       // place the arrowhead at the node border (canReachBorder is false).
-      if (tLen !== 0 && canReachBorder) {
+      if (!skipArrows && tLen !== 0 && canReachBorder) {
         const nx = tdx / tLen;
         const ny = tdy / tLen;
         pendingArrow = { tipX, tipY, nx, ny, arrowLen, arrowHalfWidth };
@@ -1026,7 +1162,7 @@ class FalkorDBCanvas extends HTMLElement {
       const aty = 2 * uArrow * (controlY - start.y) + 2 * tArrow * (end.y - controlY);
       const atLen = Math.sqrt(atx * atx + aty * aty);
 
-      if (atLen !== 0) {
+      if (!skipArrows && atLen !== 0) {
         const nx = atx / atLen;
         const ny = aty / atLen;
         pendingArrow = { tipX, tipY, nx, ny, arrowLen, arrowHalfWidth };
@@ -1038,52 +1174,54 @@ class FalkorDBCanvas extends HTMLElement {
     // Draw text with alphabetic baseline, positioned so visual center is at y=0
     ctx.textBaseline = "alphabetic";
 
-    // Separate cache entries per weight so each state is measured with its own
-    // font, giving equal visual padding regardless of selection state.
-    const cacheKey = `${link.relationship}_${isLinkSelected ? "700" : "400"}`;
-    let cached = this.relationshipsTextCache.get(cacheKey);
+    if (!skipLinkLabels) {
+      // Separate cache entries per weight so each state is measured with its own
+      // font, giving equal visual padding regardless of selection state.
+      const cacheKey = `${link.relationship}_${isLinkSelected ? "700" : "400"}`;
+      let cached = this.relationshipsTextCache.get(cacheKey);
 
-    if (!cached) {
-      // ctx.font is already set to the correct weight above; measure it directly.
-      const metrics = ctx.measureText(link.relationship);
-      // Use actual ink bounds for vertical metrics; fontBoundingBox* is the full
-      // line-box and adds excessive space for lighter weights.
-      // Use metrics.width for horizontal extent: actualBoundingBoxLeft/Right are
-      // unreliable with textAlign="center" and can double the value on some engines.
-      const inkAscent = metrics.actualBoundingBoxAscent ?? metrics.fontBoundingBoxAscent;
-      const inkDescent = metrics.actualBoundingBoxDescent ?? metrics.fontBoundingBoxDescent;
-      const inkWidth = metrics.width;
-      const bgPadding = 0.3;
+      if (!cached) {
+        // ctx.font is already set to the correct weight above; measure it directly.
+        const metrics = ctx.measureText(link.relationship);
+        // Use actual ink bounds for vertical metrics; fontBoundingBox* is the full
+        // line-box and adds excessive space for lighter weights.
+        // Use metrics.width for horizontal extent: actualBoundingBoxLeft/Right are
+        // unreliable with textAlign="center" and can double the value on some engines.
+        const inkAscent = metrics.actualBoundingBoxAscent ?? metrics.fontBoundingBoxAscent;
+        const inkDescent = metrics.actualBoundingBoxDescent ?? metrics.fontBoundingBoxDescent;
+        const inkWidth = metrics.width;
+        const bgPadding = 0.3;
 
-      cached = {
-        textWidth: inkWidth + bgPadding * 2,
-        textHeight: inkAscent + inkDescent + bgPadding * 2,
-        // Shift baseline up so the ink block is centred inside the bg rect.
-        textYOffset: (inkAscent - inkDescent) / 2,
-      };
-      this.relationshipsTextCache.set(cacheKey, cached);
+        cached = {
+          textWidth: inkWidth + bgPadding * 2,
+          textHeight: inkAscent + inkDescent + bgPadding * 2,
+          // Shift baseline up so the ink block is centred inside the bg rect.
+          textYOffset: (inkAscent - inkDescent) / 2,
+        };
+        this.relationshipsTextCache.set(cacheKey, cached);
+      }
+
+      const { textWidth, textHeight, textYOffset } = cached;
+
+      ctx.save();
+      ctx.translate(textX, textY);
+      ctx.rotate(angle);
+
+      // Draw background centered on the link line (y=0)
+      ctx.fillStyle = this.config.backgroundColor;
+
+      // Offset background to match text visual center
+      ctx.fillRect(
+        -textWidth / 2,
+        -textHeight / 2,
+        textWidth,
+        textHeight
+      );
+
+      ctx.fillStyle = getContrastTextColor(this.config.backgroundColor);
+      ctx.fillText(link.relationship, 0, textYOffset);
+      ctx.restore();
     }
-
-    const { textWidth, textHeight, textYOffset } = cached;
-
-    ctx.save();
-    ctx.translate(textX, textY);
-    ctx.rotate(angle);
-
-    // Draw background centered on the link line (y=0)
-    ctx.fillStyle = this.config.backgroundColor;
-
-    // Offset background to match text visual center
-    ctx.fillRect(
-      -textWidth / 2,
-      -textHeight / 2,
-      textWidth,
-      textHeight
-    );
-
-    ctx.fillStyle = getContrastTextColor(this.config.backgroundColor);
-    ctx.fillText(link.relationship, 0, textYOffset);
-    ctx.restore();
 
     // Draw arrowhead last so it always appears on top of the label background.
     if (pendingArrow) {
@@ -1342,6 +1480,7 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .onZoom((transform: Transform) => {
+        this.updateCullingBounds(transform);
         if (this.config.onZoom) {
           this.config.onZoom(transform);
         }
