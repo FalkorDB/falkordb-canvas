@@ -183,16 +183,6 @@ class FalkorDBCanvas extends HTMLElement {
 
   setConfig(config: Partial<ForceGraphConfig>) {
     this.log('Setting config:', config);
-
-    // If captionsKeys changed, invalidate cached display names and font sizes
-    // so text is recomputed with the new keys on the next render.
-    if (config.captionsKeys && JSON.stringify(config.captionsKeys) !== JSON.stringify(this.config.captionsKeys)) {
-      this.nodeDisplayFontSize.clear();
-      for (const node of this.data.nodes) {
-        node.displayName = ["", ""];
-      }
-    }
-
     Object.assign(this.config, config);
 
     // Update event handlers if they were provided
@@ -325,7 +315,6 @@ class FalkorDBCanvas extends HTMLElement {
 
   setGraphData(data: GraphData) {
     this.log('setGraphData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
-
     this.data = data;
 
     if (!this.graph) return;
@@ -726,30 +715,11 @@ class FalkorDBCanvas extends HTMLElement {
 
       let chosenSize = NODE_FONT_SIZE_BASE;
       if (!line2) {
-        // Single-line: measure at a large reference size (20px) where canvas
-        // metrics are precise, then compute the exact scale to fill the node.
-        const REF = 20;
-        ctx.font = `400 ${REF}px SofiaSans`;
-        const refMetrics = ctx.measureText(line1);
-        // Use the actual visual bounding box (not advance width) so glyphs
-        // with overshoot (e.g. "7") are fully accounted for.
-        const visualWidth = (refMetrics.actualBoundingBoxLeft ?? 0)
-          + (refMetrics.actualBoundingBoxRight ?? 0);
-        const refWidth = Math.max(visualWidth, refMetrics.width);
-        const refHeight = (refMetrics.actualBoundingBoxAscent ?? 0)
-          + (refMetrics.actualBoundingBoxDescent ?? 0);
-
-        // Inscribed-rectangle-in-circle constraint: every corner of the text
-        // bounding box must lie inside the circle, i.e.
-        //   sqrt((w/2)² + (h/2)²) ≤ r
-        // Solving for the uniform scale factor s:
-        //   s = 2·r / sqrt(refWidth² + refHeight²)
-        const r = NODE_TEXT_FILL_RATIO * textRadius;
-        if (refWidth > 0 && refHeight > 0) {
-          const diagonal = Math.sqrt(refWidth * refWidth + refHeight * refHeight);
-          chosenSize = REF * (2 * r / diagonal);
-        } else if (refWidth > 0) {
-          chosenSize = REF * (2 * r / refWidth);
+        // Single-line: scale up so the text fills NODE_TEXT_FILL_RATIO of the
+        // available chord. Font metrics scale linearly so this is exact.
+        const measuredWidth = ctx.measureText(line1).width;
+        if (measuredWidth > 0) {
+          chosenSize = NODE_FONT_SIZE_BASE * (NODE_TEXT_FILL_RATIO * 2 * textRadius / measuredWidth);
         }
       }
 
@@ -769,13 +739,7 @@ class FalkorDBCanvas extends HTMLElement {
     const halfTextHeight = (textHeight / 2) * 1.5;
 
     if (line1) {
-      // textBaseline="middle" centers on the em-box midpoint, but for glyphs
-      // without descenders (e.g. digits) the visual center sits above that.
-      // Nudge down by (ascent − descent) / 2 to true-center the rendered pixels.
-      const yCorrection = line2
-        ? 0
-        : (textMetrics.actualBoundingBoxAscent - textMetrics.actualBoundingBoxDescent) / 2;
-      ctx.fillText(line1, node.x, line2 ? node.y - halfTextHeight : node.y + yCorrection);
+      ctx.fillText(line1, node.x, line2 ? node.y - halfTextHeight : node.y);
     }
     if (line2) {
       ctx.fillText(line2, node.x, node.y + halfTextHeight);
@@ -1014,7 +978,7 @@ class FalkorDBCanvas extends HTMLElement {
 
       ctx.strokeStyle = link.color;
       ctx.lineWidth = (isLinkSelected ? 2 : 1) / globalScale;
-
+      
       ctx.setLineDash(this.config.linkLineDash?.(link) ?? []);
       ctx.beginPath();
       ctx.moveTo(gapStartX, gapStartY);
@@ -1050,14 +1014,14 @@ class FalkorDBCanvas extends HTMLElement {
       // line-box and adds excessive space for lighter weights.
       // Use metrics.width for horizontal extent: actualBoundingBoxLeft/Right are
       // unreliable with textAlign="center" and can double the value on some engines.
-      const inkAscent = metrics.actualBoundingBoxAscent ?? metrics.fontBoundingBoxAscent;
+      const inkAscent  = metrics.actualBoundingBoxAscent  ?? metrics.fontBoundingBoxAscent;
       const inkDescent = metrics.actualBoundingBoxDescent ?? metrics.fontBoundingBoxDescent;
-      const inkWidth = metrics.width;
+      const inkWidth   = metrics.width;
       const bgPadding = 0.3;
 
       cached = {
-        textWidth: inkWidth + bgPadding * 2,
-        textHeight: inkAscent + inkDescent + bgPadding * 2,
+        textWidth:   inkWidth  + bgPadding * 2,
+        textHeight:  inkAscent + inkDescent + bgPadding * 2,
         // Shift baseline up so the ink block is centred inside the bg rect.
         textYOffset: (inkAscent - inkDescent) / 2,
       };
