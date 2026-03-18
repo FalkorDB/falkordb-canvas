@@ -104,7 +104,7 @@ export function dataToGraphData(
 
     const [pairMinId, pairMaxId] = getPairIds(sourceNode.id, targetNode.id);
     let pairMap = linksByPairCount.get(pairMinId);
-    
+
     if (!pairMap) {
       pairMap = new Map<number, number>();
       linksByPairCount.set(pairMinId, pairMap);
@@ -215,15 +215,21 @@ export const getContrastTextColor = (bgColor: string): string => {
 
 export const getNodeDisplayText = (
   node: Node,
-  captionKeys: string[],
+  captionKeys: [string, boolean][],
   showPropertyKeyPrefix: boolean
 ) => {
-  const key = captionKeys.find((k) => {
-    const match = Object.keys(node.data).find((dk) => dk.toLowerCase() === k.toLowerCase());
+  const caption = captionKeys.find(([k, exactMatch]) => {
+    if (exactMatch) {
+      const match = Object.keys(node.data).find((dk) => dk === k);
+      return match && String(node.data[match]).trim().length > 0;
+    }
+
+    const match = Object.keys(node.data).find((dk) => dk.toLowerCase().includes(k.toLowerCase()));
     return match && String(node.data[match]).trim().length > 0;
   });
 
-  if (key) {
+  if (caption) {
+    const [key] = caption;
     const actualKey = Object.keys(node.data).find((dk) => dk.toLowerCase() === key.toLowerCase())!;
     return showPropertyKeyPrefix ? `${key}: ${String(node.data[actualKey])}` : String(node.data[actualKey]);
   }
@@ -233,14 +239,19 @@ export const getNodeDisplayText = (
 
 export const getNodeDisplayKey = (
   node: Node,
-  captionKeys: string[]
+  captionKeys: [string, boolean][]
 ) => {
-  const key = captionKeys.find((k) => {
-    const match = Object.keys(node.data).find((dk) => dk.toLowerCase() === k.toLowerCase());
+  const caption = captionKeys.find(([k, exactMatch]) => {
+    if (exactMatch) {
+      const match = Object.keys(node.data).find((dk) => dk === k);
+      return match && String(node.data[match]).trim().length > 0;
+    }
+
+    const match = Object.keys(node.data).find((dk) => dk.toLowerCase().includes(k.toLowerCase()));
     return match && String(node.data[match]).trim().length > 0;
   });
 
-  return key || "id";
+  return caption?.[0] || "id";
 }
 
 /**
