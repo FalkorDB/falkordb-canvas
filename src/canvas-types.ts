@@ -5,6 +5,8 @@ export interface ForceGraphConfig {
   height?: number;
   backgroundColor?: string;
   foregroundColor?: string;
+  layoutMode?: LayoutMode;
+  layoutOptions?: LayoutOptions;
   onNodeClick?: (node: GraphNode, event: MouseEvent) => void;
   onLinkClick?: (link: GraphLink, event: MouseEvent) => void;
   onNodeRightClick?: (node: GraphNode, event: MouseEvent) => void;
@@ -35,11 +37,37 @@ export interface ForceGraphConfig {
   };
 }
 
-export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix'> {
+export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix' | 'layoutMode' | 'layoutOptions'> {
   backgroundColor: string;
   foregroundColor: string;
   captionsKeys: string[];
   showPropertyKeyPrefix: boolean;
+  layoutMode: LayoutMode;
+  layoutOptions: LayoutOptions;
+}
+
+export type LayoutMode = 'force' | 'flow' | 'tree';
+
+export type LayoutDirection = 'TB' | 'BT' | 'LR' | 'RL';
+
+export interface TreeLayoutOptions {
+  rootNodeId?: number;
+  direction?: LayoutDirection;
+  levelSpacing?: number;
+  nodeSpacing?: number;
+  componentSpacing?: number;
+}
+
+export interface FlowLayoutOptions {
+  direction?: LayoutDirection;
+  layerSpacing?: number;
+  nodeSpacing?: number;
+  componentSpacing?: number;
+}
+
+export interface LayoutOptions {
+  tree?: TreeLayoutOptions;
+  flow?: FlowLayoutOptions;
 }
 
 export type GraphNode = NodeObject & {

@@ -55,6 +55,38 @@
       background: #45a049;
     }
 
+    .control-group {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    label {
+      color: #333;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    select {
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+      font-size: 14px;
+    }
+
+    select:disabled {
+      background: #f3f3f3;
+      color: #777;
+      cursor: not-allowed;
+    }
+
     .info {
       margin-top: 20px;
       padding: 15px;
@@ -74,9 +106,27 @@
     <h1>FalkorDB Canvas Web Component</h1>
 
     <div class="controls">
-      <button onclick="addNode()">Add Node</button>
-      <button onclick="addLink()">Add Link</button>
-      <button onclick="toggleLoading()">Toggle Loading</button>
+      <div class="control-group">
+        <button onclick="addNode()">Add Node</button>
+        <button onclick="addLink()">Add Link</button>
+        <button onclick="toggleLoading()">Toggle Loading</button>
+      </div>
+      <div class="control-group">
+        <label for="layout-select">Layout</label>
+        <select id="layout-select" onchange="changeLayout()">
+          <option value="force" selected>Force</option>
+          <option value="tree">Tree</option>
+          <option value="flow">Flow</option>
+        </select>
+
+        <label for="layout-direction-select">Direction</label>
+        <select id="layout-direction-select" onchange="changeLayout()">
+          <option value="TB">Top → Bottom</option>
+          <option value="BT">Bottom → Top</option>
+          <option value="LR" selected>Left → Right</option>
+          <option value="RL">Right → Left</option>
+        </select>
+      </div>
     </div>
 
     <div class="graph-container">
@@ -107,6 +157,63 @@
     let canvas;
     let nodeCounter = 1;
     let linkCounter = 1;
+    const layoutSelect = document.getElementById('layout-select');
+    const layoutDirectionSelect = document.getElementById('layout-direction-select');
+
+    const updateDirectionControlState = (layoutMode) => {
+      if (!layoutDirectionSelect) return;
+      layoutDirectionSelect.disabled = layoutMode === 'force';
+    };
+
+    const getLayoutConfig = (layoutMode, direction) => {
+      if (layoutMode === 'tree') {
+        const data = canvas?.getData?.();
+        const firstNodeId = data?.nodes?.[0]?.id;
+
+        return {
+          layoutMode: 'tree',
+          layoutOptions: {
+            tree: {
+              direction,
+              ...(firstNodeId !== undefined ? { rootNodeId: firstNodeId } : {})
+            }
+          }
+        };
+      }
+
+      if (layoutMode === 'flow') {
+        return {
+          layoutMode: 'flow',
+          layoutOptions: {
+            flow: {
+              direction
+            }
+          }
+        };
+      }
+
+      return {
+        layoutMode: 'force',
+        layoutOptions: {}
+      };
+    };
+
+    window.changeLayout = () => {
+      if (!layoutSelect || !layoutDirectionSelect) return;
+
+      const layoutMode = layoutSelect.value;
+      const direction = layoutDirectionSelect.value;
+      updateDirectionControlState(layoutMode);
+
+      if (!canvas) {
+        alert('Graph not loaded yet, please wait...');
+        return;
+      }
+
+      canvas.setConfig(getLayoutConfig(layoutMode, direction));
+      document.getElementById('selected-info').textContent =
+        `Layout: ${layoutMode.toUpperCase()}${layoutMode === 'force' ? '' : ` (${direction})`}`;
+    };
 
     window.addNode = () => {
       if (!canvas) {
@@ -369,6 +476,12 @@
       isNodeSelected: (node) => false,
       isLinkSelected: (link) => false,
     });
+
+    // Initialize layout controls and apply selected layout
+    if (layoutSelect) {
+      updateDirectionControlState(layoutSelect.value);
+    }
+    window.changeLayout();
 
     // Update counters based on loaded data
     nodeCounter = Math.max(...graphData.nodes.map(n => n.id), 0) + 1;
