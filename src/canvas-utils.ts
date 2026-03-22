@@ -148,6 +148,27 @@ export function graphDataToData(graphData: GraphData): Data {
   return { nodes, links };
 }
 
+const resolveNodeCaption = (
+  node: Node,
+  captionKeys: [string, boolean][]
+): { requestedKey: string; actualKey: string } | null => {
+  for (const [requestedKey, exactMatch] of captionKeys) {
+    const dataKeys = Object.keys(node.data);
+    const matchedKey = dataKeys.find((dk) =>
+      exactMatch
+        ? dk === requestedKey
+        : dk.toLowerCase().includes(requestedKey.toLowerCase())
+    );
+    if (
+      matchedKey &&
+      String(node.data[matchedKey]).trim().length > 0
+    ) {
+      return { requestedKey, actualKey: matchedKey };
+    }
+  }
+  return null;
+};
+
 /**
  * Calculates the appropriate text color (black or white) based on background color brightness
  * Uses the relative luminance formula from WCAG guidelines
@@ -218,20 +239,12 @@ export const getNodeDisplayText = (
   captionKeys: [string, boolean][],
   showPropertyKeyPrefix: boolean
 ) => {
-  const caption = captionKeys.find(([k, exactMatch]) => {
-    if (exactMatch) {
-      const match = Object.keys(node.data).find((dk) => dk === k);
-      return match && String(node.data[match]).trim().length > 0;
-    }
-
-    const match = Object.keys(node.data).find((dk) => dk.toLowerCase().includes(k.toLowerCase()));
-    return match && String(node.data[match]).trim().length > 0;
-  });
+  const caption = resolveNodeCaption(node, captionKeys);
 
   if (caption) {
-    const [key] = caption;
-    const actualKey = Object.keys(node.data).find((dk) => dk.toLowerCase() === key.toLowerCase())!;
-    return showPropertyKeyPrefix ? `${key}: ${String(node.data[actualKey])}` : String(node.data[actualKey]);
+    const { requestedKey, actualKey } = caption;
+    const value = String(node.data[actualKey]);
+    return showPropertyKeyPrefix ? `${requestedKey}: ${value}` : value;
   }
 
   return showPropertyKeyPrefix ? `ID: ${String(node.id)}` : String(node.id);
@@ -241,17 +254,8 @@ export const getNodeDisplayKey = (
   node: Node,
   captionKeys: [string, boolean][]
 ) => {
-  const caption = captionKeys.find(([k, exactMatch]) => {
-    if (exactMatch) {
-      const match = Object.keys(node.data).find((dk) => dk === k);
-      return match && String(node.data[match]).trim().length > 0;
-    }
-
-    const match = Object.keys(node.data).find((dk) => dk.toLowerCase().includes(k.toLowerCase()));
-    return match && String(node.data[match]).trim().length > 0;
-  });
-
-  return caption?.[0] || "id";
+  const caption = resolveNodeCaption(node, captionKeys);
+  return caption?.actualKey || "id";
 }
 
 /**
