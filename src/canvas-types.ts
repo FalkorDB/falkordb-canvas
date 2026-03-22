@@ -19,7 +19,7 @@ export interface ForceGraphConfig {
   cooldownTicks?: number | undefined;
   cooldownTime?: number;
   autoStopOnSettle?: boolean;
-  captionsKeys?: string[];
+  captionsKeys?: Array<string | [string, boolean]>;
   showPropertyKeyPrefix?: boolean;
   isLinkSelected?: (link: GraphLink) => boolean;
   isNodeSelected?: (node: GraphNode) => boolean;
@@ -38,7 +38,7 @@ export interface ForceGraphConfig {
 export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix'> {
   backgroundColor: string;
   foregroundColor: string;
-  captionsKeys: string[];
+  captionsKeys: [string, boolean][];
   showPropertyKeyPrefix: boolean;
 }
 
