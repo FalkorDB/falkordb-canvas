@@ -19,7 +19,7 @@ export interface ForceGraphConfig {
   cooldownTicks?: number | undefined;
   cooldownTime?: number;
   autoStopOnSettle?: boolean;
-  captionsKeys?: [string, boolean][];
+  captionsKeys?: Array<string | [string, boolean]>;
   showPropertyKeyPrefix?: boolean;
   isLinkSelected?: (link: GraphLink) => boolean;
   isNodeSelected?: (node: GraphNode) => boolean;

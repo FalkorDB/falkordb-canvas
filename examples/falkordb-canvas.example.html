@@ -166,9 +166,9 @@
     };
 
     // Now load the graph data
-    const API_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhNzEwYjE3MC0zY2EyLTQ3YzgtYTg3Ny0yMWY0ZWRiNzM1MzAiLCJqdGkiOiIxNzY5NTk3ODE5OTIxLWQ5YTZlZjFiLTI3ZmYtNGUyYy1hZDQwLTJmOTUxMWM0NWI2MCIsInVzZXJuYW1lIjoiZmFsa29yZGIiLCJyb2xlIjoiUmVhZC1Xcml0ZSIsImhvc3QiOiJyLTZqaXNzdXJ1YXIuaW5zdGFuY2UtdWZ3eWgwcTUzLmhjLTdvM3ZyY2h0by5tZS13ZXN0MS5nY3AuZjJlMGE5NTViYjg0LmNsb3VkIiwicG9ydCI6NjI5MTAsInRscyI6ZmFsc2UsImNhIjoidW5kZWZpbmVkIiwiaWF0IjoxNzY5NTk3ODE5fQ.w9adY7PRSphcywv6sq3OPuQofen-MGFAqGVB4t6_ZBM';
-    const graphName = 'NETIT';
-    const query = 'MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN * LIMIT 100'; // MATCH (n) OPTIONAL MATCH (n)-[e]->(m) RETURN * LIMIT 100
+    const API_TOKEN = 'your_api_token_here'; // Replace with your actual API token
+    const graphName = 'your_graph_name_here'; // Replace with your actual graph name
+    const query = 'your_query_here'; // Replace with your actual query
 
     const url = `https://browser.falkordb.com/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
 
