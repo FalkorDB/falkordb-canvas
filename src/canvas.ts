@@ -22,6 +22,7 @@ import {
   LINK_DISTANCE,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
+import { applyGraphLayout, isForceLayout } from "./layouts.js";
 
 const PADDING = 2;
 // Arrow geometry constants (shared by self-loop and regular-link drawing paths)
@@ -92,6 +93,8 @@ class FalkorDBCanvas extends HTMLElement {
     foregroundColor: '#1A1A1A',
     captionsKeys: [],
     showPropertyKeyPrefix: false,
+    layoutMode: "force",
+    layoutOptions: {},
   };
 
   private nodeMode: CanvasRenderMode = 'replace';
@@ -183,6 +186,7 @@ class FalkorDBCanvas extends HTMLElement {
 
   setConfig(config: Partial<ForceGraphConfig>) {
     this.log('Setting config:', config);
+    const layoutChanged = config.layoutMode !== undefined || config.layoutOptions !== undefined;
 
     // If captionsKeys changed, invalidate cached display names and font sizes
     // so text is recomputed with the new keys on the next render.
@@ -194,6 +198,31 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     Object.assign(this.config, config);
+
+    if (layoutChanged) {
+      if (this.isForceLayoutMode() && this.config.cooldownTicks === 0 && this.data.nodes.length > 0) {
+        this.config.cooldownTicks = undefined;
+      }
+      this.data = applyGraphLayout(this.data, this.config.layoutMode, this.config.layoutOptions);
+      if (this.graph) {
+        this.calculateNodeDegree();
+        this.graph.graphData(this.data);
+        this.configureSimulationForCurrentLayout();
+        if (this.isForceLayoutMode()) {
+          this.config.isLoading = this.data.nodes.length > 0;
+          this.config.onLoadingChange?.(this.config.isLoading);
+          this.updateLoadingState();
+        } else {
+          this.config.isLoading = false;
+          this.config.onLoadingChange?.(false);
+          this.updateLoadingState();
+          if (this.data.nodes.length > 0) {
+            this.zoomToFit(1);
+          }
+          this.triggerRender();
+        }
+      }
+    }
 
     // Update event handlers if they were provided
     if (config.onNodeClick || config.onLinkClick || config.onNodeRightClick || config.onLinkRightClick ||
@@ -255,10 +284,12 @@ class FalkorDBCanvas extends HTMLElement {
     this.log('Setting cooldown ticks to:', ticks);
     this.config.cooldownTicks = ticks;
     if (this.graph) {
-      this.graph.cooldownTicks(ticks ?? Infinity);
+      this.graph.cooldownTicks(this.isForceLayoutMode() ? (ticks ?? Infinity) : 0);
     }
 
-    this.updateCanvasSimulationAttribute(ticks !== 0);
+    this.updateCanvasSimulationAttribute(
+      this.isForceLayoutMode() && ticks !== 0 && this.data.nodes.length > 0
+    );
   }
 
   getData(): Data {
@@ -269,15 +300,23 @@ class FalkorDBCanvas extends HTMLElement {
     this.log('setData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
     // Convert data and apply circular layout to new nodes only
     this.data = dataToGraphData(data);
+    this.data = applyGraphLayout(this.data, this.config.layoutMode, this.config.layoutOptions);
 
-    this.config.cooldownTicks = this.data.nodes.length > 0 ? undefined : 0;
-    this.config.isLoading = this.data.nodes.length > 0;
+    if (this.isForceLayoutMode()) {
+      this.config.cooldownTicks = this.data.nodes.length > 0 ? undefined : 0;
+      this.config.isLoading = this.data.nodes.length > 0;
+    } else {
+      this.config.cooldownTicks = 0;
+      this.config.isLoading = false;
+    }
     this.log('Loading state:', this.config.isLoading);
     this.config.onLoadingChange?.(this.config.isLoading);
 
     // Update simulation state
-    if (this.data.nodes.length > 0) {
+    if (this.data.nodes.length > 0 && this.isForceLayoutMode()) {
       this.updateCanvasSimulationAttribute(true);
+    } else {
+      this.updateCanvasSimulationAttribute(false);
     }
 
     // Initialize graph if it hasn't been initialized yet
@@ -290,12 +329,17 @@ class FalkorDBCanvas extends HTMLElement {
 
     this.log('Calculating node degrees and setting up forces');
     this.calculateNodeDegree();
-    this.setupForces();
 
     // Update graph data and properties
     this.graph
-      .graphData(this.data)
-      .cooldownTicks(this.config.cooldownTicks ?? Infinity);
+      .graphData(this.data);
+
+    this.configureSimulationForCurrentLayout();
+
+    if (!this.isForceLayoutMode() && this.data.nodes.length > 0) {
+      this.zoomToFit(1);
+      this.triggerRender();
+    }
 
     this.updateLoadingState();
   }
@@ -325,16 +369,29 @@ class FalkorDBCanvas extends HTMLElement {
 
   setGraphData(data: GraphData) {
     this.log('setGraphData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
+    this.data = applyGraphLayout(data, this.config.layoutMode, this.config.layoutOptions);
 
-    this.data = data;
+    if (this.isForceLayoutMode() && this.config.cooldownTicks === 0 && this.data.nodes.length > 0) {
+      this.config.cooldownTicks = undefined;
+    }
 
     if (!this.graph) return;
 
     this.calculateNodeDegree();
-    this.setupForces();
 
     this.graph
-      .graphData(this.data)
+      .graphData(this.data);
+    this.configureSimulationForCurrentLayout();
+
+    if (!this.isForceLayoutMode()) {
+      this.config.isLoading = false;
+      this.config.onLoadingChange?.(false);
+      this.updateLoadingState();
+      if (this.data.nodes.length > 0) {
+        this.zoomToFit(1);
+        this.triggerRender();
+      }
+    }
 
     if (this.viewport) {
       this.log('Applying viewport:', this.viewport);
@@ -375,6 +432,25 @@ class FalkorDBCanvas extends HTMLElement {
     this.log('Zooming to fit with padding multiplier:', paddingMultiplier, 'padding:', padding * paddingMultiplier);
     // Use the force-graph's built-in zoomToFit method
     this.graph.zoomToFit(500, padding * paddingMultiplier, filter);
+  }
+
+  private isForceLayoutMode() {
+    return isForceLayout(this.config.layoutMode);
+  }
+
+  private configureSimulationForCurrentLayout() {
+    if (!this.graph) return;
+
+    if (this.isForceLayoutMode()) {
+      this.setupForces();
+      const cooldownTicks = this.config.cooldownTicks ?? Infinity;
+      this.graph.cooldownTicks(cooldownTicks);
+      this.updateCanvasSimulationAttribute(cooldownTicks !== 0 && this.data.nodes.length > 0);
+      return;
+    }
+
+    this.graph.cooldownTicks(0);
+    this.updateCanvasSimulationAttribute(false);
   }
 
   private triggerRender() {
@@ -548,7 +624,7 @@ class FalkorDBCanvas extends HTMLElement {
       .linkCurvature("curve")
       .linkVisibility("visible")
       .nodeVisibility("visible")
-      .cooldownTicks(this.config.cooldownTicks ?? Infinity) // undefined = infinite
+      .cooldownTicks(this.isForceLayoutMode() ? (this.config.cooldownTicks ?? Infinity) : 0) // undefined = infinite
       .cooldownTime(this.config.cooldownTime ?? 2000)
       .enableNodeDrag(true)
       .enableZoomInteraction(true)
@@ -633,8 +709,7 @@ class FalkorDBCanvas extends HTMLElement {
         }
       });
 
-    // Setup forces
-    this.setupForces();
+    this.configureSimulationForCurrentLayout();
     this.log('Force graph initialization complete');
   }
 

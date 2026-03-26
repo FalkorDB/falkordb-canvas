@@ -1,6 +1,13 @@
 import FalkorDBCanvas from "./canvas.js";
 import type React from "react";
-import type { CanvasRenderMode } from "./canvas-types.js";
+import type {
+  CanvasRenderMode,
+  FlowLayoutOptions,
+  LayoutDirection,
+  LayoutMode,
+  LayoutOptions,
+  TreeLayoutOptions,
+} from "./canvas-types.js";
 
 declare global {
   interface HTMLElementTagNameMap {
@@ -26,6 +33,11 @@ export { FalkorDBCanvas as default, FalkorDBCanvas };
 // Types
 export type {
   CanvasRenderMode,
+  LayoutMode,
+  LayoutDirection,
+  LayoutOptions,
+  TreeLayoutOptions,
+  FlowLayoutOptions,
 }
 
 export type {

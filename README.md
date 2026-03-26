@@ -5,6 +5,7 @@ A standalone web component for visualizing FalkorDB graphs using force-directed 
 ## Features
 
 - 🎨 **Force-directed graph layout** - Automatic positioning using D3 force simulation with smart collision detection
+- 🧭 **Multiple layout modes** - Switch between `force`, `tree`, and `flow` graph views
 - 🎯 **Interactive** - Click, hover, right-click interactions on nodes, links, and background
 - 🌓 **Theme support** - Light and dark mode compatible with customizable colors
 - ⚡ **Performance** - Optimized rendering with HTML5 canvas
@@ -137,6 +138,8 @@ function GraphVisualization() {
 | `height` | `<window height>` | Canvas height in pixels |
 | `backgroundColor` | | Background color (hex or CSS color) |
 | `foregroundColor` | | Foreground color for borders and text |
+| `layoutMode` | `force` | Layout algorithm to use: `force` \| `tree` \| `flow` |
+| `layoutOptions` | `{}` | Per-layout options. Use `tree` options (`rootNodeId`, `direction`, `levelSpacing`, `nodeSpacing`, `componentSpacing`) and `flow` options (`direction`, `layerSpacing`, `nodeSpacing`, `componentSpacing`) |
 | `cooldownTicks` | `undefined` | Number of simulation ticks before stopping (undefined = infinite) |
 | `cooldownTime` | `1000` | Time in ms for each simulation tick |
 | `autoStopOnSettle` | `true` | Automatically stop simulation when settled |
@@ -156,6 +159,43 @@ function GraphVisualization() {
 | `isLinkSelected` | | Function to determine if a link is selected. Signature: `(link: GraphLink) => boolean` |
 | `node` | | Custom node rendering functions (see Custom Rendering) |
 | `link` | | Custom link rendering functions (see Custom Rendering) |
+
+### Layout Modes
+
+Use `layoutMode` in `setConfig` to choose the graph view style:
+
+```typescript
+canvas.setConfig({
+  layoutMode: 'flow',
+  layoutOptions: {
+    flow: {
+      direction: 'LR',      // 'LR' | 'RL' | 'TB' | 'BT'
+      layerSpacing: 180,
+      nodeSpacing: 110
+    }
+  }
+});
+```
+
+Tree layout example:
+
+```typescript
+canvas.setConfig({
+  layoutMode: 'tree',
+  layoutOptions: {
+    tree: {
+      rootNodeId: 1,
+      direction: 'TB',
+      levelSpacing: 130,
+      nodeSpacing: 110
+    }
+  }
+});
+```
+
+Notes:
+- `force` keeps simulation enabled.
+- `tree` and `flow` pin node positions for stable deterministic views.
 
 ### Data Types
 
