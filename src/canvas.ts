@@ -219,6 +219,7 @@ class FalkorDBCanvas extends HTMLElement {
           if (this.data.nodes.length > 0) {
             this.zoomToFit(1);
           }
+          this.triggerRender();
         }
       }
     }
@@ -337,6 +338,7 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (!this.isForceLayoutMode() && this.data.nodes.length > 0) {
       this.zoomToFit(1);
+      this.triggerRender();
     }
 
     this.updateLoadingState();
@@ -387,6 +389,7 @@ class FalkorDBCanvas extends HTMLElement {
       this.updateLoadingState();
       if (this.data.nodes.length > 0) {
         this.zoomToFit(1);
+        this.triggerRender();
       }
     }
 
