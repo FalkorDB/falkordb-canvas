@@ -5,7 +5,7 @@ A standalone web component for visualizing FalkorDB graphs using force-directed 
 ## Features
 
 - 🎨 **Force-directed graph layout** - Automatic positioning using D3 force simulation with smart collision detection
-- 🧭 **Multiple layout modes** - Switch between `force`, `tree`, and `flow` graph views
+- 🧭 **Multiple layout modes** - Switch between `force`, `tree`, `flow`, `radial-tree`, `concentric`, `components`, and `arc` graph views
 - 🎯 **Interactive** - Click, hover, right-click interactions on nodes, links, and background
 - 🌓 **Theme support** - Light and dark mode compatible with customizable colors
 - ⚡ **Performance** - Optimized rendering with HTML5 canvas
@@ -138,8 +138,8 @@ function GraphVisualization() {
 | `height` | `<window height>` | Canvas height in pixels |
 | `backgroundColor` | | Background color (hex or CSS color) |
 | `foregroundColor` | | Foreground color for borders and text |
-| `layoutMode` | `force` | Layout algorithm to use: `force` \| `tree` \| `flow` |
-| `layoutOptions` | `{}` | Per-layout options. Use `tree` options (`rootNodeId`, `direction`, `levelSpacing`, `nodeSpacing`, `componentSpacing`) and `flow` options (`direction`, `layerSpacing`, `nodeSpacing`, `componentSpacing`) |
+| `layoutMode` | `force` | Layout algorithm to use: `force` \| `tree` \| `flow` \| `radial-tree` \| `concentric` \| `components` \| `arc` |
+| `layoutOptions` | `{}` | Per-layout options for each mode: `tree`, `flow`, `radialTree`, `concentric`, `components`, and `arc` |
 | `cooldownTicks` | `undefined` | Number of simulation ticks before stopping (undefined = infinite) |
 | `cooldownTime` | `1000` | Time in ms for each simulation tick |
 | `autoStopOnSettle` | `true` | Automatically stop simulation when settled |
@@ -176,18 +176,39 @@ canvas.setConfig({
   }
 });
 ```
-
-Tree layout example:
+Tree / radial tree example:
 
 ```typescript
 canvas.setConfig({
-  layoutMode: 'tree',
+  layoutMode: 'radial-tree',
   layoutOptions: {
-    tree: {
+    radialTree: {
       rootNodeId: 1,
       direction: 'TB',
-      levelSpacing: 130,
-      nodeSpacing: 110
+      radiusStep: 130
+    }
+  }
+});
+```
+
+Concentric / components / arc examples:
+
+```typescript
+canvas.setConfig({
+  layoutMode: 'concentric',
+  layoutOptions: {
+    concentric: {
+      metric: 'degree', // 'degree' | 'inDegree' | 'outDegree' | 'bfsDepth'
+      ringSpacing: 130
+    },
+    components: {
+      innerLayout: 'concentric', // 'concentric' | 'tree' | 'flow' | 'radial-tree'
+      maxColumns: 3
+    },
+    arc: {
+      direction: 'LR', // 'LR' | 'RL'
+      orderBy: 'degree', // 'id' | 'label' | 'degree'
+      curveScale: 0.22
     }
   }
 });
@@ -195,7 +216,14 @@ canvas.setConfig({
 
 Notes:
 - `force` keeps simulation enabled.
-- `tree` and `flow` pin node positions for stable deterministic views.
+- All non-`force` layouts pin node positions for stable deterministic views.
+- `components` uses its own `innerLayout` strategy for each disconnected subgraph and arranges components in a tiled view.
+- `tree`: `rootNodeId`, `direction`, `levelSpacing`, `nodeSpacing`, `componentSpacing`.
+- `flow`: `direction`, `layerSpacing`, `nodeSpacing`, `componentSpacing`.
+- `radialTree`: `rootNodeId`, `direction`, `startAngle`, `endAngle`, `radiusStep`, `componentSpacing`.
+- `concentric`: `metric`, `rootNodeId`, `ringSpacing`, `minRingNodeSpacing`, `sortWithinRing`.
+- `components`: `innerLayout`, `componentGap`, `maxColumns`, `sortComponentsBy`.
+- `arc`: `orderBy`, `direction`, `nodeSpacing`, `curveScale`.
 
 ### Data Types
 

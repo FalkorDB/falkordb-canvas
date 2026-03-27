@@ -117,6 +117,10 @@
           <option value="force" selected>Force</option>
           <option value="tree">Tree</option>
           <option value="flow">Flow</option>
+          <option value="radial-tree">Radial Tree</option>
+          <option value="concentric">Concentric</option>
+          <option value="components">Components</option>
+          <option value="arc">Arc</option>
         </select>
 
         <label for="layout-direction-select">Direction</label>
@@ -125,6 +129,30 @@
           <option value="BT">Bottom → Top</option>
           <option value="LR" selected>Left → Right</option>
           <option value="RL">Right → Left</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="concentric-metric-select">Concentric Metric</label>
+        <select id="concentric-metric-select" onchange="changeLayout()">
+          <option value="degree" selected>Degree</option>
+          <option value="inDegree">In Degree</option>
+          <option value="outDegree">Out Degree</option>
+          <option value="bfsDepth">BFS Depth</option>
+        </select>
+
+        <label for="components-inner-layout-select">Components Inner Layout</label>
+        <select id="components-inner-layout-select" onchange="changeLayout()">
+          <option value="concentric" selected>Concentric</option>
+          <option value="tree">Tree</option>
+          <option value="flow">Flow</option>
+          <option value="radial-tree">Radial Tree</option>
+        </select>
+
+        <label for="arc-order-select">Arc Order</label>
+        <select id="arc-order-select" onchange="changeLayout()">
+          <option value="id" selected>ID</option>
+          <option value="degree">Degree</option>
+          <option value="label">Label</option>
         </select>
       </div>
     </div>
@@ -165,16 +193,35 @@
     let linkCounter = 1;
     const layoutSelect = document.getElementById('layout-select');
     const layoutDirectionSelect = document.getElementById('layout-direction-select');
+    const concentricMetricSelect = document.getElementById('concentric-metric-select');
+    const componentsInnerLayoutSelect = document.getElementById('components-inner-layout-select');
+    const arcOrderSelect = document.getElementById('arc-order-select');
 
     const updateDirectionControlState = (layoutMode) => {
       if (!layoutDirectionSelect) return;
-      layoutDirectionSelect.disabled = layoutMode === 'force';
+      const supportsDirection =
+        layoutMode === 'tree' ||
+        layoutMode === 'flow' ||
+        layoutMode === 'radial-tree' ||
+        layoutMode === 'arc';
+
+      layoutDirectionSelect.disabled = !supportsDirection;
+      if (layoutMode === 'arc' && !['LR', 'RL'].includes(layoutDirectionSelect.value)) {
+        layoutDirectionSelect.value = 'LR';
+      }
+
+      if (concentricMetricSelect) concentricMetricSelect.disabled = layoutMode !== 'concentric';
+      if (componentsInnerLayoutSelect) componentsInnerLayoutSelect.disabled = layoutMode !== 'components';
+      if (arcOrderSelect) arcOrderSelect.disabled = layoutMode !== 'arc';
     };
 
     const getLayoutConfig = (layoutMode, direction) => {
+      const data = canvas?.getData?.();
+      const firstNodeId = data?.nodes?.[0]?.id;
+      const concentricMetric = concentricMetricSelect?.value || 'degree';
+      const componentsInnerLayout = componentsInnerLayoutSelect?.value || 'concentric';
+      const arcOrder = arcOrderSelect?.value || 'id';
       if (layoutMode === 'tree') {
-        const data = canvas?.getData?.();
-        const firstNodeId = data?.nodes?.[0]?.id;
 
         return {
           layoutMode: 'tree',
@@ -198,6 +245,53 @@
         };
       }
 
+      if (layoutMode === 'radial-tree') {
+        return {
+          layoutMode: 'radial-tree',
+          layoutOptions: {
+            radialTree: {
+              direction,
+              ...(firstNodeId !== undefined ? { rootNodeId: firstNodeId } : {})
+            }
+          }
+        };
+      }
+
+      if (layoutMode === 'concentric') {
+        return {
+          layoutMode: 'concentric',
+          layoutOptions: {
+            concentric: {
+              metric: concentricMetric,
+              ...(firstNodeId !== undefined ? { rootNodeId: firstNodeId } : {})
+            }
+          }
+        };
+      }
+
+      if (layoutMode === 'components') {
+        return {
+          layoutMode: 'components',
+          layoutOptions: {
+            components: {
+              innerLayout: componentsInnerLayout
+            }
+          }
+        };
+      }
+
+      if (layoutMode === 'arc') {
+        const arcDirection = ['LR', 'RL'].includes(direction) ? direction : 'LR';
+        return {
+          layoutMode: 'arc',
+          layoutOptions: {
+            arc: {
+              direction: arcDirection,
+              orderBy: arcOrder
+            }
+          }
+        };
+      }
       return {
         layoutMode: 'force',
         layoutOptions: {}
@@ -217,8 +311,22 @@
       }
 
       canvas.setConfig(getLayoutConfig(layoutMode, direction));
+      const details = [];
+      if (['tree', 'flow', 'radial-tree'].includes(layoutMode)) {
+        details.push(direction);
+      }
+      if (layoutMode === 'concentric') {
+        details.push(`metric=${concentricMetricSelect?.value || 'degree'}`);
+      }
+      if (layoutMode === 'components') {
+        details.push(`inner=${componentsInnerLayoutSelect?.value || 'concentric'}`);
+      }
+      if (layoutMode === 'arc') {
+        details.push(`dir=${layoutDirectionSelect.value}`);
+        details.push(`order=${arcOrderSelect?.value || 'id'}`);
+      }
       document.getElementById('selected-info').textContent =
-        `Layout: ${layoutMode.toUpperCase()}${layoutMode === 'force' ? '' : ` (${direction})`}`;
+        `Layout: ${layoutMode.toUpperCase()}${details.length > 0 ? ` (${details.join(', ')})` : ''}`;
     };
 
     window.addNode = () => {
