@@ -582,7 +582,7 @@ function applyRadialTreeLayout(graphData: GraphData, radialOptions?: RadialTreeL
 
   for (const treeRoot of forest) {
     const rootHierarchy = d3.hierarchy(treeRoot, (node) => node.children);
-    const treeLayout = d3.tree<TreeNode>().size([angleSpan, options.radiusStep * (rootHierarchy.height + 1)]);
+    const treeLayout = d3.tree<TreeNode>().size([angleSpan, options.radiusStep * rootHierarchy.height]);
     treeLayout(rootHierarchy);
 
     const points: Array<{ id: number; x: number; y: number }> = [];
@@ -806,16 +806,34 @@ function applyArcLayout(graphData: GraphData, arcOptions?: ArcLayoutOptions) {
     node.x = index * options.nodeSpacing;
     node.y = 0;
   });
+  const linksByPairCount = new Map<number, Map<number, number>>();
 
   for (const link of graphData.links) {
     const sourceIndex = nodeIndex.get(link.source.id);
     const targetIndex = nodeIndex.get(link.target.id);
     if (sourceIndex === undefined || targetIndex === undefined) continue;
-    if (sourceIndex === targetIndex) continue;
+
+    const sourceId = link.source.id;
+    const targetId = link.target.id;
+    const minId = Math.min(sourceId, targetId);
+    const maxId = Math.max(sourceId, targetId);
+    let pairMap = linksByPairCount.get(minId);
+    if (!pairMap) {
+      pairMap = new Map<number, number>();
+      linksByPairCount.set(minId, pairMap);
+    }
+    const duplicateIndex = pairMap.get(maxId) ?? 0;
+    pairMap.set(maxId, duplicateIndex + 1);
+
+    if (sourceIndex === targetIndex) {
+      link.curve = calculateLinkCurve(duplicateIndex, true);
+      continue;
+    }
 
     const distance = Math.max(1, Math.abs(sourceIndex - targetIndex));
     const magnitude = Math.max(0.25, distance * options.curveScale);
-    link.curve = sourceIndex < targetIndex ? -magnitude : magnitude;
+    const baseCurve = calculateLinkCurve(duplicateIndex, false);
+    link.curve = (sourceIndex < targetIndex ? -magnitude : magnitude) + baseCurve;
   }
 
   centerNodePositions(graphData.nodes);
