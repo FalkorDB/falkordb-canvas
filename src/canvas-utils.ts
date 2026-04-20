@@ -126,12 +126,12 @@ export function dataToGraphData(
 
 /**
  * Converts GraphData format to Data format
- * Removes runtime properties (x, y, vx, vy, fx, fy, displayName, curve)
+ * Removes runtime properties (x, y, layoutTargetX, layoutTargetY, vx, vy, fx, fy, displayName, curve)
  */
 export function graphDataToData(graphData: GraphData): Data {
   const nodes: Node[] = graphData.nodes.map((node) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { x, y, vx, vy, fx, fy, displayName, ...rest } = node;
+    const { x, y, layoutTargetX, layoutTargetY, vx, vy, fx, fy, displayName, ...rest } = node;
     return rest;
   });
 
