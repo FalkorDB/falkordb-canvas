@@ -98,6 +98,11 @@
     #selected-info {
       color: #666;
     }
+
+    #context-status {
+      color: #444;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 
@@ -107,8 +112,18 @@
 
     <div class="controls">
       <div class="control-group">
-        <button onclick="addNode()">Add Node</button>
-        <button onclick="addLink()">Add Link</button>
+        <label for="context-layer-select">Context Layer</label>
+        <select id="context-layer-select" data-context-control>
+          <option value="collaboration" selected>Collaboration Graph</option>
+          <option value="organization">Organization Graph</option>
+          <option value="geography">Geography Graph</option>
+          <option value="delivery">Delivery Graph</option>
+        </select>
+        <button onclick="expandSelectedContext()" data-context-control>Expand Layer</button>
+        <button onclick="collapseSelectedContext()" data-context-control>Collapse Layer</button>
+        <button onclick="expandAllContexts()" data-context-control>Expand All Context</button>
+        <button onclick="collapseAllContexts()" data-context-control>Collapse All Context</button>
+        <button onclick="playExpandCollapseDemo()" data-context-control>Play Expand/Collapse Demo</button>
         <button onclick="toggleLoading()">Toggle Loading</button>
       </div>
       <div class="control-group">
@@ -162,6 +177,8 @@
     </div>
 
     <div class="info">
+      <h3>Animation Context:</h3>
+      <div id="context-status">No context layers expanded yet.</div>
       <h3>Selected Element:</h3>
       <div id="selected-info">Click on a node or link to see details</div>
     </div>
@@ -189,13 +206,209 @@
 
     // Define control functions FIRST so they're available immediately for onclick handlers
     let canvas;
-    let nodeCounter = 1;
-    let linkCounter = 1;
+    let graphData = { nodes: [], links: [] };
+    let isLoading = false;
+    let isPlayingContextDemo = false;
+    const activeContextLayers = [];
     const layoutSelect = document.getElementById('layout-select');
     const layoutDirectionSelect = document.getElementById('layout-direction-select');
     const concentricMetricSelect = document.getElementById('concentric-metric-select');
     const componentsInnerLayoutSelect = document.getElementById('components-inner-layout-select');
     const arcOrderSelect = document.getElementById('arc-order-select');
+    const contextLayerSelect = document.getElementById('context-layer-select');
+    const contextStatusElement = document.getElementById('context-status');
+    const contextControls = Array.from(document.querySelectorAll('[data-context-control]'));
+
+    const SAMPLE_GRAPH_BASE_DATA = {
+      nodes: [
+        { id: 1, labels: ['Person'], color: '#FF6B6B', visible: true, data: { name: 'Alice', role: 'Engineer' } },
+        { id: 2, labels: ['Person'], color: '#4ECDC4', visible: true, data: { name: 'Bob', role: 'Engineer' } },
+        { id: 3, labels: ['Person'], color: '#45B7D1', visible: true, data: { name: 'Charlie', role: 'Engineer' } },
+        { id: 4, labels: ['Person'], color: '#FFEAA7', visible: true, data: { name: 'Dana', role: 'Tech Lead' } },
+        { id: 5, labels: ['Company'], color: '#FFA07A', visible: true, data: { name: 'FalkorDB' } },
+        { id: 6, labels: ['Product'], color: '#74B9FF', visible: true, data: { name: 'Canvas' } },
+        { id: 7, labels: ['City'], color: '#96CEB4', visible: true, data: { name: 'Tel Aviv' } },
+        { id: 8, labels: ['Project'], color: '#A29BFE', visible: true, data: { name: 'Graph Query Engine' } }
+      ],
+      links: [
+        { id: 1, relationship: 'KNOWS', color: '#888', source: 1, target: 2, visible: true, data: {} },
+        { id: 2, relationship: 'KNOWS', color: '#888', source: 2, target: 3, visible: true, data: {} },
+        { id: 3, relationship: 'KNOWS', color: '#888', source: 3, target: 4, visible: true, data: {} },
+        { id: 4, relationship: 'WORKS_AT', color: '#666', source: 1, target: 5, visible: true, data: {} },
+        { id: 5, relationship: 'WORKS_AT', color: '#666', source: 2, target: 5, visible: true, data: {} },
+        { id: 6, relationship: 'WORKS_AT', color: '#666', source: 3, target: 5, visible: true, data: {} },
+        { id: 7, relationship: 'LEADS', color: '#5D5D5D', source: 4, target: 8, visible: true, data: {} },
+        { id: 8, relationship: 'BUILDS', color: '#5D5D5D', source: 5, target: 6, visible: true, data: {} },
+        { id: 9, relationship: 'LOCATED_IN', color: '#7C7C7C', source: 5, target: 7, visible: true, data: {} },
+        { id: 10, relationship: 'CONTRIBUTES_TO', color: '#7C7C7C', source: 1, target: 6, visible: true, data: {} },
+        { id: 11, relationship: 'CONTRIBUTES_TO', color: '#7C7C7C', source: 2, target: 6, visible: true, data: {} },
+        { id: 12, relationship: 'CONTRIBUTES_TO', color: '#7C7C7C', source: 3, target: 8, visible: true, data: {} }
+      ]
+    };
+
+    const SAMPLE_GRAPH_CONTEXT_LAYERS = {
+      collaboration: {
+        label: 'Collaboration Graph',
+        nodes: [
+          { id: 101, labels: ['Person'], color: '#FD79A8', visible: true, data: { name: 'Eve', role: 'Engineer' } },
+          { id: 102, labels: ['Person'], color: '#FDCB6E', visible: true, data: { name: 'Farid', role: 'Engineer' } },
+          { id: 103, labels: ['Team'], color: '#00B894', visible: true, data: { name: 'Graph UX Guild' } },
+          { id: 104, labels: ['Project'], color: '#E17055', visible: true, data: { name: 'Query Pipeline Initiative' } }
+        ],
+        links: [
+          { id: 1001, relationship: 'KNOWS', color: '#888', source: 2, target: 101, visible: true, data: {} },
+          { id: 1002, relationship: 'KNOWS', color: '#888', source: 3, target: 102, visible: true, data: {} },
+          { id: 1003, relationship: 'MEMBER_OF', color: '#666', source: 1, target: 103, visible: true, data: {} },
+          { id: 1004, relationship: 'MEMBER_OF', color: '#666', source: 101, target: 103, visible: true, data: {} },
+          { id: 1005, relationship: 'MEMBER_OF', color: '#666', source: 102, target: 103, visible: true, data: {} },
+          { id: 1006, relationship: 'COLLABORATES_ON', color: '#5D5D5D', source: 103, target: 6, visible: true, data: {} },
+          { id: 1007, relationship: 'CONTRIBUTES_TO', color: '#5D5D5D', source: 102, target: 104, visible: true, data: {} },
+          { id: 1008, relationship: 'DEPENDS_ON', color: '#7C7C7C', source: 104, target: 8, visible: true, data: {} }
+        ]
+      },
+      organization: {
+        label: 'Organization Graph',
+        nodes: [
+          { id: 201, labels: ['Team'], color: '#6C5CE7', visible: true, data: { name: 'Platform Team' } },
+          { id: 202, labels: ['Team'], color: '#0984E3', visible: true, data: { name: 'Runtime Team' } },
+          { id: 203, labels: ['Team'], color: '#55EFC4', visible: true, data: { name: 'Observability Team' } },
+          { id: 204, labels: ['Company'], color: '#FF7675', visible: true, data: { name: 'Redwood Ventures' } }
+        ],
+        links: [
+          { id: 2001, relationship: 'HAS_TEAM', color: '#666', source: 5, target: 201, visible: true, data: {} },
+          { id: 2002, relationship: 'HAS_TEAM', color: '#666', source: 5, target: 202, visible: true, data: {} },
+          { id: 2003, relationship: 'HAS_TEAM', color: '#666', source: 5, target: 203, visible: true, data: {} },
+          { id: 2004, relationship: 'OWNS', color: '#5D5D5D', source: 201, target: 6, visible: true, data: {} },
+          { id: 2005, relationship: 'OWNS', color: '#5D5D5D', source: 202, target: 8, visible: true, data: {} },
+          { id: 2006, relationship: 'SUPPORTS', color: '#5D5D5D', source: 203, target: 8, visible: true, data: {} },
+          { id: 2007, relationship: 'PARTNERS_WITH', color: '#7C7C7C', source: 5, target: 204, visible: true, data: {} },
+          { id: 2008, relationship: 'ADVISES', color: '#7C7C7C', source: 204, target: 6, visible: true, data: {} }
+        ]
+      },
+      geography: {
+        label: 'Geography Graph',
+        nodes: [
+          { id: 301, labels: ['City'], color: '#FFD166', visible: true, data: { name: 'Berlin' } },
+          { id: 302, labels: ['Country'], color: '#06D6A0', visible: true, data: { name: 'Germany' } },
+          { id: 303, labels: ['City'], color: '#118AB2', visible: true, data: { name: 'London' } },
+          { id: 304, labels: ['Country'], color: '#073B4C', visible: true, data: { name: 'United Kingdom' } }
+        ],
+        links: [
+          { id: 3001, relationship: 'LIVES_IN', color: '#888', source: 3, target: 301, visible: true, data: {} },
+          { id: 3002, relationship: 'LOCATED_IN', color: '#666', source: 301, target: 302, visible: true, data: {} },
+          { id: 3003, relationship: 'LIVES_IN', color: '#888', source: 4, target: 303, visible: true, data: {} },
+          { id: 3004, relationship: 'LOCATED_IN', color: '#666', source: 303, target: 304, visible: true, data: {} },
+          { id: 3005, relationship: 'HAS_OFFICE_IN', color: '#5D5D5D', source: 5, target: 301, visible: true, data: {} },
+          { id: 3006, relationship: 'HAS_OFFICE_IN', color: '#5D5D5D', source: 5, target: 303, visible: true, data: {} }
+        ]
+      },
+      delivery: {
+        label: 'Delivery Graph',
+        nodes: [
+          { id: 401, labels: ['Release'], color: '#C77DFF', visible: true, data: { name: 'Canvas v0.1' } },
+          { id: 402, labels: ['Task'], color: '#7B2CBF', visible: true, data: { name: 'Layout Stress Test' } },
+          { id: 403, labels: ['Epic'], color: '#9D4EDD', visible: true, data: { name: 'Expand/Collapse Animation' } },
+          { id: 404, labels: ['Product'], color: '#90BE6D', visible: true, data: { name: 'Customer Analytics Dashboard' } }
+        ],
+        links: [
+          { id: 4001, relationship: 'DELIVERS', color: '#666', source: 6, target: 401, visible: true, data: {} },
+          { id: 4002, relationship: 'VALIDATES', color: '#5D5D5D', source: 402, target: 403, visible: true, data: {} },
+          { id: 4003, relationship: 'INCLUDES', color: '#5D5D5D', source: 401, target: 403, visible: true, data: {} },
+          { id: 4004, relationship: 'ENABLES', color: '#5D5D5D', source: 401, target: 404, visible: true, data: {} },
+          { id: 4005, relationship: 'TESTED_BY', color: '#7C7C7C', source: 402, target: 6, visible: true, data: {} },
+          { id: 4006, relationship: 'DEPENDS_ON', color: '#7C7C7C', source: 403, target: 8, visible: true, data: {} },
+          { id: 4007, relationship: 'REQUESTED_BY', color: '#7C7C7C', source: 404, target: 4, visible: true, data: {} }
+        ]
+      }
+    };
+
+    const CONTEXT_LAYER_KEYS = Object.keys(SAMPLE_GRAPH_CONTEXT_LAYERS);
+
+    const cloneGraphData = (data) => JSON.parse(JSON.stringify(data));
+
+    const setContextControlsEnabled = (enabled) => {
+      contextControls.forEach((control) => {
+        control.disabled = !enabled;
+      });
+    };
+
+    const mergeGraphDataWithContexts = (baseData, contextLayerKeys) => {
+      const nodesById = new Map();
+      const linksById = new Map();
+
+      baseData.nodes.forEach((node) => {
+        nodesById.set(node.id, { ...node });
+      });
+      baseData.links.forEach((link) => {
+        linksById.set(link.id, { ...link });
+      });
+
+      contextLayerKeys.forEach((layerKey) => {
+        const layer = SAMPLE_GRAPH_CONTEXT_LAYERS[layerKey];
+        if (!layer) return;
+
+        layer.nodes.forEach((node) => {
+          nodesById.set(node.id, { ...node });
+        });
+        layer.links.forEach((link) => {
+          linksById.set(link.id, { ...link });
+        });
+      });
+
+      return {
+        nodes: Array.from(nodesById.values()),
+        links: Array.from(linksById.values())
+      };
+    };
+
+    const updateContextStatus = (isRemoteMode) => {
+      if (!contextStatusElement) return;
+
+      if (isRemoteMode) {
+        contextStatusElement.textContent =
+          'Context expand/collapse controls are disabled when loading remote query data.';
+        return;
+      }
+
+      if (activeContextLayers.length === 0) {
+        contextStatusElement.textContent =
+          'No context layers expanded yet. Expand one to visualize transition animations.';
+        return;
+      }
+
+      const activeLabels = activeContextLayers
+        .map((layerKey) => SAMPLE_GRAPH_CONTEXT_LAYERS[layerKey]?.label)
+        .filter(Boolean);
+
+      contextStatusElement.textContent =
+        `Active context layers (${activeLabels.length}/${CONTEXT_LAYER_KEYS.length}): ${activeLabels.join(', ')}`;
+    };
+
+    const applyExpandedContexts = (isRemoteMode) => {
+      if (isRemoteMode || !canvas) return;
+
+      graphData = mergeGraphDataWithContexts(SAMPLE_GRAPH_BASE_DATA, activeContextLayers);
+      canvas.setData(cloneGraphData(graphData));
+      updateContextStatus(false);
+    };
+
+    const expandContextLayer = (layerKey, isRemoteMode) => {
+      if (isRemoteMode) return;
+      if (!SAMPLE_GRAPH_CONTEXT_LAYERS[layerKey]) return;
+      if (activeContextLayers.includes(layerKey)) return;
+
+      activeContextLayers.push(layerKey);
+      applyExpandedContexts(false);
+    };
+
+    const collapseContextLayer = (layerKey, isRemoteMode) => {
+      if (isRemoteMode) return;
+      const index = activeContextLayers.indexOf(layerKey);
+      if (index < 0) return;
+
+      activeContextLayers.splice(index, 1);
+      applyExpandedContexts(false);
+    };
 
     const updateDirectionControlState = (layoutMode) => {
       if (!layoutDirectionSelect) return;
@@ -329,53 +542,6 @@
         `Layout: ${layoutMode.toUpperCase()}${details.length > 0 ? ` (${details.join(', ')})` : ''}`;
     };
 
-    window.addNode = () => {
-      if (!canvas) {
-        alert('Graph not loaded yet, please wait...');
-        return;
-      }
-      const data = canvas.getData();
-      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#96CEB4'];
-      data.nodes.push({
-        id: nodeCounter,
-        labels: ['Person'],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        visible: true,
-        data: { name: `Person ${nodeCounter}` }
-      });
-      nodeCounter++;
-      canvas.setData(data);
-    };
-
-    window.addLink = () => {
-      if (!canvas) {
-        alert('Graph not loaded yet, please wait...');
-        return;
-      }
-      const data = canvas.getData();
-      if (data.nodes.length < 2) {
-        alert('Need at least 2 nodes to create a link');
-        return;
-      }
-      const sourceIdx = Math.floor(Math.random() * data.nodes.length);
-      let targetIdx = Math.floor(Math.random() * data.nodes.length);
-      while (targetIdx === sourceIdx && data.nodes.length > 1) {
-        targetIdx = Math.floor(Math.random() * data.nodes.length);
-      }
-      data.links.push({
-        id: linkCounter,
-        relationship: 'CONNECTS',
-        color: '#999',
-        source: data.nodes[sourceIdx].id,
-        target: data.nodes[targetIdx].id,
-        visible: true,
-        data: {}
-      });
-      linkCounter++;
-      canvas.setData(data);
-    };
-
-    let isLoading = false;
     window.toggleLoading = () => {
       if (!canvas) {
         alert('Graph not loaded yet, please wait...');
@@ -385,24 +551,52 @@
       canvas.setIsLoading(isLoading);
       canvas.setCooldownTicks(isLoading ? undefined : 300);
     };
+    const wait = (durationMs) =>
+      new Promise((resolve) => {
+        setTimeout(resolve, durationMs);
+      });
 
-    // Now load the graph data
-    const SAMPLE_GRAPH_DATA = {
-      nodes: [
-        { id: 1, labels: ['Person'], color: '#FF6B6B', visible: true, data: { name: 'Alice' } },
-        { id: 2, labels: ['Person'], color: '#4ECDC4', visible: true, data: { name: 'Bob' } },
-        { id: 3, labels: ['Person'], color: '#45B7D1', visible: true, data: { name: 'Charlie' } },
-        { id: 4, labels: ['Company'], color: '#FFA07A', visible: true, data: { name: 'FalkorDB' } },
-        { id: 5, labels: ['City'], color: '#96CEB4', visible: true, data: { name: 'Tel Aviv' } }
-      ],
-      links: [
-        { id: 1, relationship: 'KNOWS', color: '#888', source: 1, target: 2, visible: true, data: {} },
-        { id: 2, relationship: 'KNOWS', color: '#888', source: 2, target: 3, visible: true, data: {} },
-        { id: 3, relationship: 'WORKS_AT', color: '#666', source: 1, target: 4, visible: true, data: {} },
-        { id: 4, relationship: 'WORKS_AT', color: '#666', source: 3, target: 4, visible: true, data: {} },
-        { id: 5, relationship: 'LIVES_IN', color: '#999', source: 1, target: 5, visible: true, data: {} },
-        { id: 6, relationship: 'LIVES_IN', color: '#999', source: 2, target: 5, visible: true, data: {} }
-      ]
+    window.expandSelectedContext = () => {
+      if (!contextLayerSelect) return;
+      expandContextLayer(contextLayerSelect.value, shouldFetchRemote);
+    };
+
+    window.collapseSelectedContext = () => {
+      if (!contextLayerSelect) return;
+      collapseContextLayer(contextLayerSelect.value, shouldFetchRemote);
+    };
+
+    window.expandAllContexts = () => {
+      if (shouldFetchRemote) return;
+      activeContextLayers.splice(0, activeContextLayers.length, ...CONTEXT_LAYER_KEYS);
+      applyExpandedContexts(false);
+    };
+
+    window.collapseAllContexts = () => {
+      if (shouldFetchRemote) return;
+      activeContextLayers.length = 0;
+      applyExpandedContexts(false);
+    };
+
+    window.playExpandCollapseDemo = async () => {
+      if (shouldFetchRemote || isPlayingContextDemo) return;
+
+      isPlayingContextDemo = true;
+      try {
+        window.collapseAllContexts();
+        await wait(700);
+        expandContextLayer('collaboration', false);
+        await wait(900);
+        expandContextLayer('organization', false);
+        await wait(900);
+        expandContextLayer('geography', false);
+        await wait(900);
+        collapseContextLayer('organization', false);
+        await wait(900);
+        expandContextLayer('delivery', false);
+      } finally {
+        isPlayingContextDemo = false;
+      }
     };
 
     const API_TOKEN = 'your_api_token_here'; // Replace with your actual API token
@@ -416,7 +610,7 @@
 
     const url = `https://browser.falkordb.com/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
 
-    let graphData = JSON.parse(JSON.stringify(SAMPLE_GRAPH_DATA));
+    graphData = cloneGraphData(SAMPLE_GRAPH_BASE_DATA);
 
     // Color palettes
     const labelColors = {};
@@ -561,6 +755,9 @@
     } else {
       console.log('Using built-in sample graph data. Set API_TOKEN/graphName/query to fetch remote data.');
     }
+    if (!shouldFetchRemote) {
+      graphData = mergeGraphDataWithContexts(SAMPLE_GRAPH_BASE_DATA, activeContextLayers);
+    }
 
     // Get the graph element
     canvas = document.getElementById('graph');
@@ -568,14 +765,16 @@
     // Wait for the element to be defined
     await customElements.whenDefined('falkordb-canvas');
 
-    // Set initial data
-    canvas.setData(graphData);
-
     const graphContainer = document.querySelector('.graph-container');
 
     // Configure the graph using individual setters (more efficient!)
     canvas.setWidth(graphContainer.clientWidth);
     canvas.setHeight(graphContainer.clientHeight);
+    setContextControlsEnabled(!shouldFetchRemote);
+    updateContextStatus(shouldFetchRemote);
+
+    // Set initial data
+    canvas.setData(cloneGraphData(graphData));
 
     // Set event handlers using setConfig (for callbacks)
     canvas.setConfig({
@@ -624,10 +823,7 @@
       updateDirectionControlState(layoutSelect.value);
     }
     window.changeLayout();
-
-    // Update counters based on loaded data
-    nodeCounter = Math.max(...graphData.nodes.map(n => n.id), 0) + 1;
-    linkCounter = Math.max(...graphData.links.map(l => l.id), 0) + 1;
+    updateContextStatus(shouldFetchRemote);
   </script>
 </body>
 
