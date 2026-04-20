@@ -196,12 +196,16 @@
 
   <!-- Import the web component -->
   <script type="module">
+    let loadedFromCdnFallback = false;
     try {
-      await import('../dist/index.js');
-      console.log('Loaded local ../dist/index.js');
+      const localBuildModulePath = `../dist/index.js?v=${Date.now()}`;
+      await import(localBuildModulePath);
+      console.log('Loaded local build from', localBuildModulePath);
     } catch (error) {
+      loadedFromCdnFallback = true;
       console.warn('Falling back to CDN package because local build could not be loaded.', error);
-      await import('https://cdn.jsdelivr.net/npm/@falkordb/canvas@0.0.16/dist/index.js');
+      await import('https://cdn.jsdelivr.net/npm/@falkordb/canvas@0.0.45/dist/index.js');
+      console.warn('Loaded CDN fallback @falkordb/canvas@0.0.45. Run `npm run build` to use the local branch build.');
     }
 
     // Define control functions FIRST so they're available immediately for onclick handlers
@@ -772,6 +776,13 @@
     canvas.setHeight(graphContainer.clientHeight);
     setContextControlsEnabled(!shouldFetchRemote);
     updateContextStatus(shouldFetchRemote);
+    if (loadedFromCdnFallback) {
+      const selectedInfoElement = document.getElementById('selected-info');
+      if (selectedInfoElement) {
+        selectedInfoElement.textContent =
+          'Using CDN fallback build. If layout behavior looks outdated, run `npm run build` and refresh.';
+      }
+    }
 
     // Set initial data
     canvas.setData(cloneGraphData(graphData));
