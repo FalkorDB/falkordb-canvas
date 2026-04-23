@@ -1,5 +1,3 @@
-/* eslint-disable no-param-reassign */
-
 import ForceGraph from "force-graph";
 import * as d3 from "d3";
 import {
@@ -179,7 +177,6 @@ class FalkorDBCanvas extends HTMLElement {
       this.resizeObserver = null;
     }
     if (this.graph) {
-      // eslint-disable-next-line no-underscore-dangle
       this.graph._destructor();
     }
   }
@@ -607,7 +604,6 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Initialize force-graph
     // Cast to any for the factory call pattern, result is properly typed as ForceGraphInstance
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.graph = (ForceGraph as any)()(this.container)
       .width(this.config.width || 800)
       .height(this.config.height || 600)
