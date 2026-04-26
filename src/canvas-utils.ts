@@ -130,13 +130,11 @@ export function dataToGraphData(
  */
 export function graphDataToData(graphData: GraphData): Data {
   const nodes: Node[] = graphData.nodes.map((node) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { x, y, layoutTargetX, layoutTargetY, vx, vy, fx, fy, displayName, ...rest } = node;
     return rest;
   });
 
   const links: Link[] = graphData.links.map((link) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { curve, source, target, ...rest } = link;
     return {
       ...rest,

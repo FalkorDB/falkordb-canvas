@@ -1,5 +1,3 @@
-/* eslint-disable no-param-reassign */
-
 import ForceGraph from "force-graph";
 import * as d3 from "d3";
 import {
@@ -20,6 +18,7 @@ import {
   getNodeDisplayText,
   graphDataToData,
   LINK_DISTANCE,
+  NODE_SIZE,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
 import { applyGraphLayout, isForceLayout } from "./layouts.js";
@@ -30,7 +29,7 @@ const ARROW_WH_RATIO = 1.6;
 const ARROW_VLEN_RATIO = 0.2;
 // Multiplier to convert node size → cubic bezier control-point distance for self-loops
 const SELF_LOOP_CURVE_FACTOR = 11.67;
-// Base font size used for the initial measurement and for two-line text.
+// Base font size used for the initial wrap-measurement pass.
 const NODE_FONT_SIZE_BASE = 2;
 // Fraction of the chord width that single-line text should fill (0–1).
 // Leaves (1 - ratio)/2 of the radius as horizontal padding on each side.
@@ -129,6 +128,9 @@ class FalkorDBCanvas extends HTMLElement {
   private onFontsLoadingDone = () => {
     this.relationshipsTextCache.clear();
     this.nodeDisplayFontSize.clear();
+    for (const node of this.data.nodes) {
+      node.displayName = ["", ""];
+    }
     this.triggerRender();
   };
 
@@ -192,7 +194,6 @@ class FalkorDBCanvas extends HTMLElement {
       this.resizeObserver = null;
     }
     if (this.graph) {
-      // eslint-disable-next-line no-underscore-dangle
       this.graph._destructor();
     }
   }
@@ -411,12 +412,10 @@ class FalkorDBCanvas extends HTMLElement {
     const previousPositions = this.getNodePositionMap();
     this.data = applyGraphLayout(data, this.config.layoutMode, this.config.layoutOptions);
     const shouldAnimateNonForceLayout = this.prepareNodePositionsForCurrentLayout(previousPositions);
-
     if (this.isForceLayoutMode() && this.config.cooldownTicks === 0 && this.data.nodes.length > 0) {
       this.config.cooldownTicks = undefined;
       this.shouldZoomToFitOnNonForceSettle = false;
     }
-
     if (!this.graph) return;
 
     this.calculateNodeDegree();
@@ -424,6 +423,10 @@ class FalkorDBCanvas extends HTMLElement {
     this.graph
       .graphData(this.data);
     this.configureSimulationForCurrentLayout(shouldAnimateNonForceLayout);
+
+    if (this.isForceLayoutMode() && this.data.nodes.length > 0) {
+      this.triggerRender();
+    }
 
     if (!this.isForceLayoutMode()) {
       this.config.isLoading = false;
@@ -845,7 +848,6 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Initialize force-graph
     // Cast to any for the factory call pattern, result is properly typed as ForceGraphInstance
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.graph = (ForceGraph as any)()(this.container)
       .width(this.config.width || 800)
       .height(this.config.height || 600)
@@ -1069,32 +1071,49 @@ class FalkorDBCanvas extends HTMLElement {
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
 
       let chosenSize = NODE_FONT_SIZE_BASE;
-      if (!line2) {
-        // Single-line: measure at a large reference size (20px) where canvas
-        // metrics are precise, then compute the exact scale to fill the node.
-        const REF = 20;
-        ctx.font = `400 ${REF}px SofiaSans`;
-        const refMetrics = ctx.measureText(line1);
-        // Use the actual visual bounding box (not advance width) so glyphs
-        // with overshoot (e.g. "7") are fully accounted for.
-        const visualWidth = (refMetrics.actualBoundingBoxLeft ?? 0)
-          + (refMetrics.actualBoundingBoxRight ?? 0);
-        const refWidth = Math.max(visualWidth, refMetrics.width);
-        const refHeight = (refMetrics.actualBoundingBoxAscent ?? 0)
-          + (refMetrics.actualBoundingBoxDescent ?? 0);
+      // Measure at a large reference size (20px) where canvas metrics are
+      // precise, then compute the exact scale to fill the node.
+      const REF = 20;
+      ctx.font = `400 ${REF}px SofiaSans`;
+      // Switch to "left" for measurement: actualBoundingBoxLeft/Right are
+      // unreliable with textAlign="center" and can double on some engines.
+      ctx.textAlign = "left";
+      const refMetrics = ctx.measureText(line1);
+      // Use the actual visual bounding box (not advance width) so glyphs
+      // with overshoot (e.g. "7") are fully accounted for.
+      const visualWidth = (refMetrics.actualBoundingBoxLeft ?? 0)
+        + (refMetrics.actualBoundingBoxRight ?? 0);
+      let refWidth = Math.max(visualWidth, refMetrics.width);
+      const singleLineHeight = (refMetrics.actualBoundingBoxAscent ?? 0)
+        + (refMetrics.actualBoundingBoxDescent ?? 0);
 
-        // Inscribed-rectangle-in-circle constraint: every corner of the text
-        // bounding box must lie inside the circle, i.e.
-        //   sqrt((w/2)² + (h/2)²) ≤ r
-        // Solving for the uniform scale factor s:
-        //   s = 2·r / sqrt(refWidth² + refHeight²)
-        const r = NODE_TEXT_FILL_RATIO * textRadius;
-        if (refWidth > 0 && refHeight > 0) {
-          const diagonal = Math.sqrt(refWidth * refWidth + refHeight * refHeight);
-          chosenSize = REF * (2 * r / diagonal);
-        } else if (refWidth > 0) {
-          chosenSize = REF * (2 * r / refWidth);
-        }
+      let refHeight: number;
+      if (!line2) {
+        refHeight = singleLineHeight;
+      } else {
+        // Two-line: use the wider line and account for the vertical span
+        // of both lines including the 1.5× spacing used by the rendering code.
+        const m2 = ctx.measureText(line2);
+        const vis2 = Math.max(
+          (m2.actualBoundingBoxLeft ?? 0) + (m2.actualBoundingBoxRight ?? 0),
+          m2.width,
+        );
+        refWidth = Math.max(refWidth, vis2);
+        refHeight = singleLineHeight * 2.5;
+      }
+      ctx.textAlign = "center";
+
+      // Inscribed-rectangle-in-circle constraint: every corner of the text
+      // bounding box must lie inside the circle, i.e.
+      //   sqrt((w/2)² + (h/2)²) ≤ r
+      // Solving for the uniform scale factor s:
+      //   s = 2·r / sqrt(refWidth² + refHeight²)
+      const r = NODE_TEXT_FILL_RATIO * textRadius;
+      if (refWidth > 0 && refHeight > 0) {
+        const diagonal = Math.sqrt(refWidth * refWidth + refHeight * refHeight);
+        chosenSize = REF * (2 * r / diagonal);
+      } else if (refWidth > 0) {
+        chosenSize = REF * (2 * r / refWidth);
       }
 
       ctx.font = `400 ${chosenSize}px SofiaSans`;
@@ -1164,7 +1183,7 @@ class FalkorDBCanvas extends HTMLElement {
     let pendingArrow: { tipX: number; tipY: number; nx: number; ny: number; arrowLen: number; arrowHalfWidth: number } | null = null;
 
     if (start.id === end.id) {
-      const nodeSize = start.size || 6;
+      const nodeSize = start.size || NODE_SIZE;
       const d = (link.curve || 0) * nodeSize * SELF_LOOP_CURVE_FACTOR;
 
       ctx.lineWidth = (isLinkSelected ? 2 : 1) / globalScale;
@@ -1291,7 +1310,7 @@ class FalkorDBCanvas extends HTMLElement {
       const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
 
       // Target-side clip: find t where bezier enters target node border + PADDING
-      const endNodeSize = end.size || 6;
+      const endNodeSize = end.size || NODE_SIZE;
       const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? 1 : 0.5) + PADDING;
       const borderRadiusSq = borderRadius * borderRadius;
 
@@ -1319,7 +1338,7 @@ class FalkorDBCanvas extends HTMLElement {
       const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
 
       // Source-side clip: find t where bezier exits source node border + PADDING
-      const startNodeSize = start.size || 6;
+      const startNodeSize = start.size || NODE_SIZE;
       const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + PADDING;
       const srcBorderRadiusSq = srcBorderRadius * srcBorderRadius;
 
@@ -1463,7 +1482,7 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (start.id === end.id) {
       // Self-loop: replicate exact cubic bezier clip from drawLink
-      const nodeSize = start.size || 6;
+      const nodeSize = start.size || NODE_SIZE;
       const d = (link.curve || 0) * nodeSize * SELF_LOOP_CURVE_FACTOR;
 
       const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? 1 : 0.5;
@@ -1514,7 +1533,7 @@ class FalkorDBCanvas extends HTMLElement {
         const controlY = (start.y + end.y) / 2 + perpY * curvature * distance;
 
         // Use the same borderRadius and binary-search clip as drawLink
-        const endNodeSize = end.size || 6;
+        const endNodeSize = end.size || NODE_SIZE;
         const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? 1 : 0.5) + PADDING;
         const borderRadiusSq = borderRadius * borderRadius;
 
@@ -1541,7 +1560,7 @@ class FalkorDBCanvas extends HTMLElement {
         const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
 
         // Source-side clip: mirror of drawLink source gap
-        const startNodeSize = start.size || 6;
+        const startNodeSize = start.size || NODE_SIZE;
         const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + PADDING;
         const srcBorderRadiusSq = srcBorderRadius * srcBorderRadius;
 
