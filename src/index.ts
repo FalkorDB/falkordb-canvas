@@ -1,11 +1,20 @@
 import FalkorDBCanvas from "./canvas.js";
 import type React from "react";
 import type {
+  ArcDirection,
+  ArcLayoutOptions,
+  ComponentsInnerLayout,
+  ComponentsLayoutOptions,
+  ComponentsSortMode,
+  ConcentricLayoutOptions,
+  ConcentricMetric,
   CanvasRenderMode,
   FlowLayoutOptions,
+  RadialTreeLayoutOptions,
   LayoutDirection,
   LayoutMode,
   LayoutOptions,
+  RingSortMode,
   TreeLayoutOptions,
 } from "./canvas-types.js";
 
@@ -32,12 +41,21 @@ export { FalkorDBCanvas as default, FalkorDBCanvas };
 
 // Types
 export type {
+  ArcDirection,
   CanvasRenderMode,
   LayoutMode,
   LayoutDirection,
   LayoutOptions,
   TreeLayoutOptions,
   FlowLayoutOptions,
+  RadialTreeLayoutOptions,
+  ConcentricLayoutOptions,
+  ComponentsLayoutOptions,
+  ArcLayoutOptions,
+  ConcentricMetric,
+  RingSortMode,
+  ComponentsInnerLayout,
+  ComponentsSortMode,
 }
 
 export type {

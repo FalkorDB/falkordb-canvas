@@ -13,6 +13,9 @@ faq
 npm
 json
 npmjs
+htmlcontent
+<htmlcontent>
+subgraph
 GitHub
 github
 config

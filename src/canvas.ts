@@ -40,6 +40,17 @@ const CHARGE_STRENGTH = -400;
 const CENTER_STRENGTH = 0.03;
 const VELOCITY_DECAY = 0.4;
 const ALPHA_MIN = 0.05;
+const NON_FORCE_CHARGE_STRENGTH = -220;
+const NON_FORCE_COLLIDE_PADDING = 18;
+const NON_FORCE_CENTER_STRENGTH = 0.02;
+const NON_FORCE_LINK_STRENGTH = 0.08;
+const NON_FORCE_TARGET_STRENGTH = 0.3;
+const NON_FORCE_VELOCITY_DECAY = 0.5;
+const NON_FORCE_ALPHA_MIN = 0.03;
+const NON_FORCE_LAYOUT_COOLDOWN_TICKS = 120;
+const NON_FORCE_DRAG_COOLDOWN_TICKS = 90;
+
+type NodePosition = { x: number; y: number };
 
 // Create styles for the web component
 function createStyles(backgroundColor: string, foregroundColor: string): HTMLStyleElement {
@@ -125,6 +136,8 @@ class FalkorDBCanvas extends HTMLElement {
 
   private viewport: ViewportState;
 
+  private shouldZoomToFitOnNonForceSettle: boolean = false;
+
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
@@ -201,15 +214,18 @@ class FalkorDBCanvas extends HTMLElement {
     Object.assign(this.config, config);
 
     if (layoutChanged) {
+      const previousPositions = this.getNodePositionMap();
       if (this.isForceLayoutMode() && this.config.cooldownTicks === 0 && this.data.nodes.length > 0) {
         this.config.cooldownTicks = undefined;
       }
       this.data = applyGraphLayout(this.data, this.config.layoutMode, this.config.layoutOptions);
+      const shouldAnimateNonForceLayout = this.prepareNodePositionsForCurrentLayout(previousPositions);
       if (this.graph) {
         this.calculateNodeDegree();
         this.graph.graphData(this.data);
-        this.configureSimulationForCurrentLayout();
+        this.configureSimulationForCurrentLayout(shouldAnimateNonForceLayout);
         if (this.isForceLayoutMode()) {
+          this.shouldZoomToFitOnNonForceSettle = false;
           this.config.isLoading = this.data.nodes.length > 0;
           this.config.onLoadingChange?.(this.config.isLoading);
           this.updateLoadingState();
@@ -218,9 +234,18 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onLoadingChange?.(false);
           this.updateLoadingState();
           if (this.data.nodes.length > 0) {
-            this.zoomToFit(1);
+            if (shouldAnimateNonForceLayout) {
+              this.shouldZoomToFitOnNonForceSettle = true;
+            } else {
+              this.shouldZoomToFitOnNonForceSettle = false;
+              this.zoomToFit(1);
+            }
+          } else {
+            this.shouldZoomToFitOnNonForceSettle = false;
           }
-          this.triggerRender();
+          if (!shouldAnimateNonForceLayout) {
+            this.triggerRender();
+          }
         }
       }
     }
@@ -299,11 +324,19 @@ class FalkorDBCanvas extends HTMLElement {
 
   setData(data: Data) {
     this.log('setData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
-    // Convert data and apply circular layout to new nodes only
-    this.data = dataToGraphData(data);
+    const previousPositions = this.getNodePositionMap();
+    const oldNodesMap = new Map<number, GraphNode>();
+    for (const node of this.data.nodes) {
+      oldNodesMap.set(node.id, node);
+    }
+
+    // Convert data and preserve positions for existing nodes
+    this.data = dataToGraphData(data, undefined, oldNodesMap);
     this.data = applyGraphLayout(this.data, this.config.layoutMode, this.config.layoutOptions);
+    const shouldAnimateNonForceLayout = this.prepareNodePositionsForCurrentLayout(previousPositions);
 
     if (this.isForceLayoutMode()) {
+      this.shouldZoomToFitOnNonForceSettle = false;
       this.config.cooldownTicks = this.data.nodes.length > 0 ? undefined : 0;
       this.config.isLoading = this.data.nodes.length > 0;
     } else {
@@ -334,12 +367,18 @@ class FalkorDBCanvas extends HTMLElement {
     // Update graph data and properties
     this.graph
       .graphData(this.data);
-
-    this.configureSimulationForCurrentLayout();
+    this.configureSimulationForCurrentLayout(shouldAnimateNonForceLayout);
 
     if (!this.isForceLayoutMode() && this.data.nodes.length > 0) {
-      this.zoomToFit(1);
-      this.triggerRender();
+      if (shouldAnimateNonForceLayout) {
+        this.shouldZoomToFitOnNonForceSettle = true;
+      } else {
+        this.shouldZoomToFitOnNonForceSettle = false;
+        this.zoomToFit(1);
+        this.triggerRender();
+      }
+    } else {
+      this.shouldZoomToFitOnNonForceSettle = false;
     }
 
     this.updateLoadingState();
@@ -370,15 +409,20 @@ class FalkorDBCanvas extends HTMLElement {
 
   setGraphData(data: GraphData) {
     this.log('setGraphData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
+    const previousPositions = this.getNodePositionMap();
     this.data = applyGraphLayout(data, this.config.layoutMode, this.config.layoutOptions);
-
+    const shouldAnimateNonForceLayout = this.prepareNodePositionsForCurrentLayout(previousPositions);
+    if (this.isForceLayoutMode() && this.config.cooldownTicks === 0 && this.data.nodes.length > 0) {
+      this.config.cooldownTicks = undefined;
+      this.shouldZoomToFitOnNonForceSettle = false;
+    }
     if (!this.graph) return;
 
     this.calculateNodeDegree();
 
     this.graph
       .graphData(this.data);
-    this.configureSimulationForCurrentLayout();
+    this.configureSimulationForCurrentLayout(shouldAnimateNonForceLayout);
 
     if (this.isForceLayoutMode() && this.data.nodes.length > 0) {
       this.triggerRender();
@@ -389,8 +433,15 @@ class FalkorDBCanvas extends HTMLElement {
       this.config.onLoadingChange?.(false);
       this.updateLoadingState();
       if (this.data.nodes.length > 0) {
-        this.zoomToFit(1);
-        this.triggerRender();
+        if (shouldAnimateNonForceLayout) {
+          this.shouldZoomToFitOnNonForceSettle = true;
+        } else {
+          this.shouldZoomToFitOnNonForceSettle = false;
+          this.zoomToFit(1);
+          this.triggerRender();
+        }
+      } else {
+        this.shouldZoomToFitOnNonForceSettle = false;
       }
     }
 
@@ -438,8 +489,192 @@ class FalkorDBCanvas extends HTMLElement {
   private isForceLayoutMode() {
     return isForceLayout(this.config.layoutMode);
   }
+  private getNodePositionMap(): Map<number, NodePosition> {
+    const positions = new Map<number, NodePosition>();
 
-  private configureSimulationForCurrentLayout() {
+    for (const node of this.data.nodes) {
+      if (node.x === undefined || node.y === undefined) continue;
+      positions.set(node.id, { x: node.x, y: node.y });
+    }
+
+    return positions;
+  }
+
+  private getGraphCenter(positions: Map<number, NodePosition>): NodePosition | undefined {
+    if (positions.size === 0) return undefined;
+
+    let sumX = 0;
+    let sumY = 0;
+
+    for (const position of positions.values()) {
+      sumX += position.x;
+      sumY += position.y;
+    }
+
+    return {
+      x: sumX / positions.size,
+      y: sumY / positions.size,
+    };
+  }
+
+  private getConnectedExistingPosition(
+    nodeId: number,
+    previousPositions: Map<number, NodePosition>
+  ): NodePosition | undefined {
+    let sumX = 0;
+    let sumY = 0;
+    let count = 0;
+
+    for (const link of this.data.links) {
+      const sourceId = link.source.id;
+      const targetId = link.target.id;
+
+      if (sourceId === nodeId) {
+        const existingPosition = previousPositions.get(targetId);
+        if (!existingPosition) continue;
+        sumX += existingPosition.x;
+        sumY += existingPosition.y;
+        count += 1;
+      } else if (targetId === nodeId) {
+        const existingPosition = previousPositions.get(sourceId);
+        if (!existingPosition) continue;
+        sumX += existingPosition.x;
+        sumY += existingPosition.y;
+        count += 1;
+      }
+    }
+
+    if (count === 0) return undefined;
+    return {
+      x: sumX / count,
+      y: sumY / count,
+    };
+  }
+
+  private clearLayoutTargets() {
+    for (const node of this.data.nodes) {
+      node.layoutTargetX = undefined;
+      node.layoutTargetY = undefined;
+    }
+  }
+
+  private prepareNodePositionsForCurrentLayout(previousPositions: Map<number, NodePosition>): boolean {
+    if (this.isForceLayoutMode()) {
+      this.clearLayoutTargets();
+      return false;
+    }
+
+    const graphCenter = this.getGraphCenter(previousPositions);
+    let shouldAnimate = false;
+
+    for (const node of this.data.nodes) {
+      const targetX = node.x ?? 0;
+      const targetY = node.y ?? 0;
+
+      node.layoutTargetX = targetX;
+      node.layoutTargetY = targetY;
+      node.fx = undefined;
+      node.fy = undefined;
+      node.vx = 0;
+      node.vy = 0;
+
+      if (previousPositions.size === 0) {
+        node.x = targetX;
+        node.y = targetY;
+        continue;
+      }
+
+      const previousPosition = previousPositions.get(node.id)
+        ?? this.getConnectedExistingPosition(node.id, previousPositions)
+        ?? graphCenter;
+
+      if (!previousPosition) {
+        node.x = targetX;
+        node.y = targetY;
+        continue;
+      }
+
+      node.x = previousPosition.x;
+      node.y = previousPosition.y;
+
+      if (
+        Math.abs(previousPosition.x - targetX) > 0.5
+        || Math.abs(previousPosition.y - targetY) > 0.5
+      ) {
+        shouldAnimate = true;
+      }
+    }
+
+    return shouldAnimate;
+  }
+
+  private setupAnchoredLayoutForces() {
+    if (!this.graph) return;
+
+    const linkForce = this.graph.d3Force("link");
+    if (linkForce) {
+      linkForce
+        .distance((link: GraphLink) => {
+          const sourceSize = link.source.size;
+          const targetSize = link.target.size;
+          return sourceSize + targetSize + LINK_DISTANCE * 1.6;
+        })
+        .strength(NON_FORCE_LINK_STRENGTH);
+    }
+
+    this.graph.d3Force(
+      "collide",
+      d3.forceCollide((node: GraphNode) => node.size + NON_FORCE_COLLIDE_PADDING)
+    );
+
+    this.graph.d3Force(
+      "centerX",
+      d3.forceX(0).strength(NON_FORCE_CENTER_STRENGTH)
+    );
+
+    this.graph.d3Force(
+      "centerY",
+      d3.forceY(0).strength(NON_FORCE_CENTER_STRENGTH)
+    );
+
+    this.graph.d3Force(
+      "layoutTargetX",
+      d3.forceX((node: GraphNode) => node.layoutTargetX ?? node.x ?? 0).strength(NON_FORCE_TARGET_STRENGTH)
+    );
+
+    this.graph.d3Force(
+      "layoutTargetY",
+      d3.forceY((node: GraphNode) => node.layoutTargetY ?? node.y ?? 0).strength(NON_FORCE_TARGET_STRENGTH)
+    );
+
+    const chargeForce = this.graph.d3Force("charge");
+    if (chargeForce) {
+      chargeForce.strength(NON_FORCE_CHARGE_STRENGTH);
+    }
+
+    this.graph.d3VelocityDecay(NON_FORCE_VELOCITY_DECAY);
+    this.graph.d3AlphaMin(NON_FORCE_ALPHA_MIN);
+  }
+
+  private startNonForceSettleAnimation(cooldownTicks: number) {
+    if (!this.graph || this.data.nodes.length === 0 || this.isForceLayoutMode()) return;
+
+    this.graph.cooldownTicks(cooldownTicks);
+    this.updateCanvasSimulationAttribute(true);
+    this.graph.d3ReheatSimulation();
+  }
+
+  private applyLayoutTargets() {
+    for (const node of this.data.nodes) {
+      if (node.layoutTargetX === undefined || node.layoutTargetY === undefined) continue;
+      node.x = node.layoutTargetX;
+      node.y = node.layoutTargetY;
+      node.vx = 0;
+      node.vy = 0;
+    }
+  }
+
+  private configureSimulationForCurrentLayout(shouldAnimateNonForceLayout = false) {
     if (!this.graph) return;
 
     if (this.isForceLayoutMode()) {
@@ -447,6 +682,11 @@ class FalkorDBCanvas extends HTMLElement {
       const cooldownTicks = this.config.cooldownTicks ?? Infinity;
       this.graph.cooldownTicks(cooldownTicks);
       this.updateCanvasSimulationAttribute(cooldownTicks !== 0 && this.data.nodes.length > 0);
+      return;
+    }
+    this.setupAnchoredLayoutForces();
+    if (shouldAnimateNonForceLayout) {
+      this.startNonForceSettleAnimation(NON_FORCE_LAYOUT_COOLDOWN_TICKS);
       return;
     }
 
@@ -654,6 +894,12 @@ class FalkorDBCanvas extends HTMLElement {
           this.config.onNodeHover(node);
         }
       })
+      .onNodeDrag((node: GraphNode) => {
+        this.handleNodeDrag(node);
+      })
+      .onNodeDragEnd((node: GraphNode) => {
+        this.handleNodeDragEnd(node);
+      })
       .onLinkHover((link: GraphLink | null) => {
         if (this.config.onLinkHover) {
           this.config.onLinkHover(link);
@@ -720,6 +966,9 @@ class FalkorDBCanvas extends HTMLElement {
     if (!linkForce) return;
     if (!this.graph) return;
 
+    this.graph.d3Force("layoutTargetX", null);
+    this.graph.d3Force("layoutTargetY", null);
+
     // distance based on node size + constant
     linkForce
       .distance((link: GraphLink) => {
@@ -761,6 +1010,28 @@ class FalkorDBCanvas extends HTMLElement {
       if (simulation.alphaMin) simulation.alphaMin(ALPHA_MIN);
     }
     this.log('Force simulation setup complete');
+  }
+
+  private handleNodeDrag(node: GraphNode) {
+    if (this.isForceLayoutMode()) return;
+    if (node.x === undefined || node.y === undefined) return;
+
+    node.layoutTargetX = node.x;
+    node.layoutTargetY = node.y;
+    this.shouldZoomToFitOnNonForceSettle = false;
+    this.startNonForceSettleAnimation(NON_FORCE_DRAG_COOLDOWN_TICKS);
+  }
+
+  private handleNodeDragEnd(node: GraphNode) {
+    if (this.isForceLayoutMode()) return;
+    if (node.x === undefined || node.y === undefined) return;
+
+    node.layoutTargetX = node.x;
+    node.layoutTargetY = node.y;
+    node.fx = undefined;
+    node.fy = undefined;
+    this.shouldZoomToFitOnNonForceSettle = false;
+    this.startNonForceSettleAnimation(NON_FORCE_DRAG_COOLDOWN_TICKS);
   }
 
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
@@ -1346,6 +1617,16 @@ class FalkorDBCanvas extends HTMLElement {
     if (!this.graph) return;
 
     this.log('Engine stopped');
+    if (!this.isForceLayoutMode()) {
+      this.applyLayoutTargets();
+      this.graph.cooldownTicks(0);
+      this.updateCanvasSimulationAttribute(false);
+      if (this.shouldZoomToFitOnNonForceSettle && this.data.nodes.length > 0) {
+        this.zoomToFit(1);
+      }
+      this.shouldZoomToFitOnNonForceSettle = false;
+      return;
+    }
     // If already stopped, just ensure any leftover loading state is cleared and return
     if (this.config.cooldownTicks === 0) {
       if (this.config.isLoading) {
@@ -1417,6 +1698,12 @@ class FalkorDBCanvas extends HTMLElement {
         if (this.config.onNodeHover) {
           this.config.onNodeHover(node);
         }
+      })
+      .onNodeDrag((node: GraphNode) => {
+        this.handleNodeDrag(node);
+      })
+      .onNodeDragEnd((node: GraphNode) => {
+        this.handleNodeDragEnd(node);
       })
       .onLinkHover((link: GraphLink | null) => {
         if (this.config.onLinkHover) {

@@ -46,9 +46,14 @@ export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgr
   layoutOptions: LayoutOptions;
 }
 
-export type LayoutMode = 'force' | 'flow' | 'tree';
+export type LayoutMode = 'force' | 'flow' | 'tree' | 'radial-tree' | 'concentric' | 'components' | 'arc';
 
 export type LayoutDirection = 'TB' | 'BT' | 'LR' | 'RL';
+export type ArcDirection = 'LR' | 'RL';
+export type ConcentricMetric = 'degree' | 'inDegree' | 'outDegree' | 'bfsDepth';
+export type RingSortMode = 'id' | 'label' | 'degree';
+export type ComponentsInnerLayout = 'concentric' | 'tree' | 'flow' | 'radial-tree';
+export type ComponentsSortMode = 'size' | 'edgeCount';
 
 export interface TreeLayoutOptions {
   rootNodeId?: number;
@@ -64,10 +69,44 @@ export interface FlowLayoutOptions {
   nodeSpacing?: number;
   componentSpacing?: number;
 }
+export interface RadialTreeLayoutOptions {
+  rootNodeId?: number;
+  direction?: LayoutDirection;
+  startAngle?: number;
+  endAngle?: number;
+  radiusStep?: number;
+  componentSpacing?: number;
+}
+
+export interface ConcentricLayoutOptions {
+  metric?: ConcentricMetric;
+  rootNodeId?: number;
+  ringSpacing?: number;
+  minRingNodeSpacing?: number;
+  sortWithinRing?: RingSortMode;
+}
+
+export interface ComponentsLayoutOptions {
+  innerLayout?: ComponentsInnerLayout;
+  componentGap?: number;
+  maxColumns?: number;
+  sortComponentsBy?: ComponentsSortMode;
+}
+
+export interface ArcLayoutOptions {
+  orderBy?: RingSortMode;
+  direction?: ArcDirection;
+  nodeSpacing?: number;
+  curveScale?: number;
+}
 
 export interface LayoutOptions {
   tree?: TreeLayoutOptions;
   flow?: FlowLayoutOptions;
+  radialTree?: RadialTreeLayoutOptions;
+  concentric?: ConcentricLayoutOptions;
+  components?: ComponentsLayoutOptions;
+  arc?: ArcLayoutOptions;
 }
 
 export type GraphNode = NodeObject & {
@@ -82,6 +121,8 @@ export type GraphNode = NodeObject & {
   };
   x?: number;
   y?: number;
+  layoutTargetX?: number;
+  layoutTargetY?: number;
   vx?: number;
   vy?: number;
   fx?: number;
@@ -109,7 +150,7 @@ export interface GraphData {
 
 export type Node = Omit<
   GraphNode,
-  "x" | "y" | "vx" | "vy" | "fx" | "fy" | "initialPositionCalculated" | "displayName" | "size"
+  "x" | "y" | "layoutTargetX" | "layoutTargetY" | "vx" | "vy" | "fx" | "fy" | "initialPositionCalculated" | "displayName" | "size"
 > & {
   size?: number;
 }
