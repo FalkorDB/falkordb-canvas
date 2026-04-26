@@ -804,6 +804,9 @@ class FalkorDBCanvas extends HTMLElement {
       // precise, then compute the exact scale to fill the node.
       const REF = 20;
       ctx.font = `400 ${REF}px SofiaSans`;
+      // Switch to "left" for measurement: actualBoundingBoxLeft/Right are
+      // unreliable with textAlign="center" and can double on some engines.
+      ctx.textAlign = "left";
       const refMetrics = ctx.measureText(line1);
       // Use the actual visual bounding box (not advance width) so glyphs
       // with overshoot (e.g. "7") are fully accounted for.
@@ -827,6 +830,7 @@ class FalkorDBCanvas extends HTMLElement {
         refWidth = Math.max(refWidth, vis2);
         refHeight = singleLineHeight * 2.5;
       }
+      ctx.textAlign = "center";
 
       // Inscribed-rectangle-in-circle constraint: every corner of the text
       // bounding box must lie inside the circle, i.e.
