@@ -122,6 +122,8 @@ export type GraphNode = NodeObject & {
   };
   x?: number;
   y?: number;
+  layoutTargetX?: number;
+  layoutTargetY?: number;
   vx?: number;
   vy?: number;
   fx?: number;
@@ -150,7 +152,7 @@ export interface GraphData {
 
 export type Node = Omit<
   GraphNode,
-  "x" | "y" | "vx" | "vy" | "fx" | "fy" | "initialPositionCalculated" | "displayName" | "size"
+  "x" | "y" | "layoutTargetX" | "layoutTargetY" | "vx" | "vy" | "fx" | "fy" | "initialPositionCalculated" | "displayName" | "size"
 > & {
   size?: number;
 }

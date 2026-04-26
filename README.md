@@ -216,7 +216,7 @@ canvas.setConfig({
 
 Notes:
 - `force` keeps simulation enabled.
-- All non-`force` layouts pin node positions for stable deterministic views.
+- All non-`force` layouts compute deterministic target positions, animate layout transitions, and support drag interactions while preserving layout structure.
 - `components` uses its own `innerLayout` strategy for each disconnected subgraph and arranges components in a tiled view.
 - `tree`: `rootNodeId`, `direction`, `levelSpacing`, `nodeSpacing`, `componentSpacing`.
 - `flow`: `direction`, `layerSpacing`, `nodeSpacing`, `componentSpacing`.
