@@ -159,7 +159,7 @@ function GraphVisualization() {
 | `isLinkSelected` | | Function to determine if a link is selected. Signature: `(link: GraphLink) => boolean` |
 | `node` | | Custom node rendering functions (see Custom Rendering) |
 | `link` | | Custom link rendering functions (see Custom Rendering) |
-| `largeGraph` | | Large-graph rendering optimisations (see [Large-Graph Optimisations](#large-graph-optimisations)) |
+| `largeGraph` | | Large-graph rendering optimizations (see [Large-Graph Optimizations](#large-graph-optimizations)) |
 
 ### Layout Modes
 
@@ -435,9 +435,9 @@ while (true) {
 4. **Viewport**: Use `getViewport()` and `setViewport()` to preserve user's view when updating data
 5. **Very large graphs**: Enable viewport culling via the `largeGraph` option (see below)
 
-## Large-Graph Optimisations
+## Large-Graph Optimizations
 
-For graphs with thousands of nodes and links, enable the built-in viewport culling and low-zoom draw-skipping optimisations via the `largeGraph` configuration option.
+For graphs with thousands of nodes and links, enable the built-in viewport culling and low-zoom draw-skipping optimizations via the `largeGraph` configuration option.
 
 ```typescript
 canvas.setConfig({
