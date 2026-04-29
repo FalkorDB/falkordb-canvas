@@ -11,6 +11,8 @@ import "../src/canvas";
 type CanvasTestElement = HTMLElement & {
   setConfig: (config: Record<string, unknown>) => void;
   setData: (data: { nodes: NodeInput[]; links: LinkInput[] }) => void;
+  setWidth: (w: number) => void;
+  setHeight: (h: number) => void;
   getGraphData: () => { nodes: RuntimeNode[]; links: RuntimeLink[] };
 };
 
@@ -43,6 +45,46 @@ type RuntimeLink = LinkInput & {
   target: RuntimeNode;
   curve?: number;
 };
+
+function createCtxSpy() {
+  return {
+    beginPath: vi.fn(),
+    arc: vi.fn(),
+    stroke: vi.fn(),
+    fill: vi.fn(),
+    fillText: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    quadraticCurveTo: vi.fn(),
+    bezierCurveTo: vi.fn(),
+    setLineDash: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
+    translate: vi.fn(),
+    rotate: vi.fn(),
+    clip: vi.fn(),
+    closePath: vi.fn(),
+    fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+    clearRect: vi.fn(),
+    getLineDash: vi.fn(() => []),
+    measureText: vi.fn(() => ({
+      width: 10,
+      actualBoundingBoxAscent: 2,
+      actualBoundingBoxDescent: 1,
+      actualBoundingBoxLeft: 0,
+      actualBoundingBoxRight: 10,
+    })),
+    canvas: { width: 800, height: 600 },
+    lineWidth: 1,
+    strokeStyle: "#000",
+    fillStyle: "#000",
+    font: "12px sans-serif",
+    textAlign: "center" as CanvasTextAlign,
+    textBaseline: "middle" as CanvasTextBaseline,
+    globalAlpha: 1,
+  } as unknown as CanvasRenderingContext2D;
+}
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -87,6 +129,17 @@ function triggerZoom(transform: { k: number; x: number; y: number }) {
   instance.callbacks.onZoom?.(transform);
 }
 
+function setupInstanceDimensions(instance: ReturnType<typeof getLastInstance>, w = 800, h = 600) {
+  instance.width = (value?: number) => {
+    if (value === undefined) return w;
+    return instance;
+  };
+  instance.height = (value?: number) => {
+    if (value === undefined) return h;
+    return instance;
+  };
+}
+
 const SIMPLE_DATA = {
   nodes: [
     { id: 1, labels: ["A"], visible: true, color: "#f00", data: { name: "n1" } },
@@ -106,31 +159,34 @@ describe("viewport culling", () => {
     resetForceGraphMockState();
   });
 
-  it("culling is disabled by default — all nodes pass", () => {
+  it("culling is disabled by default — offscreen nodes are still drawn", () => {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setData(SIMPLE_DATA);
 
-    // Position nodes
+    const instance = getLastInstance();
+    setupInstanceDimensions(instance);
+
+    // Position node far offscreen
     const data = canvas.getGraphData();
-    data.nodes[0].x = -1000; // far offscreen
+    data.nodes[0].x = -5000;
     data.nodes[0].y = 0;
     data.nodes[0].size = 6;
-    data.nodes[1].x = 400;
-    data.nodes[1].y = 300;
-    data.nodes[1].size = 6;
 
-    // Trigger zoom (identity transform: zoom=1, no pan)
+    // Trigger zoom — without largeGraph enabled, culling should not activate
     triggerZoom({ k: 1, x: 0, y: 0 });
 
-    // Without largeGraph enabled, cullingBounds should be null (no culling)
-    // All nodes should be drawn regardless of position
-    // We can verify by checking that the nodeCanvasObject callback was set
-    const instance = getLastInstance();
-    expect(instance.callbacks.onZoom).toBeDefined();
+    // Invoke the nodeCanvasObject callback for the offscreen node
+    const ctx = createCtxSpy();
+    const painter = instance.callbacks.nodeCanvasObject!;
+    expect(painter).toBeDefined();
+    painter(data.nodes[0], ctx);
+
+    // Node should still be drawn (arc called) because culling is disabled
+    expect(ctx.arc).toHaveBeenCalled();
   });
 
-  it("culling bounds are computed correctly from zoom transform", () => {
+  it("enabled culling skips offscreen nodes and draws onscreen nodes", () => {
     const canvas = createCanvas();
     canvas.setConfig({
       width: 800,
@@ -139,32 +195,98 @@ describe("viewport culling", () => {
     });
     canvas.setData(SIMPLE_DATA);
 
-    // Mock width/height return values for the graph instance
     const instance = getLastInstance();
-    instance.width = (value?: number) => {
-      if (value === undefined) return 800;
-      return instance;
-    };
-    instance.height = (value?: number) => {
-      if (value === undefined) return 600;
-      return instance;
-    };
+    setupInstanceDimensions(instance);
 
-    // Identity transform: zoom=1, pan=(0,0)
-    // Expected bounds: minX=0, maxX=800, minY=0, maxY=600
+    const data = canvas.getGraphData();
+    // Node at center of viewport (visible)
+    data.nodes[0].x = 400;
+    data.nodes[0].y = 300;
+    data.nodes[0].size = 6;
+    // Node far offscreen (should be culled)
+    data.nodes[1].x = -5000;
+    data.nodes[1].y = -5000;
+    data.nodes[1].size = 6;
+
+    // Identity transform: visible area is [0,800] x [0,600]
     triggerZoom({ k: 1, x: 0, y: 0 });
 
-    // Zoom=2, pan=(100,50)
-    // minX = -100/2 = -50, maxX = (800-100)/2 = 350
-    // minY = -50/2 = -25, maxY = (600-50)/2 = 275
-    triggerZoom({ k: 2, x: 100, y: 50 });
+    const painter = instance.callbacks.nodeCanvasObject!;
 
-    // We can't directly access private fields, but the test verifies
-    // the onZoom callback ran without errors
-    expect(instance.callbacks.onZoom).toBeDefined();
+    // Onscreen node should be drawn
+    const ctxOn = createCtxSpy();
+    painter(data.nodes[0], ctxOn);
+    expect(ctxOn.arc).toHaveBeenCalled();
+
+    // Offscreen node should be skipped
+    const ctxOff = createCtxSpy();
+    painter(data.nodes[1], ctxOff);
+    expect(ctxOff.arc).not.toHaveBeenCalled();
   });
 
-  it("culling bounds include viewport padding", () => {
+  it("culling bounds include viewport padding — borderline node is drawn", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({
+      width: 800,
+      height: 600,
+      largeGraph: { enabled: true, viewportPadding: 100 },
+    });
+    canvas.setData(SIMPLE_DATA);
+
+    const instance = getLastInstance();
+    setupInstanceDimensions(instance);
+
+    const data = canvas.getGraphData();
+    // Node just outside viewport but within padding
+    // Identity transform: viewport [0,800]x[0,600], with padding: [-100,900]x[-100,700]
+    data.nodes[0].x = -50;
+    data.nodes[0].y = 300;
+    data.nodes[0].size = 6;
+
+    triggerZoom({ k: 1, x: 0, y: 0 });
+
+    const ctx = createCtxSpy();
+    const painter = instance.callbacks.nodeCanvasObject!;
+    painter(data.nodes[0], ctx);
+
+    // Node at x=-50 is within padded bounds [-100, 900], so it should be drawn
+    expect(ctx.arc).toHaveBeenCalled();
+  });
+
+  it("disabling largeGraph stops culling — previously culled nodes are drawn", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({
+      width: 800,
+      height: 600,
+      largeGraph: { enabled: true, viewportPadding: 0 },
+    });
+    canvas.setData(SIMPLE_DATA);
+
+    const instance = getLastInstance();
+    setupInstanceDimensions(instance);
+
+    const data = canvas.getGraphData();
+    data.nodes[0].x = -5000;
+    data.nodes[0].y = 0;
+    data.nodes[0].size = 6;
+
+    triggerZoom({ k: 1, x: 0, y: 0 });
+
+    // Verify node is culled while enabled
+    const ctx1 = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctx1);
+    expect(ctx1.arc).not.toHaveBeenCalled();
+
+    // Disable culling
+    canvas.setConfig({ largeGraph: { enabled: false } });
+
+    // Now the same offscreen node should be drawn
+    const ctx2 = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctx2);
+    expect(ctx2.arc).toHaveBeenCalled();
+  });
+
+  it("deep-merges largeGraph config — partial updates preserve other fields", () => {
     const canvas = createCanvas();
     canvas.setConfig({
       width: 800,
@@ -174,57 +296,26 @@ describe("viewport culling", () => {
     canvas.setData(SIMPLE_DATA);
 
     const instance = getLastInstance();
-    instance.width = (value?: number) => {
-      if (value === undefined) return 800;
-      return instance;
-    };
-    instance.height = (value?: number) => {
-      if (value === undefined) return 600;
-      return instance;
-    };
+    setupInstanceDimensions(instance);
 
-    // With padding=50, bounds expand by 50 in all directions
+    // Update only viewportPadding — enabled should remain true
+    canvas.setConfig({ largeGraph: { viewportPadding: 200 } });
+
+    const data = canvas.getGraphData();
+    data.nodes[0].x = -5000;
+    data.nodes[0].y = 0;
+    data.nodes[0].size = 6;
+
     triggerZoom({ k: 1, x: 0, y: 0 });
-    expect(instance.callbacks.onZoom).toBeDefined();
+
+    // Culling should still be active (enabled wasn't wiped)
+    const ctx = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctx);
+    expect(ctx.arc).not.toHaveBeenCalled();
   });
 
-  it("disabling largeGraph clears culling bounds", () => {
+  it("resize recomputes culling bounds using cached transform", () => {
     const canvas = createCanvas();
-    canvas.setConfig({
-      width: 800,
-      height: 600,
-      largeGraph: { enabled: true, viewportPadding: 0 },
-    });
-    canvas.setData(SIMPLE_DATA);
-
-    const instance = getLastInstance();
-    instance.width = (value?: number) => {
-      if (value === undefined) return 800;
-      return instance;
-    };
-    instance.height = (value?: number) => {
-      if (value === undefined) return 600;
-      return instance;
-    };
-
-    // Enable and trigger zoom
-    triggerZoom({ k: 1, x: 0, y: 0 });
-
-    // Disable largeGraph
-    canvas.setConfig({ largeGraph: { enabled: false } });
-
-    // Trigger another zoom — should not compute bounds (enabled is false)
-    triggerZoom({ k: 1, x: 0, y: 0 });
-
-    // Re-enable — bounds should be recomputed
-    canvas.setConfig({ largeGraph: { enabled: true } });
-
-    // No error means the lifecycle works correctly
-    expect(true).toBe(true);
-  });
-
-  it("resize recomputes culling bounds", () => {
-    const canvas = createCanvas() as CanvasTestElement & { setWidth: (w: number) => void };
     canvas.setConfig({
       width: 800,
       height: 600,
@@ -244,17 +335,60 @@ describe("viewport culling", () => {
       return instance;
     };
 
-    // Initial zoom
+    const data = canvas.getGraphData();
+    // Node at x=900 — outside 800px viewport but inside 1200px viewport
+    data.nodes[0].x = 900;
+    data.nodes[0].y = 300;
+    data.nodes[0].size = 6;
+
+    // With width=800, identity transform: bounds are [0,800]x[0,600]
     triggerZoom({ k: 1, x: 0, y: 0 });
 
-    // Resize via setWidth — should recompute bounds using cached transform
-    canvas.setWidth(1200);
+    // Node at x=900 should be culled
+    const ctx1 = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctx1);
+    expect(ctx1.arc).not.toHaveBeenCalled();
 
-    // The new width is applied to the graph instance
+    // Resize to 1200px — bounds should recompute to [0,1200]x[0,600]
+    canvas.setWidth(1200);
     expect(mockWidth).toBe(1200);
+
+    // Now node at x=900 should be visible
+    const ctx2 = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctx2);
+    expect(ctx2.arc).toHaveBeenCalled();
   });
 
-  it("handles invalid transform gracefully", () => {
+  it("invalid transform (k<=0) clears culling bounds — nodes are drawn", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({
+      width: 800,
+      height: 600,
+      largeGraph: { enabled: true, viewportPadding: 0 },
+    });
+    canvas.setData(SIMPLE_DATA);
+
+    const instance = getLastInstance();
+    setupInstanceDimensions(instance);
+
+    const data = canvas.getGraphData();
+    data.nodes[0].x = 400;
+    data.nodes[0].y = 300;
+    data.nodes[0].size = 6;
+
+    // First set valid bounds
+    triggerZoom({ k: 1, x: 0, y: 0 });
+
+    // Now trigger with k=0 — should clear bounds (not keep stale ones)
+    triggerZoom({ k: 0, x: 0, y: 0 });
+
+    // With null bounds, culling check passes (no bounds = no culling)
+    const ctx = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctx);
+    expect(ctx.arc).toHaveBeenCalled();
+  });
+
+  it("zero-size canvas clears culling bounds", () => {
     const canvas = createCanvas();
     canvas.setConfig({
       width: 800,
@@ -264,47 +398,49 @@ describe("viewport culling", () => {
     canvas.setData(SIMPLE_DATA);
 
     const instance = getLastInstance();
-    instance.width = (value?: number) => {
-      if (value === undefined) return 800;
-      return instance;
-    };
-    instance.height = (value?: number) => {
-      if (value === undefined) return 600;
-      return instance;
-    };
+    setupInstanceDimensions(instance, 0, 0);
 
-    // Zero zoom should not cause division by zero
-    triggerZoom({ k: 0, x: 0, y: 0 });
+    const data = canvas.getGraphData();
+    data.nodes[0].x = 400;
+    data.nodes[0].y = 300;
+    data.nodes[0].size = 6;
 
-    // Negative zoom
-    triggerZoom({ k: -1, x: 0, y: 0 });
+    // With zero-size canvas, bounds should be cleared
+    triggerZoom({ k: 1, x: 0, y: 0 });
 
-    // No errors thrown
-    expect(true).toBe(true);
+    // Node should still be drawn (null bounds = no culling active)
+    const ctx = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctx);
+    expect(ctx.arc).toHaveBeenCalled();
   });
 
-  it("handles zero-size canvas gracefully", () => {
+  it("link culling skips offscreen links", () => {
     const canvas = createCanvas();
     canvas.setConfig({
-      width: 0,
-      height: 0,
-      largeGraph: { enabled: true },
+      width: 800,
+      height: 600,
+      largeGraph: { enabled: true, viewportPadding: 0 },
     });
     canvas.setData(SIMPLE_DATA);
 
     const instance = getLastInstance();
-    instance.width = (value?: number) => {
-      if (value === undefined) return 0;
-      return instance;
-    };
-    instance.height = (value?: number) => {
-      if (value === undefined) return 0;
-      return instance;
-    };
+    setupInstanceDimensions(instance);
 
-    // Should not crash
+    const data = canvas.getGraphData();
+    // Position link endpoints far offscreen
+    const link = data.links[0];
+    link.source = { ...data.nodes[0], x: -5000, y: -5000, size: 6 } as RuntimeNode;
+    link.target = { ...data.nodes[1], x: -4000, y: -4000, size: 6 } as RuntimeNode;
+
     triggerZoom({ k: 1, x: 0, y: 0 });
-    expect(true).toBe(true);
+
+    const ctx = createCtxSpy();
+    const linkPainter = instance.callbacks.linkCanvasObject!;
+    linkPainter(link, ctx, 1);
+
+    // Offscreen link should be skipped
+    expect(ctx.moveTo).not.toHaveBeenCalled();
+    expect(ctx.quadraticCurveTo).not.toHaveBeenCalled();
   });
 });
 
@@ -314,39 +450,42 @@ describe("low-zoom draw skipping", () => {
     resetForceGraphMockState();
   });
 
-  it("low-zoom thresholds use correct defaults", () => {
+  it("labels are skipped below lowZoomThreshold", () => {
     const canvas = createCanvas();
     canvas.setConfig({
       width: 800,
       height: 600,
       largeGraph: {
         enabled: true,
-        // defaults: lowZoomThreshold=0.5, skipLabelsAtLowZoom=true,
-        // skipArrowsAtLowZoom=true, skipLinkLabelsAtLowZoom=true
+        lowZoomThreshold: 0.5,
+        skipLabelsAtLowZoom: true,
       },
     });
     canvas.setData(SIMPLE_DATA);
 
     const instance = getLastInstance();
-    instance.width = (value?: number) => {
-      if (value === undefined) return 800;
-      return instance;
-    };
-    instance.height = (value?: number) => {
-      if (value === undefined) return 600;
-      return instance;
-    };
+    setupInstanceDimensions(instance);
 
-    // Zoom below threshold
+    const data = canvas.getGraphData();
+    data.nodes[0].x = 400;
+    data.nodes[0].y = 300;
+    data.nodes[0].size = 6;
+
+    // Zoom below threshold (0.3 < 0.5) — labels should be skipped
     triggerZoom({ k: 0.3, x: 0, y: 0 });
+    const ctxLow = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctxLow);
+    // Node circle is still drawn
+    expect(ctxLow.arc).toHaveBeenCalled();
+    // But label text is skipped
+    expect(ctxLow.fillText).not.toHaveBeenCalled();
 
-    // Above threshold
-    triggerZoom({ k: 0.6, x: 0, y: 0 });
-
-    // At exactly threshold
-    triggerZoom({ k: 0.5, x: 0, y: 0 });
-
-    expect(true).toBe(true);
+    // Zoom above threshold (0.8 > 0.5) — labels should be drawn
+    triggerZoom({ k: 0.8, x: 0, y: 0 });
+    const ctxHigh = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctxHigh);
+    expect(ctxHigh.arc).toHaveBeenCalled();
+    expect(ctxHigh.fillText).toHaveBeenCalled();
   });
 
   it("custom lowZoomThreshold is respected", () => {
@@ -358,28 +497,30 @@ describe("low-zoom draw skipping", () => {
         enabled: true,
         lowZoomThreshold: 0.8,
         skipLabelsAtLowZoom: true,
-        skipArrowsAtLowZoom: false,
-        skipLinkLabelsAtLowZoom: true,
       },
     });
     canvas.setData(SIMPLE_DATA);
 
     const instance = getLastInstance();
-    instance.width = (value?: number) => {
-      if (value === undefined) return 800;
-      return instance;
-    };
-    instance.height = (value?: number) => {
-      if (value === undefined) return 600;
-      return instance;
-    };
+    setupInstanceDimensions(instance);
 
-    // At 0.7, below custom threshold of 0.8
+    const data = canvas.getGraphData();
+    data.nodes[0].x = 400;
+    data.nodes[0].y = 300;
+    data.nodes[0].size = 6;
+
+    // At 0.7 — below custom threshold of 0.8 — labels skipped
     triggerZoom({ k: 0.7, x: 0, y: 0 });
+    const ctxLow = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctxLow);
+    expect(ctxLow.arc).toHaveBeenCalled();
+    expect(ctxLow.fillText).not.toHaveBeenCalled();
 
-    // At 0.9, above custom threshold
+    // At 0.9 — above threshold — labels drawn
     triggerZoom({ k: 0.9, x: 0, y: 0 });
-
-    expect(true).toBe(true);
+    const ctxHigh = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(data.nodes[0], ctxHigh);
+    expect(ctxHigh.arc).toHaveBeenCalled();
+    expect(ctxHigh.fillText).toHaveBeenCalled();
   });
 });

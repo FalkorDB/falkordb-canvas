@@ -1074,7 +1074,11 @@ class FalkorDBCanvas extends HTMLElement {
     const h = this.graph?.height() ?? 0;
     const { k, x: tx, y: ty } = transform;
 
-    if (k <= 0 || w <= 0 || h <= 0) return;
+    if (k <= 0 || w <= 0 || h <= 0) {
+      this.cullingBounds = null;
+      this.cullingZoom = 1;
+      return;
+    }
 
     const padding = this.config.largeGraph?.viewportPadding ?? 0;
 

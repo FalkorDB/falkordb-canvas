@@ -439,6 +439,11 @@ while (true) {
 
 For graphs with thousands of nodes and links, enable the built-in viewport culling and low-zoom draw-skipping optimizations via the `largeGraph` configuration option.
 
+> **Note:** These optimizations are applied by the default renderer. If you provide custom
+> `nodeCanvasObject` / `linkCanvasObject` callbacks, the library will not cull or skip
+> drawing for those elements automatically. Implement equivalent viewport culling and
+> low-zoom checks in your custom renderer if needed.
+
 ```typescript
 canvas.setConfig({
   largeGraph: {

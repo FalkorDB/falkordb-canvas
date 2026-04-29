@@ -13,6 +13,8 @@ type CallbackMap = {
   onBackgroundRightClick?: (event: MouseEvent) => void;
   onZoom?: (transform: { k: number; x: number; y: number }) => void;
   onEngineStop?: () => void;
+  nodeCanvasObject?: (node: unknown, ctx: CanvasRenderingContext2D) => void;
+  linkCanvasObject?: (link: unknown, ctx: CanvasRenderingContext2D, globalScale: number) => void;
   nodePointerAreaPaint?: (node: unknown, color: string, ctx: CanvasRenderingContext2D) => void;
   linkPointerAreaPaint?: (link: unknown, color: string, ctx: CanvasRenderingContext2D) => void;
 };
@@ -217,9 +219,15 @@ export class MockForceGraphInstance {
     return this;
   }
 
-  nodeCanvasObject(_callback: unknown) { return this; }
+  nodeCanvasObject(callback?: unknown) {
+    if (callback) this.callbacks.nodeCanvasObject = callback as (node: unknown, ctx: CanvasRenderingContext2D) => void;
+    return this;
+  }
 
-  linkCanvasObject(_callback: unknown) { return this; }
+  linkCanvasObject(callback?: unknown) {
+    if (callback) this.callbacks.linkCanvasObject = callback as (link: unknown, ctx: CanvasRenderingContext2D, globalScale: number) => void;
+    return this;
+  }
 
   nodePointerAreaPaint(callback?: (node: unknown, color: string, ctx: CanvasRenderingContext2D) => void) {
     if (!callback) return this.callbacks.nodePointerAreaPaint;
