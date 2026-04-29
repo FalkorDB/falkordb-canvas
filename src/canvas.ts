@@ -241,7 +241,7 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     // Recompute or clear culling bounds when largeGraph config changes.
-    if (config.largeGraph !== undefined) {
+    if ('largeGraph' in config) {
       if (this.config.largeGraph?.enabled) {
         this.recomputeCullingBoundsIfNeeded();
       } else {
@@ -1928,7 +1928,9 @@ class FalkorDBCanvas extends HTMLElement {
         this.config.node!.nodePointerAreaPaint(node, color, ctx);
       });
     } else {
-      this.graph.nodePointerAreaPaint();
+      this.graph.nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+        this.pointerNode(node, color, ctx);
+      });
     }
 
     if (this.config.link) {
@@ -1936,7 +1938,9 @@ class FalkorDBCanvas extends HTMLElement {
         this.config.link!.linkPointerAreaPaint(link, color, ctx);
       });
     } else {
-      this.graph.linkPointerAreaPaint();
+      this.graph.linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
+        this.pointerLink(link, color, ctx);
+      });
     }
   }
 

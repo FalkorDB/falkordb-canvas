@@ -458,7 +458,7 @@ canvas.setConfig({
 
 - For **nodes**: the bounding box is a circle of radius `node.size + 2`.
 - For **links**: the bounding box is the convex-hull axis-aligned rectangle of the Bezier curve's control points (source, control point, target).  This is a conservative bound – it never produces false negatives.
-- For **self-loops**: the bounding box is a square centred on the node with a side length derived from the loop curvature.
+- For **self-loops**: the bounding box is a square centered on the node with a side length derived from the loop curvature.
 
 **Low-zoom draw skipping** – when the current zoom level drops below `lowZoomThreshold`, expensive per-element details that would be too small to read are skipped:
 
