@@ -1,5 +1,3 @@
-/* eslint-disable no-param-reassign */
-
 import ForceGraph from "force-graph";
 import * as d3 from "d3";
 import {
@@ -20,8 +18,10 @@ import {
   getNodeDisplayText,
   graphDataToData,
   LINK_DISTANCE,
+  NODE_SIZE,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
+import { applyGraphLayout, isForceLayout } from "./layouts.js";
 
 const PADDING = 2;
 // Arrow geometry constants (shared by self-loop and regular-link drawing paths)
@@ -29,7 +29,7 @@ const ARROW_WH_RATIO = 1.6;
 const ARROW_VLEN_RATIO = 0.2;
 // Multiplier to convert node size → cubic bezier control-point distance for self-loops
 const SELF_LOOP_CURVE_FACTOR = 11.67;
-// Base font size used for the initial measurement and for two-line text.
+// Base font size used for the initial wrap-measurement pass.
 const NODE_FONT_SIZE_BASE = 2;
 // Fraction of the chord width that single-line text should fill (0–1).
 // Leaves (1 - ratio)/2 of the radius as horizontal padding on each side.
@@ -40,6 +40,17 @@ const CHARGE_STRENGTH = -400;
 const CENTER_STRENGTH = 0.03;
 const VELOCITY_DECAY = 0.4;
 const ALPHA_MIN = 0.05;
+const NON_FORCE_CHARGE_STRENGTH = -220;
+const NON_FORCE_COLLIDE_PADDING = 18;
+const NON_FORCE_CENTER_STRENGTH = 0.02;
+const NON_FORCE_LINK_STRENGTH = 0.08;
+const NON_FORCE_TARGET_STRENGTH = 0.3;
+const NON_FORCE_VELOCITY_DECAY = 0.5;
+const NON_FORCE_ALPHA_MIN = 0.03;
+const NON_FORCE_LAYOUT_COOLDOWN_TICKS = 120;
+const NON_FORCE_DRAG_COOLDOWN_TICKS = 90;
+
+type NodePosition = { x: number; y: number };
 
 /** Axis-aligned bounding box in world-space coordinates. */
 type WorldBounds = {
@@ -100,6 +111,8 @@ class FalkorDBCanvas extends HTMLElement {
     foregroundColor: '#1A1A1A',
     captionsKeys: [],
     showPropertyKeyPrefix: false,
+    layoutMode: "force",
+    layoutOptions: {},
   };
 
   private nodeMode: CanvasRenderMode = 'replace';
@@ -133,10 +146,15 @@ class FalkorDBCanvas extends HTMLElement {
   private onFontsLoadingDone = () => {
     this.relationshipsTextCache.clear();
     this.nodeDisplayFontSize.clear();
+    for (const node of this.data.nodes) {
+      node.displayName = ["", ""];
+    }
     this.triggerRender();
   };
 
   private viewport: ViewportState;
+
+  private shouldZoomToFitOnNonForceSettle: boolean = false;
 
   constructor() {
     super();
@@ -194,13 +212,13 @@ class FalkorDBCanvas extends HTMLElement {
       this.resizeObserver = null;
     }
     if (this.graph) {
-      // eslint-disable-next-line no-underscore-dangle
       this.graph._destructor();
     }
   }
 
   setConfig(config: Partial<ForceGraphConfig>) {
     this.log('Setting config:', config);
+    const layoutChanged = config.layoutMode !== undefined || config.layoutOptions !== undefined;
 
     // If captionsKeys changed, invalidate cached display names and font sizes
     // so text is recomputed with the new keys on the next render.
@@ -212,6 +230,43 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     Object.assign(this.config, config);
+
+    if (layoutChanged) {
+      const previousPositions = this.getNodePositionMap();
+      if (this.isForceLayoutMode() && this.config.cooldownTicks === 0 && this.data.nodes.length > 0) {
+        this.config.cooldownTicks = undefined;
+      }
+      this.data = applyGraphLayout(this.data, this.config.layoutMode, this.config.layoutOptions);
+      const shouldAnimateNonForceLayout = this.prepareNodePositionsForCurrentLayout(previousPositions);
+      if (this.graph) {
+        this.calculateNodeDegree();
+        this.graph.graphData(this.data);
+        this.configureSimulationForCurrentLayout(shouldAnimateNonForceLayout);
+        if (this.isForceLayoutMode()) {
+          this.shouldZoomToFitOnNonForceSettle = false;
+          this.config.isLoading = this.data.nodes.length > 0;
+          this.config.onLoadingChange?.(this.config.isLoading);
+          this.updateLoadingState();
+        } else {
+          this.config.isLoading = false;
+          this.config.onLoadingChange?.(false);
+          this.updateLoadingState();
+          if (this.data.nodes.length > 0) {
+            if (shouldAnimateNonForceLayout) {
+              this.shouldZoomToFitOnNonForceSettle = true;
+            } else {
+              this.shouldZoomToFitOnNonForceSettle = false;
+              this.zoomToFit(1);
+            }
+          } else {
+            this.shouldZoomToFitOnNonForceSettle = false;
+          }
+          if (!shouldAnimateNonForceLayout) {
+            this.triggerRender();
+          }
+        }
+      }
+    }
 
     // Update event handlers if they were provided
     if (config.onNodeClick || config.onLinkClick || config.onNodeRightClick || config.onLinkRightClick ||
@@ -273,10 +328,12 @@ class FalkorDBCanvas extends HTMLElement {
     this.log('Setting cooldown ticks to:', ticks);
     this.config.cooldownTicks = ticks;
     if (this.graph) {
-      this.graph.cooldownTicks(ticks ?? Infinity);
+      this.graph.cooldownTicks(this.isForceLayoutMode() ? (ticks ?? Infinity) : 0);
     }
 
-    this.updateCanvasSimulationAttribute(ticks !== 0);
+    this.updateCanvasSimulationAttribute(
+      this.isForceLayoutMode() && ticks !== 0 && this.data.nodes.length > 0
+    );
   }
 
   getData(): Data {
@@ -285,17 +342,33 @@ class FalkorDBCanvas extends HTMLElement {
 
   setData(data: Data) {
     this.log('setData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
-    // Convert data and apply circular layout to new nodes only
-    this.data = dataToGraphData(data);
+    const previousPositions = this.getNodePositionMap();
+    const oldNodesMap = new Map<number, GraphNode>();
+    for (const node of this.data.nodes) {
+      oldNodesMap.set(node.id, node);
+    }
 
-    this.config.cooldownTicks = this.data.nodes.length > 0 ? undefined : 0;
-    this.config.isLoading = this.data.nodes.length > 0;
+    // Convert data and preserve positions for existing nodes
+    this.data = dataToGraphData(data, undefined, oldNodesMap);
+    this.data = applyGraphLayout(this.data, this.config.layoutMode, this.config.layoutOptions);
+    const shouldAnimateNonForceLayout = this.prepareNodePositionsForCurrentLayout(previousPositions);
+
+    if (this.isForceLayoutMode()) {
+      this.shouldZoomToFitOnNonForceSettle = false;
+      this.config.cooldownTicks = this.data.nodes.length > 0 ? undefined : 0;
+      this.config.isLoading = this.data.nodes.length > 0;
+    } else {
+      this.config.cooldownTicks = 0;
+      this.config.isLoading = false;
+    }
     this.log('Loading state:', this.config.isLoading);
     this.config.onLoadingChange?.(this.config.isLoading);
 
     // Update simulation state
-    if (this.data.nodes.length > 0) {
+    if (this.data.nodes.length > 0 && this.isForceLayoutMode()) {
       this.updateCanvasSimulationAttribute(true);
+    } else {
+      this.updateCanvasSimulationAttribute(false);
     }
 
     // Initialize graph if it hasn't been initialized yet
@@ -308,12 +381,23 @@ class FalkorDBCanvas extends HTMLElement {
 
     this.log('Calculating node degrees and setting up forces');
     this.calculateNodeDegree();
-    this.setupForces();
 
     // Update graph data and properties
     this.graph
-      .graphData(this.data)
-      .cooldownTicks(this.config.cooldownTicks ?? Infinity);
+      .graphData(this.data);
+    this.configureSimulationForCurrentLayout(shouldAnimateNonForceLayout);
+
+    if (!this.isForceLayoutMode() && this.data.nodes.length > 0) {
+      if (shouldAnimateNonForceLayout) {
+        this.shouldZoomToFitOnNonForceSettle = true;
+      } else {
+        this.shouldZoomToFitOnNonForceSettle = false;
+        this.zoomToFit(1);
+        this.triggerRender();
+      }
+    } else {
+      this.shouldZoomToFitOnNonForceSettle = false;
+    }
 
     this.updateLoadingState();
   }
@@ -343,16 +427,41 @@ class FalkorDBCanvas extends HTMLElement {
 
   setGraphData(data: GraphData) {
     this.log('setGraphData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
-
-    this.data = data;
-
+    const previousPositions = this.getNodePositionMap();
+    this.data = applyGraphLayout(data, this.config.layoutMode, this.config.layoutOptions);
+    const shouldAnimateNonForceLayout = this.prepareNodePositionsForCurrentLayout(previousPositions);
+    if (this.isForceLayoutMode() && this.config.cooldownTicks === 0 && this.data.nodes.length > 0) {
+      this.config.cooldownTicks = undefined;
+      this.shouldZoomToFitOnNonForceSettle = false;
+    }
     if (!this.graph) return;
 
     this.calculateNodeDegree();
-    this.setupForces();
 
     this.graph
-      .graphData(this.data)
+      .graphData(this.data);
+    this.configureSimulationForCurrentLayout(shouldAnimateNonForceLayout);
+
+    if (this.isForceLayoutMode() && this.data.nodes.length > 0) {
+      this.triggerRender();
+    }
+
+    if (!this.isForceLayoutMode()) {
+      this.config.isLoading = false;
+      this.config.onLoadingChange?.(false);
+      this.updateLoadingState();
+      if (this.data.nodes.length > 0) {
+        if (shouldAnimateNonForceLayout) {
+          this.shouldZoomToFitOnNonForceSettle = true;
+        } else {
+          this.shouldZoomToFitOnNonForceSettle = false;
+          this.zoomToFit(1);
+          this.triggerRender();
+        }
+      } else {
+        this.shouldZoomToFitOnNonForceSettle = false;
+      }
+    }
 
     if (this.viewport) {
       this.log('Applying viewport:', this.viewport);
@@ -393,6 +502,214 @@ class FalkorDBCanvas extends HTMLElement {
     this.log('Zooming to fit with padding multiplier:', paddingMultiplier, 'padding:', padding * paddingMultiplier);
     // Use the force-graph's built-in zoomToFit method
     this.graph.zoomToFit(500, padding * paddingMultiplier, filter);
+  }
+
+  private isForceLayoutMode() {
+    return isForceLayout(this.config.layoutMode);
+  }
+  private getNodePositionMap(): Map<number, NodePosition> {
+    const positions = new Map<number, NodePosition>();
+
+    for (const node of this.data.nodes) {
+      if (node.x === undefined || node.y === undefined) continue;
+      positions.set(node.id, { x: node.x, y: node.y });
+    }
+
+    return positions;
+  }
+
+  private getGraphCenter(positions: Map<number, NodePosition>): NodePosition | undefined {
+    if (positions.size === 0) return undefined;
+
+    let sumX = 0;
+    let sumY = 0;
+
+    for (const position of positions.values()) {
+      sumX += position.x;
+      sumY += position.y;
+    }
+
+    return {
+      x: sumX / positions.size,
+      y: sumY / positions.size,
+    };
+  }
+
+  private getConnectedExistingPosition(
+    nodeId: number,
+    previousPositions: Map<number, NodePosition>
+  ): NodePosition | undefined {
+    let sumX = 0;
+    let sumY = 0;
+    let count = 0;
+
+    for (const link of this.data.links) {
+      const sourceId = link.source.id;
+      const targetId = link.target.id;
+
+      if (sourceId === nodeId) {
+        const existingPosition = previousPositions.get(targetId);
+        if (!existingPosition) continue;
+        sumX += existingPosition.x;
+        sumY += existingPosition.y;
+        count += 1;
+      } else if (targetId === nodeId) {
+        const existingPosition = previousPositions.get(sourceId);
+        if (!existingPosition) continue;
+        sumX += existingPosition.x;
+        sumY += existingPosition.y;
+        count += 1;
+      }
+    }
+
+    if (count === 0) return undefined;
+    return {
+      x: sumX / count,
+      y: sumY / count,
+    };
+  }
+
+  private clearLayoutTargets() {
+    for (const node of this.data.nodes) {
+      node.layoutTargetX = undefined;
+      node.layoutTargetY = undefined;
+    }
+  }
+
+  private prepareNodePositionsForCurrentLayout(previousPositions: Map<number, NodePosition>): boolean {
+    if (this.isForceLayoutMode()) {
+      this.clearLayoutTargets();
+      return false;
+    }
+
+    const graphCenter = this.getGraphCenter(previousPositions);
+    let shouldAnimate = false;
+
+    for (const node of this.data.nodes) {
+      const targetX = node.x ?? 0;
+      const targetY = node.y ?? 0;
+
+      node.layoutTargetX = targetX;
+      node.layoutTargetY = targetY;
+      node.fx = undefined;
+      node.fy = undefined;
+      node.vx = 0;
+      node.vy = 0;
+
+      if (previousPositions.size === 0) {
+        node.x = targetX;
+        node.y = targetY;
+        continue;
+      }
+
+      const previousPosition = previousPositions.get(node.id)
+        ?? this.getConnectedExistingPosition(node.id, previousPositions)
+        ?? graphCenter;
+
+      if (!previousPosition) {
+        node.x = targetX;
+        node.y = targetY;
+        continue;
+      }
+
+      node.x = previousPosition.x;
+      node.y = previousPosition.y;
+
+      if (
+        Math.abs(previousPosition.x - targetX) > 0.5
+        || Math.abs(previousPosition.y - targetY) > 0.5
+      ) {
+        shouldAnimate = true;
+      }
+    }
+
+    return shouldAnimate;
+  }
+
+  private setupAnchoredLayoutForces() {
+    if (!this.graph) return;
+
+    const linkForce = this.graph.d3Force("link");
+    if (linkForce) {
+      linkForce
+        .distance((link: GraphLink) => {
+          const sourceSize = link.source.size;
+          const targetSize = link.target.size;
+          return sourceSize + targetSize + LINK_DISTANCE * 1.6;
+        })
+        .strength(NON_FORCE_LINK_STRENGTH);
+    }
+
+    this.graph.d3Force(
+      "collide",
+      d3.forceCollide((node: GraphNode) => node.size + NON_FORCE_COLLIDE_PADDING)
+    );
+
+    this.graph.d3Force(
+      "centerX",
+      d3.forceX(0).strength(NON_FORCE_CENTER_STRENGTH)
+    );
+
+    this.graph.d3Force(
+      "centerY",
+      d3.forceY(0).strength(NON_FORCE_CENTER_STRENGTH)
+    );
+
+    this.graph.d3Force(
+      "layoutTargetX",
+      d3.forceX((node: GraphNode) => node.layoutTargetX ?? node.x ?? 0).strength(NON_FORCE_TARGET_STRENGTH)
+    );
+
+    this.graph.d3Force(
+      "layoutTargetY",
+      d3.forceY((node: GraphNode) => node.layoutTargetY ?? node.y ?? 0).strength(NON_FORCE_TARGET_STRENGTH)
+    );
+
+    const chargeForce = this.graph.d3Force("charge");
+    if (chargeForce) {
+      chargeForce.strength(NON_FORCE_CHARGE_STRENGTH);
+    }
+
+    this.graph.d3VelocityDecay(NON_FORCE_VELOCITY_DECAY);
+    this.graph.d3AlphaMin(NON_FORCE_ALPHA_MIN);
+  }
+
+  private startNonForceSettleAnimation(cooldownTicks: number) {
+    if (!this.graph || this.data.nodes.length === 0 || this.isForceLayoutMode()) return;
+
+    this.graph.cooldownTicks(cooldownTicks);
+    this.updateCanvasSimulationAttribute(true);
+    this.graph.d3ReheatSimulation();
+  }
+
+  private applyLayoutTargets() {
+    for (const node of this.data.nodes) {
+      if (node.layoutTargetX === undefined || node.layoutTargetY === undefined) continue;
+      node.x = node.layoutTargetX;
+      node.y = node.layoutTargetY;
+      node.vx = 0;
+      node.vy = 0;
+    }
+  }
+
+  private configureSimulationForCurrentLayout(shouldAnimateNonForceLayout = false) {
+    if (!this.graph) return;
+
+    if (this.isForceLayoutMode()) {
+      this.setupForces();
+      const cooldownTicks = this.config.cooldownTicks ?? Infinity;
+      this.graph.cooldownTicks(cooldownTicks);
+      this.updateCanvasSimulationAttribute(cooldownTicks !== 0 && this.data.nodes.length > 0);
+      return;
+    }
+    this.setupAnchoredLayoutForces();
+    if (shouldAnimateNonForceLayout) {
+      this.startNonForceSettleAnimation(NON_FORCE_LAYOUT_COOLDOWN_TICKS);
+      return;
+    }
+
+    this.graph.cooldownTicks(0);
+    this.updateCanvasSimulationAttribute(false);
   }
 
   private triggerRender() {
@@ -549,7 +866,6 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Initialize force-graph
     // Cast to any for the factory call pattern, result is properly typed as ForceGraphInstance
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.graph = (ForceGraph as any)()(this.container)
       .width(this.config.width || 800)
       .height(this.config.height || 600)
@@ -566,7 +882,7 @@ class FalkorDBCanvas extends HTMLElement {
       .linkCurvature("curve")
       .linkVisibility("visible")
       .nodeVisibility("visible")
-      .cooldownTicks(this.config.cooldownTicks ?? Infinity) // undefined = infinite
+      .cooldownTicks(this.isForceLayoutMode() ? (this.config.cooldownTicks ?? Infinity) : 0) // undefined = infinite
       .cooldownTime(this.config.cooldownTime ?? 2000)
       .enableNodeDrag(true)
       .enableZoomInteraction(true)
@@ -595,6 +911,12 @@ class FalkorDBCanvas extends HTMLElement {
         if (this.config.onNodeHover) {
           this.config.onNodeHover(node);
         }
+      })
+      .onNodeDrag((node: GraphNode) => {
+        this.handleNodeDrag(node);
+      })
+      .onNodeDragEnd((node: GraphNode) => {
+        this.handleNodeDragEnd(node);
       })
       .onLinkHover((link: GraphLink | null) => {
         if (this.config.onLinkHover) {
@@ -652,8 +974,7 @@ class FalkorDBCanvas extends HTMLElement {
         }
       });
 
-    // Setup forces
-    this.setupForces();
+    this.configureSimulationForCurrentLayout();
     this.log('Force graph initialization complete');
   }
 
@@ -663,6 +984,9 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (!linkForce) return;
     if (!this.graph) return;
+
+    this.graph.d3Force("layoutTargetX", null);
+    this.graph.d3Force("layoutTargetY", null);
 
     // distance based on node size + constant
     linkForce
@@ -804,6 +1128,28 @@ class FalkorDBCanvas extends HTMLElement {
     return lMaxX >= minX && lMinX <= maxX && lMaxY >= minY && lMinY <= maxY;
   }
 
+  private handleNodeDrag(node: GraphNode) {
+    if (this.isForceLayoutMode()) return;
+    if (node.x === undefined || node.y === undefined) return;
+
+    node.layoutTargetX = node.x;
+    node.layoutTargetY = node.y;
+    this.shouldZoomToFitOnNonForceSettle = false;
+    this.startNonForceSettleAnimation(NON_FORCE_DRAG_COOLDOWN_TICKS);
+  }
+
+  private handleNodeDragEnd(node: GraphNode) {
+    if (this.isForceLayoutMode()) return;
+    if (node.x === undefined || node.y === undefined) return;
+
+    node.layoutTargetX = node.x;
+    node.layoutTargetY = node.y;
+    node.fx = undefined;
+    node.fy = undefined;
+    this.shouldZoomToFitOnNonForceSettle = false;
+    this.startNonForceSettleAnimation(NON_FORCE_DRAG_COOLDOWN_TICKS);
+  }
+
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
 
     if (node.x === undefined || node.y === undefined) {
@@ -850,32 +1196,49 @@ class FalkorDBCanvas extends HTMLElement {
       [line1, line2] = wrapTextForCircularNode(ctx, text, textRadius);
 
       let chosenSize = NODE_FONT_SIZE_BASE;
-      if (!line2) {
-        // Single-line: measure at a large reference size (20px) where canvas
-        // metrics are precise, then compute the exact scale to fill the node.
-        const REF = 20;
-        ctx.font = `400 ${REF}px SofiaSans`;
-        const refMetrics = ctx.measureText(line1);
-        // Use the actual visual bounding box (not advance width) so glyphs
-        // with overshoot (e.g. "7") are fully accounted for.
-        const visualWidth = (refMetrics.actualBoundingBoxLeft ?? 0)
-          + (refMetrics.actualBoundingBoxRight ?? 0);
-        const refWidth = Math.max(visualWidth, refMetrics.width);
-        const refHeight = (refMetrics.actualBoundingBoxAscent ?? 0)
-          + (refMetrics.actualBoundingBoxDescent ?? 0);
+      // Measure at a large reference size (20px) where canvas metrics are
+      // precise, then compute the exact scale to fill the node.
+      const REF = 20;
+      ctx.font = `400 ${REF}px SofiaSans`;
+      // Switch to "left" for measurement: actualBoundingBoxLeft/Right are
+      // unreliable with textAlign="center" and can double on some engines.
+      ctx.textAlign = "left";
+      const refMetrics = ctx.measureText(line1);
+      // Use the actual visual bounding box (not advance width) so glyphs
+      // with overshoot (e.g. "7") are fully accounted for.
+      const visualWidth = (refMetrics.actualBoundingBoxLeft ?? 0)
+        + (refMetrics.actualBoundingBoxRight ?? 0);
+      let refWidth = Math.max(visualWidth, refMetrics.width);
+      const singleLineHeight = (refMetrics.actualBoundingBoxAscent ?? 0)
+        + (refMetrics.actualBoundingBoxDescent ?? 0);
 
-        // Inscribed-rectangle-in-circle constraint: every corner of the text
-        // bounding box must lie inside the circle, i.e.
-        //   sqrt((w/2)² + (h/2)²) ≤ r
-        // Solving for the uniform scale factor s:
-        //   s = 2·r / sqrt(refWidth² + refHeight²)
-        const r = NODE_TEXT_FILL_RATIO * textRadius;
-        if (refWidth > 0 && refHeight > 0) {
-          const diagonal = Math.sqrt(refWidth * refWidth + refHeight * refHeight);
-          chosenSize = REF * (2 * r / diagonal);
-        } else if (refWidth > 0) {
-          chosenSize = REF * (2 * r / refWidth);
-        }
+      let refHeight: number;
+      if (!line2) {
+        refHeight = singleLineHeight;
+      } else {
+        // Two-line: use the wider line and account for the vertical span
+        // of both lines including the 1.5× spacing used by the rendering code.
+        const m2 = ctx.measureText(line2);
+        const vis2 = Math.max(
+          (m2.actualBoundingBoxLeft ?? 0) + (m2.actualBoundingBoxRight ?? 0),
+          m2.width,
+        );
+        refWidth = Math.max(refWidth, vis2);
+        refHeight = singleLineHeight * 2.5;
+      }
+      ctx.textAlign = "center";
+
+      // Inscribed-rectangle-in-circle constraint: every corner of the text
+      // bounding box must lie inside the circle, i.e.
+      //   sqrt((w/2)² + (h/2)²) ≤ r
+      // Solving for the uniform scale factor s:
+      //   s = 2·r / sqrt(refWidth² + refHeight²)
+      const r = NODE_TEXT_FILL_RATIO * textRadius;
+      if (refWidth > 0 && refHeight > 0) {
+        const diagonal = Math.sqrt(refWidth * refWidth + refHeight * refHeight);
+        chosenSize = REF * (2 * r / diagonal);
+      } else if (refWidth > 0) {
+        chosenSize = REF * (2 * r / refWidth);
       }
 
       ctx.font = `400 ${chosenSize}px SofiaSans`;
@@ -956,7 +1319,7 @@ class FalkorDBCanvas extends HTMLElement {
     let pendingArrow: { tipX: number; tipY: number; nx: number; ny: number; arrowLen: number; arrowHalfWidth: number } | null = null;
 
     if (start.id === end.id) {
-      const nodeSize = start.size || 6;
+      const nodeSize = start.size || NODE_SIZE;
       const d = (link.curve || 0) * nodeSize * SELF_LOOP_CURVE_FACTOR;
 
       ctx.lineWidth = (isLinkSelected ? 2 : 1) / globalScale;
@@ -1083,7 +1446,7 @@ class FalkorDBCanvas extends HTMLElement {
       const arrowHalfWidth = arrowLen / ARROW_WH_RATIO / 2;
 
       // Target-side clip: find t where bezier enters target node border + PADDING
-      const endNodeSize = end.size || 6;
+      const endNodeSize = end.size || NODE_SIZE;
       const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? 1 : 0.5) + PADDING;
       const borderRadiusSq = borderRadius * borderRadius;
 
@@ -1111,7 +1474,7 @@ class FalkorDBCanvas extends HTMLElement {
       const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
 
       // Source-side clip: find t where bezier exits source node border + PADDING
-      const startNodeSize = start.size || 6;
+      const startNodeSize = start.size || NODE_SIZE;
       const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + PADDING;
       const srcBorderRadiusSq = srcBorderRadius * srcBorderRadius;
 
@@ -1257,7 +1620,7 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (start.id === end.id) {
       // Self-loop: replicate exact cubic bezier clip from drawLink
-      const nodeSize = start.size || 6;
+      const nodeSize = start.size || NODE_SIZE;
       const d = (link.curve || 0) * nodeSize * SELF_LOOP_CURVE_FACTOR;
 
       const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? 1 : 0.5;
@@ -1308,7 +1671,7 @@ class FalkorDBCanvas extends HTMLElement {
         const controlY = (start.y + end.y) / 2 + perpY * curvature * distance;
 
         // Use the same borderRadius and binary-search clip as drawLink
-        const endNodeSize = end.size || 6;
+        const endNodeSize = end.size || NODE_SIZE;
         const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? 1 : 0.5) + PADDING;
         const borderRadiusSq = borderRadius * borderRadius;
 
@@ -1335,7 +1698,7 @@ class FalkorDBCanvas extends HTMLElement {
         const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
 
         // Source-side clip: mirror of drawLink source gap
-        const startNodeSize = start.size || 6;
+        const startNodeSize = start.size || NODE_SIZE;
         const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + PADDING;
         const srcBorderRadiusSq = srcBorderRadius * srcBorderRadius;
 
@@ -1392,6 +1755,16 @@ class FalkorDBCanvas extends HTMLElement {
     if (!this.graph) return;
 
     this.log('Engine stopped');
+    if (!this.isForceLayoutMode()) {
+      this.applyLayoutTargets();
+      this.graph.cooldownTicks(0);
+      this.updateCanvasSimulationAttribute(false);
+      if (this.shouldZoomToFitOnNonForceSettle && this.data.nodes.length > 0) {
+        this.zoomToFit(1);
+      }
+      this.shouldZoomToFitOnNonForceSettle = false;
+      return;
+    }
     // If already stopped, just ensure any leftover loading state is cleared and return
     if (this.config.cooldownTicks === 0) {
       if (this.config.isLoading) {
@@ -1463,6 +1836,12 @@ class FalkorDBCanvas extends HTMLElement {
         if (this.config.onNodeHover) {
           this.config.onNodeHover(node);
         }
+      })
+      .onNodeDrag((node: GraphNode) => {
+        this.handleNodeDrag(node);
+      })
+      .onNodeDragEnd((node: GraphNode) => {
+        this.handleNodeDragEnd(node);
       })
       .onLinkHover((link: GraphLink | null) => {
         if (this.config.onLinkHover) {

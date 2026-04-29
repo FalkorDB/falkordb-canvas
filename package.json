@@ -23,7 +23,9 @@
     "dev": "tsc --watch",
     "example": "python3 -m http.server 8080",
     "clean": "rm -rf dist",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run --environment jsdom",
+    "test:watch": "vitest --environment jsdom"
   },
   "repository": {
     "type": "git",
@@ -49,12 +51,15 @@
     "react": "^19.2.3"
   },
   "devDependencies": {
-    "@types/react": "^19.2.7",
     "@types/d3": "^7.4.3",
+    "@types/react": "^19.2.7",
     "@typescript-eslint/eslint-plugin": "^8.18.2",
     "@typescript-eslint/parser": "^8.18.2",
     "eslint": "^10.0.2",
+    "jsdom": "^29.0.2",
+    "promise-retry": "^2.0.1",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4"
   }
 }

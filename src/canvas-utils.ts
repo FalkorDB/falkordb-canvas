@@ -104,7 +104,7 @@ export function dataToGraphData(
 
     const [pairMinId, pairMaxId] = getPairIds(sourceNode.id, targetNode.id);
     let pairMap = linksByPairCount.get(pairMinId);
-    
+
     if (!pairMap) {
       pairMap = new Map<number, number>();
       linksByPairCount.set(pairMinId, pairMap);
@@ -126,17 +126,15 @@ export function dataToGraphData(
 
 /**
  * Converts GraphData format to Data format
- * Removes runtime properties (x, y, vx, vy, fx, fy, displayName, curve)
+ * Removes runtime properties (x, y, layoutTargetX, layoutTargetY, vx, vy, fx, fy, displayName, curve)
  */
 export function graphDataToData(graphData: GraphData): Data {
   const nodes: Node[] = graphData.nodes.map((node) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { x, y, vx, vy, fx, fy, displayName, ...rest } = node;
+    const { x, y, layoutTargetX, layoutTargetY, vx, vy, fx, fy, displayName, ...rest } = node;
     return rest;
   });
 
   const links: Link[] = graphData.links.map((link) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { curve, source, target, ...rest } = link;
     return {
       ...rest,
@@ -147,6 +145,27 @@ export function graphDataToData(graphData: GraphData): Data {
 
   return { nodes, links };
 }
+
+const resolveNodeCaption = (
+  node: Node,
+  captionKeys: [string, boolean][]
+): { requestedKey: string; actualKey: string } | null => {
+  for (const [requestedKey, exactMatch] of captionKeys) {
+    const dataKeys = Object.keys(node.data);
+    const matchedKey = dataKeys.find((dk) =>
+      exactMatch
+        ? dk === requestedKey
+        : dk.toLowerCase().includes(requestedKey.toLowerCase())
+    );
+    if (
+      matchedKey &&
+      String(node.data[matchedKey]).trim().length > 0
+    ) {
+      return { requestedKey, actualKey: matchedKey };
+    }
+  }
+  return null;
+};
 
 /**
  * Calculates the appropriate text color (black or white) based on background color brightness
@@ -215,17 +234,15 @@ export const getContrastTextColor = (bgColor: string): string => {
 
 export const getNodeDisplayText = (
   node: Node,
-  captionKeys: string[],
+  captionKeys: [string, boolean][],
   showPropertyKeyPrefix: boolean
 ) => {
-  const key = captionKeys.find((k) => {
-    const match = Object.keys(node.data).find((dk) => dk.toLowerCase() === k.toLowerCase());
-    return match && String(node.data[match]).trim().length > 0;
-  });
+  const caption = resolveNodeCaption(node, captionKeys);
 
-  if (key) {
-    const actualKey = Object.keys(node.data).find((dk) => dk.toLowerCase() === key.toLowerCase())!;
-    return showPropertyKeyPrefix ? `${key}: ${String(node.data[actualKey])}` : String(node.data[actualKey]);
+  if (caption) {
+    const { requestedKey, actualKey } = caption;
+    const value = String(node.data[actualKey]);
+    return showPropertyKeyPrefix ? `${requestedKey}: ${value}` : value;
   }
 
   return showPropertyKeyPrefix ? `ID: ${String(node.id)}` : String(node.id);
@@ -233,14 +250,10 @@ export const getNodeDisplayText = (
 
 export const getNodeDisplayKey = (
   node: Node,
-  captionKeys: string[]
+  captionKeys: [string, boolean][]
 ) => {
-  const key = captionKeys.find((k) => {
-    const match = Object.keys(node.data).find((dk) => dk.toLowerCase() === k.toLowerCase());
-    return match && String(node.data[match]).trim().length > 0;
-  });
-
-  return key || "id";
+  const caption = resolveNodeCaption(node, captionKeys);
+  return caption?.actualKey || "id";
 }
 
 /**

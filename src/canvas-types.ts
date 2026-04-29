@@ -52,6 +52,8 @@ export interface ForceGraphConfig {
   height?: number;
   backgroundColor?: string;
   foregroundColor?: string;
+  layoutMode?: LayoutMode;
+  layoutOptions?: LayoutOptions;
   onNodeClick?: (node: GraphNode, event: MouseEvent) => void;
   onLinkClick?: (link: GraphLink, event: MouseEvent) => void;
   onNodeRightClick?: (node: GraphNode, event: MouseEvent) => void;
@@ -66,7 +68,7 @@ export interface ForceGraphConfig {
   cooldownTicks?: number | undefined;
   cooldownTime?: number;
   autoStopOnSettle?: boolean;
-  captionsKeys?: string[];
+  captionsKeys?: Array<string | [string, boolean]>;
   showPropertyKeyPrefix?: boolean;
   isLinkSelected?: (link: GraphLink) => boolean;
   isNodeSelected?: (node: GraphNode) => boolean;
@@ -84,11 +86,76 @@ export interface ForceGraphConfig {
   largeGraph?: LargeGraphConfig;
 }
 
-export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix'> {
+export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix' | 'layoutMode' | 'layoutOptions'> {
   backgroundColor: string;
   foregroundColor: string;
-  captionsKeys: string[];
+  captionsKeys: [string, boolean][];
   showPropertyKeyPrefix: boolean;
+  layoutMode: LayoutMode;
+  layoutOptions: LayoutOptions;
+}
+
+export type LayoutMode = 'force' | 'flow' | 'tree' | 'radial-tree' | 'concentric' | 'components' | 'arc';
+
+export type LayoutDirection = 'TB' | 'BT' | 'LR' | 'RL';
+export type ArcDirection = 'LR' | 'RL';
+export type ConcentricMetric = 'degree' | 'inDegree' | 'outDegree' | 'bfsDepth';
+export type RingSortMode = 'id' | 'label' | 'degree';
+export type ComponentsInnerLayout = 'concentric' | 'tree' | 'flow' | 'radial-tree';
+export type ComponentsSortMode = 'size' | 'edgeCount';
+
+export interface TreeLayoutOptions {
+  rootNodeId?: number;
+  direction?: LayoutDirection;
+  levelSpacing?: number;
+  nodeSpacing?: number;
+  componentSpacing?: number;
+}
+
+export interface FlowLayoutOptions {
+  direction?: LayoutDirection;
+  layerSpacing?: number;
+  nodeSpacing?: number;
+  componentSpacing?: number;
+}
+export interface RadialTreeLayoutOptions {
+  rootNodeId?: number;
+  direction?: LayoutDirection;
+  startAngle?: number;
+  endAngle?: number;
+  radiusStep?: number;
+  componentSpacing?: number;
+}
+
+export interface ConcentricLayoutOptions {
+  metric?: ConcentricMetric;
+  rootNodeId?: number;
+  ringSpacing?: number;
+  minRingNodeSpacing?: number;
+  sortWithinRing?: RingSortMode;
+}
+
+export interface ComponentsLayoutOptions {
+  innerLayout?: ComponentsInnerLayout;
+  componentGap?: number;
+  maxColumns?: number;
+  sortComponentsBy?: ComponentsSortMode;
+}
+
+export interface ArcLayoutOptions {
+  orderBy?: RingSortMode;
+  direction?: ArcDirection;
+  nodeSpacing?: number;
+  curveScale?: number;
+}
+
+export interface LayoutOptions {
+  tree?: TreeLayoutOptions;
+  flow?: FlowLayoutOptions;
+  radialTree?: RadialTreeLayoutOptions;
+  concentric?: ConcentricLayoutOptions;
+  components?: ComponentsLayoutOptions;
+  arc?: ArcLayoutOptions;
 }
 
 export type GraphNode = NodeObject & {
@@ -99,11 +166,12 @@ export type GraphNode = NodeObject & {
   color: string;
   size: number;
   data: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   };
   x?: number;
   y?: number;
+  layoutTargetX?: number;
+  layoutTargetY?: number;
   vx?: number;
   vy?: number;
   fx?: number;
@@ -120,7 +188,6 @@ export type GraphLink = {
   color: string;
   curve: number;
   data: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   };
 };
@@ -132,7 +199,7 @@ export interface GraphData {
 
 export type Node = Omit<
   GraphNode,
-  "x" | "y" | "vx" | "vy" | "fx" | "fy" | "initialPositionCalculated" | "displayName" | "size"
+  "x" | "y" | "layoutTargetX" | "layoutTargetY" | "vx" | "vy" | "fx" | "fy" | "initialPositionCalculated" | "displayName" | "size"
 > & {
   size?: number;
 }
