@@ -232,7 +232,13 @@ class FalkorDBCanvas extends HTMLElement {
       }
     }
 
-    Object.assign(this.config, config);
+    // Deep-merge largeGraph to avoid wiping sibling fields on partial updates.
+    if (config.largeGraph !== undefined && this.config.largeGraph) {
+      const mergedLargeGraph = { ...this.config.largeGraph, ...config.largeGraph };
+      Object.assign(this.config, config, { largeGraph: mergedLargeGraph });
+    } else {
+      Object.assign(this.config, config);
+    }
 
     // Recompute or clear culling bounds when largeGraph config changes.
     if (config.largeGraph !== undefined) {
@@ -865,6 +871,7 @@ class FalkorDBCanvas extends HTMLElement {
         if (this.graph && width > 0 && height > 0) {
           this.log('Container resized to:', width, 'x', height);
           this.graph.width(width).height(height);
+          this.recomputeCullingBoundsIfNeeded();
         }
       }
     });
@@ -960,7 +967,6 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
-        if (this.config.largeGraph?.enabled && !this.isNodeInCullingBounds(node)) return;
         if (this.config.node) {
           this.config.node.nodeCanvasObject(node, ctx);
         } else {
@@ -968,7 +974,6 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
-        if (this.config.largeGraph?.enabled && !this.isLinkInCullingBounds(link)) return;
         if (this.config.link) {
           this.config.link.linkCanvasObject(link, ctx, globalScale);
         } else {
@@ -976,7 +981,6 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
-        if (this.config.largeGraph?.enabled && !this.isNodeInCullingBounds(node)) return;
         if (this.config.node) {
           this.config.node.nodePointerAreaPaint(node, color, ctx);
         } else {
@@ -984,7 +988,6 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
-        if (this.config.largeGraph?.enabled && !this.isLinkInCullingBounds(link)) return;
         if (this.config.link) {
           this.config.link.linkPointerAreaPaint(link, color, ctx);
         } else {
@@ -1906,7 +1909,6 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
-        if (this.config.largeGraph?.enabled && !this.isNodeInCullingBounds(node)) return;
         if (this.config.node) {
           this.config.node.nodeCanvasObject(node, ctx);
         } else {
@@ -1914,7 +1916,6 @@ class FalkorDBCanvas extends HTMLElement {
         }
       })
       .linkCanvasObject((link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
-        if (this.config.largeGraph?.enabled && !this.isLinkInCullingBounds(link)) return;
         if (this.config.link) {
           this.config.link.linkCanvasObject(link, ctx, globalScale);
         } else {
@@ -1924,7 +1925,6 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (this.config.node) {
       this.graph.nodePointerAreaPaint((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
-        if (this.config.largeGraph?.enabled && !this.isNodeInCullingBounds(node)) return;
         this.config.node!.nodePointerAreaPaint(node, color, ctx);
       });
     } else {
@@ -1933,7 +1933,6 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (this.config.link) {
       this.graph.linkPointerAreaPaint((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
-        if (this.config.largeGraph?.enabled && !this.isLinkInCullingBounds(link)) return;
         this.config.link!.linkPointerAreaPaint(link, color, ctx);
       });
     } else {
