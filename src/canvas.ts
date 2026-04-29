@@ -233,7 +233,7 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     // Deep-merge largeGraph to avoid wiping sibling fields on partial updates.
-    if (config.largeGraph !== undefined && this.config.largeGraph) {
+    if (config.largeGraph && typeof config.largeGraph === 'object' && this.config.largeGraph) {
       const mergedLargeGraph = { ...this.config.largeGraph, ...config.largeGraph };
       Object.assign(this.config, config, { largeGraph: mergedLargeGraph });
     } else {
@@ -1144,7 +1144,7 @@ class FalkorDBCanvas extends HTMLElement {
     if (link.source.id === link.target.id) {
       // Self-loop: the cubic bezier extends roughly |curve| * nodeSize * factor
       // away from the node centre. Use that as a conservative radius.
-      const nodeSize = link.source.size || 6;
+      const nodeSize = link.source.size || NODE_SIZE;
       const loopRadius = Math.abs(link.curve || 1) * nodeSize * SELF_LOOP_CURVE_FACTOR;
       return (
         sx + loopRadius >= minX && sx - loopRadius <= maxX &&
