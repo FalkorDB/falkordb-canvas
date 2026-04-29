@@ -523,4 +523,79 @@ describe("low-zoom draw skipping", () => {
     expect(ctxHigh.arc).toHaveBeenCalled();
     expect(ctxHigh.fillText).toHaveBeenCalled();
   });
+
+  it("arrows are skipped below lowZoomThreshold when skipArrowsAtLowZoom is true", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({
+      width: 800,
+      height: 600,
+      largeGraph: {
+        enabled: true,
+        lowZoomThreshold: 0.5,
+        skipArrowsAtLowZoom: true,
+      },
+    });
+    canvas.setData(SIMPLE_DATA);
+
+    const instance = getLastInstance();
+    setupInstanceDimensions(instance);
+
+    const data = canvas.getGraphData();
+    // Position a link with enough separation for an arrowhead to render
+    const link = data.links[0];
+    link.source = { ...data.nodes[0], x: 100, y: 300, size: 6 } as RuntimeNode;
+    link.target = { ...data.nodes[1], x: 500, y: 300, size: 6 } as RuntimeNode;
+    link.curve = 0;
+
+    // Above threshold — arrow should be drawn (ctx.fill for arrowhead)
+    triggerZoom({ k: 0.8, x: 0, y: 0 });
+    const ctxHigh = createCtxSpy();
+    const linkPainter = instance.callbacks.linkCanvasObject!;
+    linkPainter(link, ctxHigh, 1);
+    expect(ctxHigh.fill).toHaveBeenCalled();
+
+    // Below threshold — arrow should be skipped
+    triggerZoom({ k: 0.3, x: 0, y: 0 });
+    const ctxLow = createCtxSpy();
+    linkPainter(link, ctxLow, 1);
+    // Link stroke still drawn but arrowhead fill is not called
+    expect(ctxLow.stroke).toHaveBeenCalled();
+    expect(ctxLow.fill).not.toHaveBeenCalled();
+  });
+
+  it("link labels are skipped below lowZoomThreshold when skipLinkLabelsAtLowZoom is true", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({
+      width: 800,
+      height: 600,
+      largeGraph: {
+        enabled: true,
+        lowZoomThreshold: 0.5,
+        skipLinkLabelsAtLowZoom: true,
+      },
+    });
+    canvas.setData(SIMPLE_DATA);
+
+    const instance = getLastInstance();
+    setupInstanceDimensions(instance);
+
+    const data = canvas.getGraphData();
+    const link = data.links[0];
+    link.source = { ...data.nodes[0], x: 100, y: 300, size: 6 } as RuntimeNode;
+    link.target = { ...data.nodes[1], x: 500, y: 300, size: 6 } as RuntimeNode;
+    link.curve = 0;
+
+    // Above threshold — link label should be drawn
+    triggerZoom({ k: 0.8, x: 0, y: 0 });
+    const ctxHigh = createCtxSpy();
+    const linkPainter = instance.callbacks.linkCanvasObject!;
+    linkPainter(link, ctxHigh, 1);
+    expect(ctxHigh.fillText).toHaveBeenCalled();
+
+    // Below threshold — link label text should not be drawn
+    triggerZoom({ k: 0.3, x: 0, y: 0 });
+    const ctxLow = createCtxSpy();
+    linkPainter(link, ctxLow, 1);
+    expect(ctxLow.fillText).not.toHaveBeenCalled();
+  });
 });

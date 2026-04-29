@@ -1093,8 +1093,20 @@ class FalkorDBCanvas extends HTMLElement {
 
   /** Recompute culling bounds using the last known transform (e.g. after resize). */
   private recomputeCullingBoundsIfNeeded() {
-    if (this.lastTransform && this.config.largeGraph?.enabled) {
+    if (!this.config.largeGraph?.enabled) return;
+    if (this.lastTransform) {
       this.updateCullingBounds(this.lastTransform);
+    } else if (this.graph) {
+      // Seed initial transform from current graph state before first onZoom fires.
+      const k = this.graph.zoom() ?? 1;
+      const center = this.graph.centerAt() ?? { x: 0, y: 0 };
+      const w = this.graph.width() ?? 0;
+      const h = this.graph.height() ?? 0;
+      if (k > 0 && w > 0 && h > 0) {
+        const tx = w / 2 - center.x * k;
+        const ty = h / 2 - center.y * k;
+        this.updateCullingBounds({ k, x: tx, y: ty });
+      }
     }
   }
 
