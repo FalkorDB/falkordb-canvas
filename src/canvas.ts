@@ -447,21 +447,22 @@ class FalkorDBCanvas extends HTMLElement {
 
   setGraphData(data: GraphData) {
     this.log('setGraphData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
+    const previousPositions = this.getNodePositionMap();
     this.data = applyGraphLayout(data, this.config.layoutMode, this.config.layoutOptions);
-    this.shouldZoomToFitOnNonForceSettle = false;
-
+    const shouldAnimateNonForceLayout = this.prepareNodePositionsForCurrentLayout(previousPositions);
+    if (this.isForceLayoutMode() && this.config.cooldownTicks === 0 && this.data.nodes.length > 0) {
+      this.config.cooldownTicks = undefined;
+      this.shouldZoomToFitOnNonForceSettle = false;
+    }
     if (!this.graph) return;
 
     this.calculateNodeDegree();
 
     this.graph
       .graphData(this.data);
+    this.configureSimulationForCurrentLayout(shouldAnimateNonForceLayout);
 
-    // setGraphData restores pre-positioned data — freeze simulation, just render.
-    this.graph.cooldownTicks(0);
-    this.updateCanvasSimulationAttribute(false);
-
-    if (this.data.nodes.length > 0) {
+    if (this.isForceLayoutMode() && this.data.nodes.length > 0) {
       this.triggerRender();
     }
 
@@ -469,6 +470,17 @@ class FalkorDBCanvas extends HTMLElement {
       this.config.isLoading = false;
       this.config.onLoadingChange?.(false);
       this.updateLoadingState();
+      if (this.data.nodes.length > 0) {
+        if (shouldAnimateNonForceLayout) {
+          this.shouldZoomToFitOnNonForceSettle = true;
+        } else {
+          this.shouldZoomToFitOnNonForceSettle = false;
+          this.zoomToFit(1);
+          this.triggerRender();
+        }
+      } else {
+        this.shouldZoomToFitOnNonForceSettle = false;
+      }
     }
 
     if (this.viewport) {
