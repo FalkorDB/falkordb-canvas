@@ -458,6 +458,7 @@ class FalkorDBCanvas extends HTMLElement {
       .graphData(this.data);
 
     // setGraphData restores pre-positioned data — freeze simulation, just render.
+    this.config.cooldownTicks = 0;
     this.graph.cooldownTicks(0);
     this.updateCanvasSimulationAttribute(false);
 
@@ -465,11 +466,9 @@ class FalkorDBCanvas extends HTMLElement {
       this.triggerRender();
     }
 
-    if (!this.isForceLayoutMode()) {
-      this.config.isLoading = false;
-      this.config.onLoadingChange?.(false);
-      this.updateLoadingState();
-    }
+    this.config.isLoading = false;
+    this.config.onLoadingChange?.(false);
+    this.updateLoadingState();
 
     if (this.viewport) {
       this.log('Applying viewport:', this.viewport);
