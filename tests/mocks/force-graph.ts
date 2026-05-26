@@ -151,6 +151,12 @@ export class MockForceGraphInstance {
     return this;
   }
 
+  warmupTicks(_value?: number) { return this; }
+
+  dagMode(_value?: unknown) { return this; }
+
+  dagLevelDistance(_value?: number) { return this; }
+
   cooldownTime(_value?: number) { return this; }
 
   enableNodeDrag(_value?: boolean) { return this; }
@@ -285,6 +291,10 @@ export class MockForceGraphInstance {
   zoom(value?: number, _durationMs?: number) {
     if (value === undefined) return this.zoomValue;
     this.zoomValue = value;
+    return this;
+  }
+
+  autoPauseRedraw(_value?: boolean) {
     return this;
   }
 

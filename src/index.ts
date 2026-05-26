@@ -1,21 +1,20 @@
 import FalkorDBCanvas from "./canvas.js";
 import type React from "react";
 import type {
-  ArcDirection,
-  ArcLayoutOptions,
-  ComponentsInnerLayout,
-  ComponentsLayoutOptions,
-  ComponentsSortMode,
-  ConcentricLayoutOptions,
-  ConcentricMetric,
   CanvasRenderMode,
-  FlowLayoutOptions,
-  RadialTreeLayoutOptions,
-  LayoutDirection,
   LayoutMode,
+  LayoutDirection,
+  HierarchyDirection,
+  RadialDirection,
   LayoutOptions,
-  RingSortMode,
-  TreeLayoutOptions,
+  HierarchyLayoutOptions,
+  RadialLayoutOptions,
+  ForceLayoutOptions,
+  NodeStyleConfig,
+  LinkStyleConfig,
+  SimulationConfig,
+  InteractionConfig,
+  EventHandlers,
 } from "./canvas-types.js";
 
 declare global {
@@ -41,21 +40,20 @@ export { FalkorDBCanvas as default, FalkorDBCanvas };
 
 // Types
 export type {
-  ArcDirection,
   CanvasRenderMode,
   LayoutMode,
   LayoutDirection,
+  HierarchyDirection,
+  RadialDirection,
   LayoutOptions,
-  TreeLayoutOptions,
-  FlowLayoutOptions,
-  RadialTreeLayoutOptions,
-  ConcentricLayoutOptions,
-  ComponentsLayoutOptions,
-  ArcLayoutOptions,
-  ConcentricMetric,
-  RingSortMode,
-  ComponentsInnerLayout,
-  ComponentsSortMode,
+  HierarchyLayoutOptions,
+  RadialLayoutOptions,
+  ForceLayoutOptions,
+  NodeStyleConfig,
+  LinkStyleConfig,
+  SimulationConfig,
+  InteractionConfig,
+  EventHandlers,
 }
 
 export type {
@@ -72,6 +70,8 @@ export type {
   Transform,
 } from "./canvas-types.js";
 
+export type { WorldBounds } from "./canvas.js";
+
 // Utils
 export {
   NODE_SIZE,
@@ -82,3 +82,13 @@ export {
   getNodeDisplayKey,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
+
+// Layouts
+export {
+  getDagMode,
+  isForceLayout,
+  getDagLevelDistance,
+  getChargeStrength,
+  pinAllNodes,
+  unpinAllNodes,
+} from "./layouts.js";

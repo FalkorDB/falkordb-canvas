@@ -1,160 +1,65 @@
-import * as d3 from "d3";
-import {
-  ArcLayoutOptions,
-  ComponentsInnerLayout,
-  ComponentsLayoutOptions,
-  ComponentsSortMode,
-  ConcentricLayoutOptions,
-  ConcentricMetric,
-  FlowLayoutOptions,
-  GraphData,
-  GraphLink,
-  GraphNode,
-  LayoutDirection,
-  LayoutMode,
-  LayoutOptions,
-  RadialTreeLayoutOptions,
-  RingSortMode,
-  TreeLayoutOptions,
-} from "./canvas-types.js";
+import { GraphData, GraphNode, LayoutMode, LayoutOptions } from "./canvas-types.js";
 
-type LayoutPoint = { x: number; y: number };
-type TreeNode = { id: number; children: TreeNode[] };
-type ComponentInfo = { nodeIds: number[]; edgeCount: number };
+type DagMode = 'td' | 'bu' | 'lr' | 'rl' | 'radialout' | 'radialin' | null;
 
-const DEFAULT_LAYOUT_MODE: LayoutMode = "force";
-const LINK_CURVE_MULTIPLIER = 0.4;
+/**
+ * Maps a LayoutMode + layout options to force-graph's built-in dagMode.
+ */
+export function getDagMode(layoutMode: LayoutMode, options?: LayoutOptions): DagMode {
+  if (layoutMode === 'force') return null;
 
-const DEFAULT_TREE_OPTIONS: Required<Omit<TreeLayoutOptions, "rootNodeId">> = {
-  direction: "TB",
-  levelSpacing: 130,
-  nodeSpacing: 110,
-  componentSpacing: 180,
-};
-const DEFAULT_FLOW_OPTIONS: Required<FlowLayoutOptions> = {
-  direction: "LR",
-  layerSpacing: 180,
-  nodeSpacing: 110,
-  componentSpacing: 220,
-};
-const DEFAULT_RADIAL_TREE_OPTIONS: Required<Omit<RadialTreeLayoutOptions, "rootNodeId">> = {
-  direction: "TB",
-  startAngle: -Math.PI / 2,
-  endAngle: (3 * Math.PI) / 2,
-  radiusStep: 130,
-  componentSpacing: 250,
-};
-const DEFAULT_CONCENTRIC_OPTIONS: Required<Omit<ConcentricLayoutOptions, "rootNodeId">> = {
-  metric: "degree",
-  ringSpacing: 130,
-  minRingNodeSpacing: 80,
-  sortWithinRing: "id",
-};
-const DEFAULT_COMPONENTS_OPTIONS: Required<ComponentsLayoutOptions> = {
-  innerLayout: "concentric",
-  componentGap: 260,
-  maxColumns: 3,
-  sortComponentsBy: "size",
-};
-const DEFAULT_ARC_OPTIONS: Required<ArcLayoutOptions> = {
-  orderBy: "id",
-  direction: "LR",
-  nodeSpacing: 120,
-  curveScale: 0.22,
-};
-
-function orientPoint(x: number, y: number, direction: LayoutDirection): LayoutPoint {
-  switch (direction) {
-    case "BT":
-      return { x, y: -y };
-    case "LR":
-      return { x: y, y: x };
-    case "RL":
-      return { x: -y, y: x };
-    case "TB":
-    default:
-      return { x, y };
-  }
-}
-
-function getDirectionRotation(direction: LayoutDirection): number {
-  switch (direction) {
-    case "LR":
-      return 0;
-    case "RL":
-      return Math.PI;
-    case "BT":
-      return -Math.PI / 2;
-    case "TB":
-    default:
-      return Math.PI / 2;
-  }
-}
-
-function calculateLinkCurve(index: number, isSelfLoop: boolean): number {
-  const even = index % 2 === 0;
-
-  if (isSelfLoop) {
-    if (even) {
-      return (Math.floor(-(index / 2)) - 3) * LINK_CURVE_MULTIPLIER;
+  switch (layoutMode) {
+    case 'tree': {
+      const dir = options?.tree?.direction ?? 'td';
+      if (dir === 'bu') return 'bu';
+      if (dir === 'lr') return 'lr';
+      if (dir === 'rl') return 'rl';
+      return 'td';
     }
-    return (Math.floor((index + 1) / 2) + 2) * LINK_CURVE_MULTIPLIER;
-  }
-
-  if (even) {
-    return Math.floor(-(index / 2)) * LINK_CURVE_MULTIPLIER;
-  }
-  return Math.floor((index + 1) / 2) * LINK_CURVE_MULTIPLIER;
-}
-
-function resetDefaultLinkCurves(links: GraphLink[]) {
-  const linksByPairCount = new Map<number, Map<number, number>>();
-
-  for (const link of links) {
-    const sourceId = link.source.id;
-    const targetId = link.target.id;
-    const minId = Math.min(sourceId, targetId);
-    const maxId = Math.max(sourceId, targetId);
-
-    let pairMap = linksByPairCount.get(minId);
-    if (!pairMap) {
-      pairMap = new Map<number, number>();
-      linksByPairCount.set(minId, pairMap);
+    case 'flow': {
+      const dir = options?.flow?.direction ?? 'lr';
+      if (dir === 'rl') return 'rl';
+      if (dir === 'td') return 'td';
+      if (dir === 'bu') return 'bu';
+      return 'lr';
     }
-
-    const duplicateIndex = pairMap.get(maxId) ?? 0;
-    pairMap.set(maxId, duplicateIndex + 1);
-    link.curve = calculateLinkCurve(duplicateIndex, sourceId === targetId);
+    case 'radial': {
+      const dir = options?.radial?.direction ?? 'out';
+      return dir === 'in' ? 'radialin' : 'radialout';
+    }
+    default:
+      return null;
   }
 }
 
-function centerNodePositions(nodes: GraphNode[]) {
-  if (nodes.length === 0) return;
-
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (const node of nodes) {
-    const x = node.x ?? 0;
-    const y = node.y ?? 0;
-    minX = Math.min(minX, x);
-    maxX = Math.max(maxX, x);
-    minY = Math.min(minY, y);
-    maxY = Math.max(maxY, y);
-  }
-
-  const centerX = (minX + maxX) / 2;
-  const centerY = (minY + maxY) / 2;
-
-  for (const node of nodes) {
-    node.x = (node.x ?? 0) - centerX;
-    node.y = (node.y ?? 0) - centerY;
-  }
+/**
+ * Returns true if the layout mode is the free-form force simulation.
+ */
+export function isForceLayout(layoutMode: LayoutMode): boolean {
+  return layoutMode === 'force';
 }
 
-function pinAllNodes(nodes: GraphNode[]) {
+/**
+ * Returns the dagLevelDistance for the layout.
+ */
+export function getDagLevelDistance(layoutMode: LayoutMode, options?: LayoutOptions): number | undefined {
+  if (isForceLayout(layoutMode)) return undefined;
+  if (layoutMode === 'radial') return options?.radial?.levelDistance ?? 80;
+  return undefined; // tree/flow use computeTreePositions
+}
+
+/**
+ * Returns the charge strength for radial layout.
+ */
+export function getChargeStrength(layoutMode: LayoutMode, options?: LayoutOptions): number {
+  if (layoutMode === 'radial') return options?.radial?.chargeStrength ?? -30;
+  return -30;
+}
+
+/**
+ * Pins all nodes at their current positions (sets fx/fy = x/y).
+ */
+export function pinAllNodes(nodes: GraphNode[]) {
   for (const node of nodes) {
     const x = node.x ?? 0;
     const y = node.y ?? 0;
@@ -164,830 +69,487 @@ function pinAllNodes(nodes: GraphNode[]) {
     node.fy = y;
     node.vx = 0;
     node.vy = 0;
-    node.initialPositionCalculated = true;
   }
 }
 
-function unpinAllNodes(nodes: GraphNode[]) {
+/**
+ * Unpins all nodes (clears fx/fy so forces can move them).
+ */
+export function unpinAllNodes(nodes: GraphNode[]) {
   for (const node of nodes) {
     node.fx = undefined;
     node.fy = undefined;
   }
 }
 
-function createAdjacency(graphData: GraphData) {
-  const nodeIds = graphData.nodes.map((node) => node.id);
-  const nodeIdSet = new Set<number>(nodeIds);
-  const outgoing = new Map<number, number[]>();
-  const incoming = new Map<number, number[]>();
-  const inDegree = new Map<number, number>();
+/**
+ * Computes deterministic tree positions for all nodes.
+ * Parents are centered above their children. Nodes at the same layer are evenly spaced.
+ * Uses a bottom-up subtree-width algorithm so deeper/wider subtrees get more horizontal space.
+ *
+ * @param data - The graph data (nodes + links)
+ * @param options - Layout options (direction, dagLevelDistance)
+ * @returns true if positions were computed, false if graph has cycles or no roots
+ */
+export function computeTreePositions(
+  data: GraphData,
+  layoutMode: LayoutMode,
+  options?: LayoutOptions
+): boolean {
+  const nodes = data.nodes;
+  const links = data.links;
+  if (nodes.length === 0) return true;
 
-  for (const id of nodeIds) {
-    outgoing.set(id, []);
-    incoming.set(id, []);
-    inDegree.set(id, 0);
+  // Read from the appropriate layout-specific options
+  const treeOpts = layoutMode === 'flow' ? options?.flow : options?.tree;
+  const direction = treeOpts?.direction
+    ?? (layoutMode === 'flow' ? 'lr' : 'td');
+  const baseLevelDistance = treeOpts?.levelDistance ?? 80;
+  const baseNodeSpacing = treeOpts?.nodeSpacing ?? 60;
+
+  // Ensure spacing accounts for actual node sizes
+  const maxNodeSize = nodes.reduce((max, n) => Math.max(max, n.size), 0);
+  const minNodeDiameter = maxNodeSize * 2;
+  const nodeSpacing = Math.max(baseNodeSpacing, minNodeDiameter + 10);
+  const levelDistance = Math.max(baseLevelDistance, minNodeDiameter + 10);
+
+  // Build adjacency: parent → children (directed by link source→target)
+  const childrenMap = new Map<number, number[]>();
+  const incomingCount = new Map<number, number>();
+
+  for (const node of nodes) {
+    childrenMap.set(node.id, []);
+    incomingCount.set(node.id, 0);
   }
 
-  for (const link of graphData.links) {
-    const sourceId = link.source.id;
-    const targetId = link.target.id;
-
-    if (!nodeIdSet.has(sourceId) || !nodeIdSet.has(targetId)) continue;
-    if (sourceId === targetId) continue;
-
-    const sourceOutgoing = outgoing.get(sourceId);
-    const targetIncoming = incoming.get(targetId);
-    if (!sourceOutgoing || !targetIncoming) continue;
-    if (sourceOutgoing.includes(targetId)) continue;
-
-    sourceOutgoing.push(targetId);
-    targetIncoming.push(sourceId);
-    inDegree.set(targetId, (inDegree.get(targetId) ?? 0) + 1);
+  for (const link of links) {
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source as unknown as number;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target as unknown as number;
+    childrenMap.get(sourceId)?.push(targetId);
+    incomingCount.set(targetId, (incomingCount.get(targetId) ?? 0) + 1);
   }
 
-  for (const ids of outgoing.values()) ids.sort((a, b) => a - b);
-  for (const ids of incoming.values()) ids.sort((a, b) => a - b);
+  // Find roots (no incoming edges)
+  const roots: number[] = [];
+  for (const node of nodes) {
+    if ((incomingCount.get(node.id) ?? 0) === 0) {
+      roots.push(node.id);
+    }
+  }
 
-  return { nodeIds, outgoing, incoming, inDegree };
-}
+  // If no roots found (all nodes have incoming edges = cycle),
+  // pick the node with the most outgoing edges as root
+  if (roots.length === 0) {
+    let bestId = nodes[0].id;
+    let bestOut = 0;
+    for (const node of nodes) {
+      const outCount = (childrenMap.get(node.id) ?? []).length;
+      if (outCount > bestOut) {
+        bestOut = outCount;
+        bestId = node.id;
+      }
+    }
+    roots.push(bestId);
+  }
 
-function getNodeMap(nodes: GraphNode[]) {
+  // BFS to assign depths and build the tree structure (handles DAGs by visiting first)
+  const depth = new Map<number, number>();
+  const parent = new Map<number, number | null>();
+  const treeChildren = new Map<number, number[]>(); // actual tree edges (no duplicates)
+  const queue: number[] = [];
+
+  for (const root of roots) {
+    depth.set(root, 0);
+    parent.set(root, null);
+    treeChildren.set(root, []);
+    queue.push(root);
+  }
+
+  let qi = 0;
+  while (qi < queue.length) {
+    const nodeId = queue[qi++];
+    const children = childrenMap.get(nodeId) ?? [];
+    for (const childId of children) {
+      if (depth.has(childId)) continue; // already visited
+      depth.set(childId, (depth.get(nodeId) ?? 0) + 1);
+      parent.set(childId, nodeId);
+      treeChildren.set(childId, []);
+      treeChildren.get(nodeId)!.push(childId);
+      queue.push(childId);
+    }
+  }
+
+  // Handle disconnected nodes: assign them depth 0
+  for (const node of nodes) {
+    if (!depth.has(node.id)) {
+      depth.set(node.id, 0);
+      parent.set(node.id, null);
+      treeChildren.set(node.id, []);
+      roots.push(node.id);
+    }
+  }
+
+  // Compute subtree width (number of leaves in subtree) — bottom-up
+  const subtreeWidth = new Map<number, number>();
+  // Process in reverse BFS order (leaves first)
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const nodeId = queue[i];
+    const children = treeChildren.get(nodeId) ?? [];
+    if (children.length === 0) {
+      subtreeWidth.set(nodeId, 1);
+    } else {
+      let width = 0;
+      for (const childId of children) {
+        width += subtreeWidth.get(childId) ?? 1;
+      }
+      subtreeWidth.set(nodeId, width);
+    }
+  }
+
+  // Assign breadth positions based on subtree widths
+  // Each leaf gets 1 unit of space. Parents are centered over their children.
+  const breadthPos = new Map<number, number>();
+
+  function assignBreadth(nodeId: number, startX: number) {
+    const children = treeChildren.get(nodeId) ?? [];
+    if (children.length === 0) {
+      // Leaf node — center in its 1-unit slot
+      breadthPos.set(nodeId, startX + 0.5);
+      return;
+    }
+    // Assign children left-to-right
+    let offset = startX;
+    for (const childId of children) {
+      const childWidth = subtreeWidth.get(childId) ?? 1;
+      assignBreadth(childId, offset);
+      offset += childWidth;
+    }
+    // Parent = center of first and last child
+    const firstChild = children[0];
+    const lastChild = children[children.length - 1];
+    const center = ((breadthPos.get(firstChild) ?? 0) + (breadthPos.get(lastChild) ?? 0)) / 2;
+    breadthPos.set(nodeId, center);
+  }
+
+  // Layout each root's subtree side by side
+  let globalOffset = 0;
+  for (const root of roots) {
+    assignBreadth(root, globalOffset);
+    globalOffset += subtreeWidth.get(root) ?? 1;
+  }
+
+  // Center around 0
+  const totalWidth = globalOffset;
+  const centerOffset = totalWidth / 2;
+
+  // Build node map for fast lookup
   const nodeMap = new Map<number, GraphNode>();
   for (const node of nodes) {
     nodeMap.set(node.id, node);
   }
-  return nodeMap;
-}
 
-function getNodeLabel(node: GraphNode): string {
-  const label = node.labels[0] ?? "";
-  return label || String(node.id);
-}
+  // Assign final positions based on direction
+  for (const node of nodes) {
+    const d = depth.get(node.id) ?? 0;
+    const b = (breadthPos.get(node.id) ?? 0) - centerOffset;
+    const depthCoord = d * levelDistance;
+    const breadthCoord = b * nodeSpacing;
 
-function computeDegreeMaps(nodeIds: number[], outgoing: Map<number, number[]>, incoming: Map<number, number[]>) {
-  const inDegree = new Map<number, number>();
-  const outDegree = new Map<number, number>();
-  const degree = new Map<number, number>();
-
-  for (const id of nodeIds) {
-    const inCount = incoming.get(id)?.length ?? 0;
-    const outCount = outgoing.get(id)?.length ?? 0;
-    inDegree.set(id, inCount);
-    outDegree.set(id, outCount);
-    degree.set(id, inCount + outCount);
-  }
-
-  return { inDegree, outDegree, degree };
-}
-
-function buildUndirectedAdjacency(nodeIds: number[], outgoing: Map<number, number[]>, incoming: Map<number, number[]>) {
-  const undirected = new Map<number, number[]>();
-
-  for (const id of nodeIds) {
-    const neighbors = new Set<number>();
-    for (const target of outgoing.get(id) ?? []) neighbors.add(target);
-    for (const source of incoming.get(id) ?? []) neighbors.add(source);
-    undirected.set(id, [...neighbors].sort((a, b) => a - b));
-  }
-
-  return undirected;
-}
-
-function getDefaultRootId(
-  nodeIds: number[],
-  degreeMap: Map<number, number>,
-  preferredRootId?: number
-) {
-  if (preferredRootId !== undefined && nodeIds.includes(preferredRootId)) {
-    return preferredRootId;
-  }
-
-  let bestId = nodeIds[0];
-  let bestDegree = Number.NEGATIVE_INFINITY;
-
-  for (const nodeId of nodeIds) {
-    const nodeDegree = degreeMap.get(nodeId) ?? 0;
-    if (nodeDegree > bestDegree || (nodeDegree === bestDegree && nodeId < bestId)) {
-      bestDegree = nodeDegree;
-      bestId = nodeId;
-    }
-  }
-
-  return bestId;
-}
-
-function computeBfsDepths(
-  nodeIds: number[],
-  outgoing: Map<number, number[]>,
-  incoming: Map<number, number[]>,
-  rootId?: number
-) {
-  const undirected = buildUndirectedAdjacency(nodeIds, outgoing, incoming);
-  const degreeMap = computeDegreeMaps(nodeIds, outgoing, incoming).degree;
-  const sourceRoot = getDefaultRootId(nodeIds, degreeMap, rootId);
-  const depths = new Map<number, number>();
-  const queue: number[] = [sourceRoot];
-
-  depths.set(sourceRoot, 0);
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (current === undefined) continue;
-
-    const currentDepth = depths.get(current) ?? 0;
-    for (const neighbor of undirected.get(current) ?? []) {
-      if (depths.has(neighbor)) continue;
-      depths.set(neighbor, currentDepth + 1);
-      queue.push(neighbor);
-    }
-  }
-
-  let maxDepth = 0;
-  for (const depth of depths.values()) {
-    maxDepth = Math.max(maxDepth, depth);
-  }
-
-  for (const nodeId of nodeIds) {
-    if (!depths.has(nodeId)) depths.set(nodeId, maxDepth + 1);
-  }
-
-  return depths;
-}
-
-function sortNodeIdsByMode(
-  nodeIds: number[],
-  mode: RingSortMode,
-  nodeMap: Map<number, GraphNode>,
-  degreeMap: Map<number, number>
-) {
-  const sorted = [...nodeIds];
-  sorted.sort((a, b) => {
-    if (mode === "degree") {
-      const diff = (degreeMap.get(b) ?? 0) - (degreeMap.get(a) ?? 0);
-      if (diff !== 0) return diff;
-    } else if (mode === "label") {
-      const aNode = nodeMap.get(a);
-      const bNode = nodeMap.get(b);
-      const aLabel = aNode ? getNodeLabel(aNode) : "";
-      const bLabel = bNode ? getNodeLabel(bNode) : "";
-      const labelDiff = aLabel.localeCompare(bLabel);
-      if (labelDiff !== 0) return labelDiff;
-    }
-    return a - b;
-  });
-  return sorted;
-}
-
-function buildForest(
-  nodeIds: number[],
-  outgoing: Map<number, number[]>,
-  inDegree: Map<number, number>,
-  rootNodeId?: number
-) {
-  const nodeIdSet = new Set<number>(nodeIds);
-  const preferredRoots: number[] = [];
-  const visited = new Set<number>();
-  const forest: TreeNode[] = [];
-
-  if (rootNodeId !== undefined && nodeIdSet.has(rootNodeId)) {
-    preferredRoots.push(rootNodeId);
-  }
-
-  for (const rootId of nodeIds) {
-    if ((inDegree.get(rootId) ?? 0) === 0 && !preferredRoots.includes(rootId)) {
-      preferredRoots.push(rootId);
-    }
-  }
-
-  if (preferredRoots.length === 0 && nodeIds.length > 0) {
-    preferredRoots.push(nodeIds[0]);
-  }
-
-  const addTreeRoot = (rootId: number) => {
-    if (visited.has(rootId)) return;
-
-    const root: TreeNode = { id: rootId, children: [] };
-    const queue: Array<{ node: TreeNode; id: number }> = [{ node: root, id: rootId }];
-    visited.add(rootId);
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) continue;
-
-      const children = outgoing.get(current.id) ?? [];
-      for (const childId of children) {
-        if (visited.has(childId)) continue;
-
-        visited.add(childId);
-        const childNode: TreeNode = { id: childId, children: [] };
-        current.node.children.push(childNode);
-        queue.push({ node: childNode, id: childId });
-      }
+    let x: number, y: number;
+    switch (direction) {
+      case 'bu':
+        x = breadthCoord;
+        y = -depthCoord;
+        break;
+      case 'lr':
+        x = depthCoord;
+        y = breadthCoord;
+        break;
+      case 'rl':
+        x = -depthCoord;
+        y = breadthCoord;
+        break;
+      case 'td':
+      default:
+        x = breadthCoord;
+        y = depthCoord;
+        break;
     }
 
-    forest.push(root);
-  };
-
-  for (const rootId of preferredRoots) addTreeRoot(rootId);
-  for (const nodeId of nodeIds) addTreeRoot(nodeId);
-
-  return forest;
-}
-
-function collectWeaklyConnectedComponents(
-  nodeIds: number[],
-  outgoing: Map<number, number[]>,
-  incoming: Map<number, number[]>
-) {
-  const visited = new Set<number>();
-  const components: number[][] = [];
-
-  for (const nodeId of nodeIds) {
-    if (visited.has(nodeId)) continue;
-
-    const queue: number[] = [nodeId];
-    const component: number[] = [];
-    visited.add(nodeId);
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (current === undefined) continue;
-      component.push(current);
-
-      const neighbors = [
-        ...(outgoing.get(current) ?? []),
-        ...(incoming.get(current) ?? []),
-      ];
-
-      for (const next of neighbors) {
-        if (visited.has(next)) continue;
-        visited.add(next);
-        queue.push(next);
-      }
-    }
-
-    component.sort((a, b) => a - b);
-    components.push(component);
+    node.x = x;
+    node.y = y;
+    node.fx = x;
+    node.fy = y;
+    node.vx = 0;
+    node.vy = 0;
   }
 
-  return components;
+  return true;
 }
 
-function getGraphBounds(nodes: GraphNode[]) {
-  if (nodes.length === 0) {
-    return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
-  }
+/**
+ * Computes deterministic radial positions for all nodes.
+ * Uses directed edges (source→target) to determine tree depth — same logic as the tree layout.
+ * Each depth level forms a circle with dynamic radius based on node count.
+ * Nodes are distributed using subtree-width proportional angles (yFiles-style).
+ */
+export function computeRadialPositions(
+  data: GraphData,
+  options?: LayoutOptions
+): boolean {
+  const nodes = data.nodes;
+  const links = data.links;
+  if (nodes.length === 0) return true;
 
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
+  const direction = options?.radial?.direction ?? 'out';
+
+  // Build directed adjacency: parent → children (same as tree layout)
+  const childrenMap = new Map<number, number[]>();
+  const incomingCount = new Map<number, number>();
 
   for (const node of nodes) {
-    const x = node.x ?? 0;
-    const y = node.y ?? 0;
-    minX = Math.min(minX, x);
-    maxX = Math.max(maxX, x);
-    minY = Math.min(minY, y);
-    maxY = Math.max(maxY, y);
+    childrenMap.set(node.id, []);
+    incomingCount.set(node.id, 0);
   }
 
-  return {
-    minX,
-    maxX,
-    minY,
-    maxY,
-    width: maxX - minX,
-    height: maxY - minY,
-  };
-}
+  for (const link of links) {
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source as unknown as number;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target as unknown as number;
+    childrenMap.get(sourceId)?.push(targetId);
+    incomingCount.set(targetId, (incomingCount.get(targetId) ?? 0) + 1);
+  }
 
-function assignFlowLayers(
-  componentNodeIds: number[],
-  outgoing: Map<number, number[]>,
-  incoming: Map<number, number[]>
-) {
-  const componentSet = new Set(componentNodeIds);
-  const inDegree = new Map<number, number>();
-  const layers = new Map<number, number>();
-  const processed = new Set<number>();
+  // Find roots (no incoming edges)
+  const roots: number[] = [];
+  for (const node of nodes) {
+    if ((incomingCount.get(node.id) ?? 0) === 0) {
+      roots.push(node.id);
+    }
+  }
+
+  // If no roots found (cycle), pick node with most outgoing edges
+  if (roots.length === 0) {
+    let bestId = nodes[0].id;
+    let bestOut = 0;
+    for (const node of nodes) {
+      const outCount = (childrenMap.get(node.id) ?? []).length;
+      if (outCount > bestOut) {
+        bestOut = outCount;
+        bestId = node.id;
+      }
+    }
+    roots.push(bestId);
+  }
+
+  // BFS from roots following directed edges to assign depths
+  const depth = new Map<number, number>();
+  const treeChildren = new Map<number, number[]>();
   const queue: number[] = [];
 
-  for (const nodeId of componentNodeIds) {
-    const degree = (incoming.get(nodeId) ?? []).filter((id) => componentSet.has(id)).length;
-    inDegree.set(nodeId, degree);
-    if (degree === 0) queue.push(nodeId);
+  for (const root of roots) {
+    depth.set(root, 0);
+    treeChildren.set(root, []);
+    queue.push(root);
   }
 
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (current === undefined) continue;
-    processed.add(current);
-
-    const currentLayer = layers.get(current) ?? 0;
-    const children = outgoing.get(current) ?? [];
-
+  let qi = 0;
+  while (qi < queue.length) {
+    const nodeId = queue[qi++];
+    const children = childrenMap.get(nodeId) ?? [];
     for (const childId of children) {
-      if (!componentSet.has(childId)) continue;
-      if (childId === current) continue;
-
-      const nextLayer = Math.max(layers.get(childId) ?? 0, currentLayer + 1);
-      layers.set(childId, nextLayer);
-
-      const nextInDegree = (inDegree.get(childId) ?? 0) - 1;
-      inDegree.set(childId, nextInDegree);
-      if (nextInDegree === 0) queue.push(childId);
+      if (depth.has(childId)) continue; // already visited
+      depth.set(childId, (depth.get(nodeId) ?? 0) + 1);
+      treeChildren.set(childId, []);
+      treeChildren.get(nodeId)!.push(childId);
+      queue.push(childId);
     }
   }
 
-  let maxAssignedLayer = 0;
-  for (const layer of layers.values()) {
-    maxAssignedLayer = Math.max(maxAssignedLayer, layer);
-  }
-
-  for (const nodeId of componentNodeIds) {
-    if (processed.has(nodeId)) continue;
-    const parentLayers = (incoming.get(nodeId) ?? [])
-      .filter((parentId) => componentSet.has(parentId))
-      .map((parentId) => layers.get(parentId))
-      .filter((layer): layer is number => layer !== undefined);
-
-    const fallbackLayer = maxAssignedLayer + 1;
-    const layer = parentLayers.length > 0 ? Math.max(...parentLayers) + 1 : fallbackLayer;
-    layers.set(nodeId, layer);
-    maxAssignedLayer = Math.max(maxAssignedLayer, layer);
-  }
-
-  for (const nodeId of componentNodeIds) {
-    if (!layers.has(nodeId)) layers.set(nodeId, 0);
-  }
-
-  return layers;
-}
-
-function applyTreeLayout(graphData: GraphData, treeOptions?: TreeLayoutOptions) {
-  const options = { ...DEFAULT_TREE_OPTIONS, ...treeOptions };
-  const { nodeIds, outgoing, inDegree } = createAdjacency(graphData);
-  const forest = buildForest(nodeIds, outgoing, inDegree, treeOptions?.rootNodeId);
-  const positionByNodeId = new Map<number, LayoutPoint>();
-  let breadthOffset = 0;
-
-  for (const treeRoot of forest) {
-    const rootHierarchy = d3.hierarchy(treeRoot, (node) => node.children);
-    const treeLayout = d3
-      .tree<TreeNode>()
-      .nodeSize([options.nodeSpacing, options.levelSpacing]);
-
-    treeLayout(rootHierarchy);
-
-    let minBreadth = Number.POSITIVE_INFINITY;
-    let maxBreadth = Number.NEGATIVE_INFINITY;
-    rootHierarchy.each((node) => {
-      const breadth = node.x ?? 0;
-      minBreadth = Math.min(minBreadth, breadth);
-      maxBreadth = Math.max(maxBreadth, breadth);
-    });
-
-    rootHierarchy.each((node) => {
-      const localBreadth = (node.x ?? 0) - minBreadth + breadthOffset;
-      const localDepth = node.y ?? 0;
-      positionByNodeId.set(
-        node.data.id,
-        orientPoint(localBreadth, localDepth, options.direction)
-      );
-    });
-
-    const componentBreadth = maxBreadth - minBreadth;
-    breadthOffset += componentBreadth + options.componentSpacing;
-  }
-
-  for (const node of graphData.nodes) {
-    const position = positionByNodeId.get(node.id);
-    if (!position) continue;
-    node.x = position.x;
-    node.y = position.y;
-  }
-
-  centerNodePositions(graphData.nodes);
-}
-
-function applyRadialTreeLayout(graphData: GraphData, radialOptions?: RadialTreeLayoutOptions) {
-  const options = { ...DEFAULT_RADIAL_TREE_OPTIONS, ...radialOptions };
-  const { nodeIds, outgoing, inDegree } = createAdjacency(graphData);
-  const forest = buildForest(nodeIds, outgoing, inDegree, radialOptions?.rootNodeId);
-  const angleSpan = Math.max(0.001, options.endAngle - options.startAngle);
-  const rotation = getDirectionRotation(options.direction);
-  const nodeMap = getNodeMap(graphData.nodes);
-  let offsetX = 0;
-
-  for (const treeRoot of forest) {
-    const rootHierarchy = d3.hierarchy(treeRoot, (node) => node.children);
-    const treeLayout = d3.tree<TreeNode>().size([angleSpan, options.radiusStep * rootHierarchy.height]);
-    treeLayout(rootHierarchy);
-
-    const points: Array<{ id: number; x: number; y: number }> = [];
-    rootHierarchy.each((node) => {
-      const angle = options.startAngle + (node.x ?? 0) + rotation;
-      const radius = node.y ?? 0;
-      points.push({
-        id: node.data.id,
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-      });
-    });
-
-    let minX = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    for (const point of points) {
-      minX = Math.min(minX, point.x);
-      maxX = Math.max(maxX, point.x);
-    }
-
-    for (const point of points) {
-      const node = nodeMap.get(point.id);
-      if (!node) continue;
-      node.x = point.x - minX + offsetX;
-      node.y = point.y;
-    }
-
-    offsetX += (maxX - minX) + options.componentSpacing;
-  }
-
-  centerNodePositions(graphData.nodes);
-}
-
-function applyFlowLayout(graphData: GraphData, flowOptions?: FlowLayoutOptions) {
-  const options = { ...DEFAULT_FLOW_OPTIONS, ...flowOptions };
-  const { nodeIds, outgoing, incoming } = createAdjacency(graphData);
-  const components = collectWeaklyConnectedComponents(nodeIds, outgoing, incoming);
-  const positionByNodeId = new Map<number, LayoutPoint>();
-  let breadthOffset = 0;
-
-  for (const componentNodeIds of components) {
-    const componentSet = new Set(componentNodeIds);
-    const layersByNode = assignFlowLayers(componentNodeIds, outgoing, incoming);
-    const nodesByLayer = new Map<number, number[]>();
-    const priorLayerOrder = new Map<number, number>();
-
-    for (const nodeId of componentNodeIds) {
-      const layer = layersByNode.get(nodeId) ?? 0;
-      const layerNodes = nodesByLayer.get(layer) ?? [];
-      layerNodes.push(nodeId);
-      nodesByLayer.set(layer, layerNodes);
-    }
-
-    const sortedLayers = [...nodesByLayer.keys()].sort((a, b) => a - b);
-
-    for (const layer of sortedLayers) {
-      const layerNodes = nodesByLayer.get(layer);
-      if (!layerNodes) continue;
-
-      layerNodes.sort((a, b) => {
-        const aParents = (incoming.get(a) ?? [])
-          .filter((id) => componentSet.has(id))
-          .map((id) => priorLayerOrder.get(id))
-          .filter((index): index is number => index !== undefined);
-        const bParents = (incoming.get(b) ?? [])
-          .filter((id) => componentSet.has(id))
-          .map((id) => priorLayerOrder.get(id))
-          .filter((index): index is number => index !== undefined);
-
-        const aScore = aParents.length > 0
-          ? aParents.reduce((sum, index) => sum + index, 0) / aParents.length
-          : Number.POSITIVE_INFINITY;
-        const bScore = bParents.length > 0
-          ? bParents.reduce((sum, index) => sum + index, 0) / bParents.length
-          : Number.POSITIVE_INFINITY;
-
-        if (aScore === bScore) return a - b;
-        return aScore - bScore;
-      });
-
-      layerNodes.forEach((nodeId, index) => {
-        priorLayerOrder.set(nodeId, index);
-      });
-    }
-
-    let minBreadth = Number.POSITIVE_INFINITY;
-    let maxBreadth = Number.NEGATIVE_INFINITY;
-
-    for (const layer of sortedLayers) {
-      const layerNodes = nodesByLayer.get(layer);
-      if (!layerNodes) continue;
-
-      const centerIndex = (layerNodes.length - 1) / 2;
-      layerNodes.forEach((nodeId, index) => {
-        const breadth = (index - centerIndex) * options.nodeSpacing;
-        const depth = layer * options.layerSpacing;
-        minBreadth = Math.min(minBreadth, breadth);
-        maxBreadth = Math.max(maxBreadth, breadth);
-        positionByNodeId.set(nodeId, { x: breadth, y: depth });
-      });
-    }
-
-    for (const nodeId of componentNodeIds) {
-      const basePoint = positionByNodeId.get(nodeId);
-      if (!basePoint) continue;
-      const normalizedBreadth = basePoint.x - minBreadth + breadthOffset;
-      positionByNodeId.set(nodeId, { x: normalizedBreadth, y: basePoint.y });
-    }
-
-    const componentBreadth = maxBreadth - minBreadth;
-    breadthOffset += componentBreadth + options.componentSpacing;
-  }
-
-  for (const node of graphData.nodes) {
-    const basePoint = positionByNodeId.get(node.id);
-    if (!basePoint) continue;
-    const orientedPoint = orientPoint(basePoint.x, basePoint.y, options.direction);
-    node.x = orientedPoint.x;
-    node.y = orientedPoint.y;
-  }
-
-  centerNodePositions(graphData.nodes);
-}
-
-function getMetricValues(
-  metric: ConcentricMetric,
-  nodeIds: number[],
-  outgoing: Map<number, number[]>,
-  incoming: Map<number, number[]>,
-  rootNodeId?: number
-) {
-  const { degree, inDegree, outDegree } = computeDegreeMaps(nodeIds, outgoing, incoming);
-
-  if (metric === "inDegree") return inDegree;
-  if (metric === "outDegree") return outDegree;
-  if (metric === "bfsDepth") return computeBfsDepths(nodeIds, outgoing, incoming, rootNodeId);
-  return degree;
-}
-
-function applyConcentricLayout(graphData: GraphData, concentricOptions?: ConcentricLayoutOptions) {
-  const options = { ...DEFAULT_CONCENTRIC_OPTIONS, ...concentricOptions };
-  const { nodeIds, outgoing, incoming } = createAdjacency(graphData);
-  const nodeMap = getNodeMap(graphData.nodes);
-  const degreeMap = computeDegreeMaps(nodeIds, outgoing, incoming).degree;
-  const metricValues = getMetricValues(options.metric, nodeIds, outgoing, incoming, options.rootNodeId);
-  const ringByNode = new Map<number, number>();
-  const nodesByRing = new Map<number, number[]>();
-
-  if (options.metric === "bfsDepth") {
-    for (const nodeId of nodeIds) {
-      ringByNode.set(nodeId, metricValues.get(nodeId) ?? 0);
-    }
-  } else {
-    const uniqueValues = [...new Set(nodeIds.map((nodeId) => metricValues.get(nodeId) ?? 0))]
-      .sort((a, b) => b - a);
-    const ringByMetric = new Map<number, number>();
-    uniqueValues.forEach((value, index) => {
-      ringByMetric.set(value, index);
-    });
-    for (const nodeId of nodeIds) {
-      const value = metricValues.get(nodeId) ?? 0;
-      ringByNode.set(nodeId, ringByMetric.get(value) ?? 0);
+  // Handle disconnected nodes: assign them depth 0 as additional roots
+  for (const node of nodes) {
+    if (!depth.has(node.id)) {
+      depth.set(node.id, 0);
+      treeChildren.set(node.id, []);
+      roots.push(node.id);
+      queue.push(node.id);
     }
   }
 
-  for (const nodeId of nodeIds) {
-    const ring = ringByNode.get(nodeId) ?? 0;
-    const ringNodes = nodesByRing.get(ring) ?? [];
-    ringNodes.push(nodeId);
-    nodesByRing.set(ring, ringNodes);
-  }
-
-  const rings = [...nodesByRing.keys()].sort((a, b) => a - b);
-  const baseAngle = -Math.PI / 2;
-
-  for (const ring of rings) {
-    const ringNodeIds = nodesByRing.get(ring);
-    if (!ringNodeIds) continue;
-    const sortedRingNodes = sortNodeIdsByMode(ringNodeIds, options.sortWithinRing, nodeMap, degreeMap);
-    const nodeCount = sortedRingNodes.length;
-
-    let radius = ring === 0 ? 0 : ring * options.ringSpacing;
-    if (nodeCount > 1) {
-      const minRadiusForSpacing = (nodeCount * options.minRingNodeSpacing) / (2 * Math.PI);
-      radius = Math.max(radius || options.ringSpacing, minRadiusForSpacing);
-    }
-
-    sortedRingNodes.forEach((nodeId, index) => {
-      const node = nodeMap.get(nodeId);
-      if (!node) return;
-
-      if (nodeCount === 1 && ring === 0) {
-        node.x = 0;
-        node.y = 0;
-        return;
+  // Compute subtree width for angular allocation
+  const subtreeWidth = new Map<number, number>();
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const nodeId = queue[i];
+    const children = treeChildren.get(nodeId) ?? [];
+    if (children.length === 0) {
+      subtreeWidth.set(nodeId, 1);
+    } else {
+      let width = 0;
+      for (const childId of children) {
+        width += subtreeWidth.get(childId) ?? 1;
       }
-
-      const angle = baseAngle + ((2 * Math.PI * index) / nodeCount);
-      node.x = Math.cos(angle) * radius;
-      node.y = Math.sin(angle) * radius;
-    });
+      subtreeWidth.set(nodeId, width);
+    }
   }
 
-  centerNodePositions(graphData.nodes);
-}
+  // Assign angular positions using subtree widths
+  const nodeAngle = new Map<number, number>();
 
-function applyArcLayout(graphData: GraphData, arcOptions?: ArcLayoutOptions) {
-  const options = { ...DEFAULT_ARC_OPTIONS, ...arcOptions };
-  const { nodeIds, outgoing, incoming } = createAdjacency(graphData);
-  const nodeMap = getNodeMap(graphData.nodes);
-  const degreeMap = computeDegreeMaps(nodeIds, outgoing, incoming).degree;
-  const orderedIds = sortNodeIdsByMode(nodeIds, options.orderBy, nodeMap, degreeMap);
+  function assignChildAngles(parentId: number, startAngle: number, arcSpan: number) {
+    const children = treeChildren.get(parentId) ?? [];
+    if (children.length === 0) return;
 
-  if (options.direction === "RL") orderedIds.reverse();
-
-  const nodeIndex = new Map<number, number>();
-  orderedIds.forEach((nodeId, index) => {
-    nodeIndex.set(nodeId, index);
-    const node = nodeMap.get(nodeId);
-    if (!node) return;
-    node.x = index * options.nodeSpacing;
-    node.y = 0;
-  });
-  const linksByPairCount = new Map<number, Map<number, number>>();
-
-  for (const link of graphData.links) {
-    const sourceIndex = nodeIndex.get(link.source.id);
-    const targetIndex = nodeIndex.get(link.target.id);
-    if (sourceIndex === undefined || targetIndex === undefined) continue;
-
-    const sourceId = link.source.id;
-    const targetId = link.target.id;
-    const minId = Math.min(sourceId, targetId);
-    const maxId = Math.max(sourceId, targetId);
-    let pairMap = linksByPairCount.get(minId);
-    if (!pairMap) {
-      pairMap = new Map<number, number>();
-      linksByPairCount.set(minId, pairMap);
+    const parentWidth = subtreeWidth.get(parentId) ?? 1;
+    let offset = startAngle;
+    for (const childId of children) {
+      const childWidth = subtreeWidth.get(childId) ?? 1;
+      const childArc = (childWidth / parentWidth) * arcSpan;
+      const childCenter = offset + childArc / 2;
+      nodeAngle.set(childId, childCenter);
+      assignChildAngles(childId, offset, childArc);
+      offset += childArc;
     }
-    const duplicateIndex = pairMap.get(maxId) ?? 0;
-    pairMap.set(maxId, duplicateIndex + 1);
+  }
 
-    if (sourceIndex === targetIndex) {
-      link.curve = calculateLinkCurve(duplicateIndex, true);
+  // All roots share the full 2π circle proportionally by subtree width
+  const totalRootWidth = roots.reduce((sum, r) => sum + (subtreeWidth.get(r) ?? 1), 0);
+  let rootAngleOffset = 0;
+  for (const root of roots) {
+    const rootWidth = subtreeWidth.get(root) ?? 1;
+    const rootArc = (rootWidth / totalRootWidth) * 2 * Math.PI;
+    const rootCenter = rootAngleOffset + rootArc / 2;
+    nodeAngle.set(root, rootCenter);
+    assignChildAngles(root, rootAngleOffset, rootArc);
+    rootAngleOffset += rootArc;
+  }
+
+  // Compute dynamic radius for each depth level:
+  // Each ring must be large enough to fit all its nodes with minimum spacing
+  const minGap = options?.radial?.minNodeGap ?? 10;
+
+  // Count nodes per depth and track max node size per depth
+  const nodesPerDepth = new Map<number, number>();
+  const maxSizePerDepth = new Map<number, number>();
+  let maxDepth = 0;
+  for (const node of nodes) {
+    const d = depth.get(node.id) ?? 0;
+    nodesPerDepth.set(d, (nodesPerDepth.get(d) ?? 0) + 1);
+    const currentMax = maxSizePerDepth.get(d) ?? 0;
+    if (node.size > currentMax) maxSizePerDepth.set(d, node.size);
+    if (d > maxDepth) maxDepth = d;
+  }
+
+  // Effective spacing per depth = diameter of largest node + gap
+  function spacingForDepth(d: number): number {
+    const maxSize = maxSizePerDepth.get(d) ?? 9;
+    return maxSize * 2 + minGap;
+  }
+
+  // Minimum level gap accounts for node sizes on adjacent rings
+  function levelGap(d1: number, d2: number): number {
+    const s1 = maxSizePerDepth.get(d1) ?? 9;
+    const s2 = maxSizePerDepth.get(d2) ?? 9;
+    return s1 + s2 + minGap * 2;
+  }
+
+  // Find the minimum angular gap between any two adjacent nodes per depth.
+  // This determines the actual tightest spot on each ring.
+  const anglesPerDepth = new Map<number, number[]>();
+  for (const node of nodes) {
+    const d = depth.get(node.id) ?? 0;
+    const angle = nodeAngle.get(node.id) ?? 0;
+    if (!anglesPerDepth.has(d)) anglesPerDepth.set(d, []);
+    anglesPerDepth.get(d)!.push(angle);
+  }
+
+  const minAngularGap = new Map<number, number>();
+  for (const [d, angles] of anglesPerDepth) {
+    if (angles.length <= 1) {
+      minAngularGap.set(d, 2 * Math.PI); // single node, no constraint
       continue;
     }
-
-    const distance = Math.max(1, Math.abs(sourceIndex - targetIndex));
-    const magnitude = Math.max(0.25, distance * options.curveScale);
-    const baseCurve = calculateLinkCurve(duplicateIndex, false);
-    link.curve = (sourceIndex < targetIndex ? -magnitude : magnitude) + baseCurve;
-  }
-
-  centerNodePositions(graphData.nodes);
-}
-
-function createComponentSubGraph(graphData: GraphData, nodeIds: number[]) {
-  const nodeIdSet = new Set<number>(nodeIds);
-  const nodes = graphData.nodes
-    .filter((node) => nodeIdSet.has(node.id))
-    .map((node) => ({ ...node }));
-  const nodeMap = new Map<number, GraphNode>();
-  for (const node of nodes) nodeMap.set(node.id, node);
-
-  const links = graphData.links
-    .filter((link) => nodeIdSet.has(link.source.id) && nodeIdSet.has(link.target.id))
-    .map((link) => ({
-      ...link,
-      source: nodeMap.get(link.source.id)!,
-      target: nodeMap.get(link.target.id)!,
-    }));
-
-  return { nodes, links } as GraphData;
-}
-
-function applyInnerComponentsLayout(
-  subGraph: GraphData,
-  innerLayout: ComponentsInnerLayout,
-  layoutOptions?: LayoutOptions
-) {
-  if (innerLayout === "flow") {
-    applyFlowLayout(subGraph, layoutOptions?.flow);
-    return;
-  }
-  if (innerLayout === "tree") {
-    applyTreeLayout(subGraph, layoutOptions?.tree);
-    return;
-  }
-  if (innerLayout === "radial-tree") {
-    applyRadialTreeLayout(subGraph, layoutOptions?.radialTree);
-    return;
-  }
-  applyConcentricLayout(subGraph, layoutOptions?.concentric);
-}
-
-function getComponentsInfo(
-  graphData: GraphData,
-  sortBy: ComponentsSortMode
-) {
-  const { nodeIds, outgoing, incoming } = createAdjacency(graphData);
-  const components = collectWeaklyConnectedComponents(nodeIds, outgoing, incoming);
-  const info: ComponentInfo[] = components.map((componentNodeIds) => {
-    const nodeSet = new Set(componentNodeIds);
-    let edgeCount = 0;
-    for (const link of graphData.links) {
-      if (nodeSet.has(link.source.id) && nodeSet.has(link.target.id)) edgeCount += 1;
+    angles.sort((a, b) => a - b);
+    let minGapAngle = 2 * Math.PI - (angles[angles.length - 1] - angles[0]); // wrap-around gap
+    for (let i = 1; i < angles.length; i++) {
+      const gap = angles[i] - angles[i - 1];
+      if (gap < minGapAngle) minGapAngle = gap;
     }
-    return { nodeIds: componentNodeIds, edgeCount };
-  });
+    minAngularGap.set(d, minGapAngle);
+  }
 
-  info.sort((a, b) => {
-    if (sortBy === "edgeCount") {
-      const edgeDiff = b.edgeCount - a.edgeCount;
-      if (edgeDiff !== 0) return edgeDiff;
+  // For a given depth, the radius must be large enough so that the tightest
+  // angular gap still provides sufficient spacing: r * minAngle >= spacing
+  function radiusForAngularSpacing(d: number): number {
+    const spacing = spacingForDepth(d);
+    const gap = minAngularGap.get(d) ?? (2 * Math.PI);
+    if (gap >= 2 * Math.PI) return 0; // single node
+    return spacing / gap;
+  }
+
+  // Calculate radius for each depth level
+  const radiusForDepth = new Map<number, number>();
+
+  if (direction === 'out') {
+    // 'out': roots at center, deeper levels on larger rings
+    const rootCount = nodesPerDepth.get(0) ?? 1;
+    const rootSpacing = spacingForDepth(0);
+    const rootCircleRadius = rootCount <= 1 ? 0 : Math.max(
+      (rootCount * rootSpacing) / (2 * Math.PI),
+      radiusForAngularSpacing(0)
+    );
+    radiusForDepth.set(0, rootCircleRadius);
+    let prevRadius = rootCircleRadius;
+
+    for (let d = 1; d <= maxDepth; d++) {
+      const count = nodesPerDepth.get(d) ?? 0;
+      const spacing = spacingForDepth(d);
+      const radiusEven = (count * spacing) / (2 * Math.PI);
+      const radiusAngular = radiusForAngularSpacing(d);
+      const radiusForGap = prevRadius + levelGap(d - 1, d);
+      const r = Math.max(radiusEven, radiusAngular, radiusForGap);
+      radiusForDepth.set(d, r);
+      prevRadius = r;
     }
-    const sizeDiff = b.nodeIds.length - a.nodeIds.length;
-    if (sizeDiff !== 0) return sizeDiff;
-    return a.nodeIds[0] - b.nodeIds[0];
-  });
+  } else {
+    // 'in': deepest nodes at center, roots on the outermost ring
+    // Build from innermost (maxDepth) outward to depth 0
+    const innerCount = nodesPerDepth.get(maxDepth) ?? 1;
+    const innerSpacing = spacingForDepth(maxDepth);
+    const minInnerRadius = levelGap(maxDepth, maxDepth) * (options?.radial?.innerRadiusMultiplier ?? 2);
+    const radiusEven = (innerCount * innerSpacing) / (2 * Math.PI);
+    const radiusAngular = radiusForAngularSpacing(maxDepth);
+    const innerRadius = Math.max(minInnerRadius, radiusEven, radiusAngular);
+    radiusForDepth.set(maxDepth, innerRadius);
+    let prevRadius = innerRadius;
 
-  return info;
-}
-
-function applyComponentsLayout(
-  graphData: GraphData,
-  componentsOptions?: ComponentsLayoutOptions,
-  layoutOptions?: LayoutOptions
-) {
-  const options = { ...DEFAULT_COMPONENTS_OPTIONS, ...componentsOptions };
-  const components = getComponentsInfo(graphData, options.sortComponentsBy);
-  const maxColumns = Math.max(1, options.maxColumns);
-  const globalNodeMap = getNodeMap(graphData.nodes);
-
-  let currentColumn = 0;
-  let currentX = 0;
-  let currentY = 0;
-  let rowHeight = 0;
-
-  for (const component of components) {
-    if (currentColumn >= maxColumns) {
-      currentColumn = 0;
-      currentX = 0;
-      currentY += rowHeight + options.componentGap;
-      rowHeight = 0;
+    for (let d = maxDepth - 1; d >= 0; d--) {
+      const count = nodesPerDepth.get(d) ?? 0;
+      const spacing = spacingForDepth(d);
+      const radiusEven = (count * spacing) / (2 * Math.PI);
+      const radiusAngular = radiusForAngularSpacing(d);
+      const gap = levelGap(d, d + 1) * (options?.radial?.innerGapMultiplier ?? 1.5);
+      const radiusForGap = prevRadius + gap;
+      const r = Math.max(radiusEven, radiusAngular, radiusForGap);
+      radiusForDepth.set(d, r);
+      prevRadius = r;
     }
-
-    const subGraph = createComponentSubGraph(graphData, component.nodeIds);
-    applyInnerComponentsLayout(subGraph, options.innerLayout, layoutOptions);
-
-    const bounds = getGraphBounds(subGraph.nodes);
-    const width = Math.max(1, bounds.width);
-    const height = Math.max(1, bounds.height);
-
-    const shiftX = currentX - bounds.minX;
-    const shiftY = currentY - bounds.minY;
-
-    for (const node of subGraph.nodes) {
-      const globalNode = globalNodeMap.get(node.id);
-      if (!globalNode) continue;
-      globalNode.x = (node.x ?? 0) + shiftX;
-      globalNode.y = (node.y ?? 0) + shiftY;
-    }
-
-    currentX += width + options.componentGap;
-    rowHeight = Math.max(rowHeight, height);
-    currentColumn += 1;
   }
 
-  centerNodePositions(graphData.nodes);
-}
+  // Assign positions
+  for (const node of nodes) {
+    const d = depth.get(node.id) ?? 0;
+    const angle = nodeAngle.get(node.id) ?? 0;
+    const r = radiusForDepth.get(d) ?? 0;
 
-export function isForceLayout(layoutMode?: LayoutMode): boolean {
-  return (layoutMode ?? DEFAULT_LAYOUT_MODE) === "force";
-}
+    const x = r * Math.cos(angle - Math.PI / 2);
+    const y = r * Math.sin(angle - Math.PI / 2);
 
-export function applyGraphLayout(
-  graphData: GraphData,
-  layoutMode?: LayoutMode,
-  layoutOptions?: LayoutOptions
-) {
-  const mode = layoutMode ?? DEFAULT_LAYOUT_MODE;
-
-  if (mode !== "arc") {
-    resetDefaultLinkCurves(graphData.links);
+    node.x = x;
+    node.y = y;
+    node.fx = x;
+    node.fy = y;
+    node.vx = 0;
+    node.vy = 0;
   }
 
-  if (mode === "force") {
-    unpinAllNodes(graphData.nodes);
-    return graphData;
-  }
-
-  if (mode === "tree") {
-    applyTreeLayout(graphData, layoutOptions?.tree);
-  } else if (mode === "flow") {
-    applyFlowLayout(graphData, layoutOptions?.flow);
-  } else if (mode === "radial-tree") {
-    applyRadialTreeLayout(graphData, layoutOptions?.radialTree);
-  } else if (mode === "concentric") {
-    applyConcentricLayout(graphData, layoutOptions?.concentric);
-  } else if (mode === "components") {
-    applyComponentsLayout(graphData, layoutOptions?.components, layoutOptions);
-  } else if (mode === "arc") {
-    applyArcLayout(graphData, layoutOptions?.arc);
-  }
-
-  pinAllNodes(graphData.nodes);
-  return graphData;
+  return true;
 }
