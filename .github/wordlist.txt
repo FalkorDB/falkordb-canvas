@@ -19,7 +19,9 @@ subgraph
 GitHub
 github
 config
+configs
 CHANGELOG
+UX
 md
 Customizable
 customizable

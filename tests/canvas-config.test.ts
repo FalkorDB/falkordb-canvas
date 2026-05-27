@@ -73,7 +73,6 @@ describe("setConfig deep merge", () => {
 
     // Access internal config through a known effect: set data and check rendering uses new value
     canvas.setData(SIMPLE_DATA);
-    const instance = getLastInstance();
     const data = (canvas as any).getGraphData();
     expect(data.nodes.length).toBe(2);
   });

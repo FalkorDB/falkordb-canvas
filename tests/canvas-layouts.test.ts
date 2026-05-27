@@ -2,7 +2,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   forceGraphMockState,
   resetForceGraphMockState,
-  MockForceGraphInstance,
 } from "./mocks/force-graph";
 
 vi.mock("force-graph", async () => import("./mocks/force-graph"));

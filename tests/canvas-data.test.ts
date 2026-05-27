@@ -1,6 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  forceGraphMockState,
   resetForceGraphMockState,
 } from "./mocks/force-graph";
 
@@ -38,10 +37,6 @@ function createCanvas(): CanvasElement {
   const canvas = document.createElement("falkordb-canvas") as CanvasElement;
   document.body.appendChild(canvas);
   return canvas;
-}
-
-function getLastInstance() {
-  return forceGraphMockState.lastInstance!;
 }
 
 describe("setData and getData", () => {

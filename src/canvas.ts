@@ -446,7 +446,6 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (layoutMode === 'tree' || layoutMode === 'flow') {
       // Deterministic tree layout — compute positions directly, no force simulation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.graph.dagMode(null as any);
       unpinAllNodes(this.data.nodes);
       computeTreePositions(this.data, layoutMode, layoutOptions);
@@ -460,7 +459,6 @@ class FalkorDBCanvas extends HTMLElement {
       this.updateCanvasSimulationAttribute(false);
     } else if (layoutMode === 'radial') {
       // Deterministic radial layout — each level forms a perfect circle
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.graph.dagMode(null as any);
       unpinAllNodes(this.data.nodes);
       computeRadialPositions(this.data, layoutOptions);
@@ -474,7 +472,6 @@ class FalkorDBCanvas extends HTMLElement {
       this.updateCanvasSimulationAttribute(false);
     } else {
       // Force layout — restore all forces, let simulation run
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.graph.dagMode(null as any);
       this.graph.d3Force('link', d3.forceLink());
       this.graph.d3Force('center', d3.forceCenter(0, 0));
@@ -524,7 +521,6 @@ class FalkorDBCanvas extends HTMLElement {
     const layoutMode = this.config.layoutMode;
     const layoutOptions = this.config.layoutOptions;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.graph.dagMode(null as any);
 
     if (layoutMode === 'tree' || layoutMode === 'flow') {
@@ -640,7 +636,6 @@ class FalkorDBCanvas extends HTMLElement {
           }
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.graph.dagMode(null as any);
         this.graph.d3Force('link', d3.forceLink());
         this.setupForces();
@@ -806,7 +801,6 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Initialize force-graph
     // Cast to any for the factory call pattern, result is properly typed as ForceGraphInstance
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.graph = (ForceGraph as any)()(this.container)
       .width(this.config.width || 800)
       .height(this.config.height || 600)
