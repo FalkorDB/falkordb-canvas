@@ -67,6 +67,8 @@ export interface LinkStyleConfig {
   parallelEdgeCurveMultiplier?: number;
   /** Label background padding (world units). Default: 0.3 */
   labelBackgroundPadding?: number;
+  /** Gap between edge tip and visible node border (in px). Default: 2 */
+  edgeGap?: number;
 }
 
 /** Force simulation parameters */
@@ -107,12 +109,12 @@ export interface InteractionConfig {
 
 /**
  * Configuration for large-graph rendering optimisations.
- * All options are optional; the feature is disabled by default (`enabled: false`).
+ * All options are optional; the feature is enabled by default (`enabled: true`).
  */
 export interface LargeGraphConfig {
   /**
-   * Master switch. When `false` (default) the component behaves exactly as before –
-   * no culling is applied and no draw calls are skipped.
+   * Master switch. When `true` (default) viewport culling and low-zoom
+   * optimisations are active.
    */
   enabled?: boolean;
 
@@ -125,11 +127,11 @@ export interface LargeGraphConfig {
   viewportPadding?: number;
 
   /**
-   * Zoom-out ratio at which expensive per-element details are skipped.
-   * Represents how far zoomed out from default before hiding labels/arrows.
-   * `1` = default zoom (always hide), `2` = hide when zoomed out to see 2x more,
-   * `1.5` = hide when zoomed out 50% from default.
-   * Default: `2`.
+   * Zoom level below which expensive per-element details are skipped.
+   * When the current zoom (k) drops to or below this value, labels and arrows
+   * are hidden to improve rendering performance.
+   * `0.5` = skip at half zoom, `0.3` = skip only when very zoomed out.
+   * Default: `1`.
    */
   lowZoomThreshold?: number;
 
@@ -182,8 +184,6 @@ export interface ForceGraphConfig {
   layoutOptions?: LayoutOptions;
 
   // ─── Style Sub-Configs ───────────────────────────────────────────────────────
-  /** Gap between edge tip and visible node border (in px). Default: 2 */
-  edgeGap?: number;
   /** Node visual style configuration */
   nodeStyle?: NodeStyleConfig;
   /** Link/edge visual style configuration */
@@ -219,19 +219,19 @@ export interface ForceGraphConfig {
   eventHandlers?: EventHandlers;
 }
 
-export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix' | 'layoutMode' | 'layoutOptions' | 'edgeGap' | 'pinOnDragEnd' | 'nodeStyle' | 'linkStyle' | 'simulation' | 'interaction'> {
+export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix' | 'layoutMode' | 'layoutOptions' | 'pinOnDragEnd' | 'nodeStyle' | 'linkStyle' | 'simulation' | 'interaction' | 'largeGraph'> {
   backgroundColor: string;
   foregroundColor: string;
   captionsKeys: [string, boolean][];
   showPropertyKeyPrefix: boolean;
   layoutMode: LayoutMode;
   layoutOptions: LayoutOptions;
-  edgeGap: number;
   pinOnDragEnd: boolean;
   nodeStyle: Required<NodeStyleConfig>;
   linkStyle: Required<LinkStyleConfig>;
   simulation: Required<SimulationConfig>;
   interaction: Required<InteractionConfig>;
+  largeGraph: Required<LargeGraphConfig>;
 }
 
 export type LayoutMode = 'force' | 'tree' | 'flow' | 'radial';

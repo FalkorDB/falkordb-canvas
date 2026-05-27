@@ -7,44 +7,7 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
-
-type CanvasTestElement = HTMLElement & {
-  setConfig: (config: Record<string, unknown>) => void;
-  setData: (data: { nodes: NodeInput[]; links: LinkInput[] }) => void;
-  setWidth: (w: number) => void;
-  setHeight: (h: number) => void;
-  getGraphData: () => { nodes: RuntimeNode[]; links: RuntimeLink[] };
-};
-
-type NodeInput = {
-  id: number;
-  labels: string[];
-  visible: boolean;
-  color: string;
-  data: Record<string, unknown>;
-};
-
-type LinkInput = {
-  id: number;
-  relationship: string;
-  source: number;
-  target: number;
-  visible: boolean;
-  color: string;
-  data: Record<string, unknown>;
-};
-
-type RuntimeNode = NodeInput & {
-  x?: number;
-  y?: number;
-  size: number;
-};
-
-type RuntimeLink = Omit<LinkInput, 'source' | 'target'> & {
-  source: RuntimeNode;
-  target: RuntimeNode;
-  curve?: number;
-};
+import type { CanvasTestElement, Data, GraphNode } from "./test-types";
 
 function createCtxSpy() {
   return {
@@ -140,7 +103,7 @@ function setupInstanceDimensions(instance: ReturnType<typeof getLastInstance>, w
   };
 }
 
-const SIMPLE_DATA = {
+const SIMPLE_DATA: Data = {
   nodes: [
     { id: 1, labels: ["A"], visible: true, color: "#f00", data: { name: "n1" } },
     { id: 2, labels: ["B"], visible: true, color: "#0f0", data: { name: "n2" } },
@@ -159,9 +122,9 @@ describe("viewport culling", () => {
     resetForceGraphMockState();
   });
 
-  it("culling is disabled by default — offscreen nodes are still drawn", () => {
+  it("culling is disabled when largeGraph.enabled is false — offscreen nodes are still drawn", () => {
     const canvas = createCanvas();
-    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setConfig({ width: 800, height: 600, largeGraph: { enabled: false } });
     canvas.setData(SIMPLE_DATA);
 
     const instance = getLastInstance();
@@ -173,7 +136,7 @@ describe("viewport culling", () => {
     data.nodes[0].y = 0;
     data.nodes[0].size = 6;
 
-    // Trigger zoom — without largeGraph enabled, culling should not activate
+    // Trigger zoom — with largeGraph disabled, culling should not activate
     triggerZoom({ k: 1, x: 0, y: 0 });
 
     // Invoke the nodeCanvasObject callback for the offscreen node
@@ -191,7 +154,6 @@ describe("viewport culling", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 0 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -229,7 +191,7 @@ describe("viewport culling", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 100 },
+      largeGraph: { viewportPadding: 100 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -258,7 +220,6 @@ describe("viewport culling", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 0 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -291,7 +252,7 @@ describe("viewport culling", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 50 },
+      largeGraph: { viewportPadding: 50 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -319,7 +280,6 @@ describe("viewport culling", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 0 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -364,7 +324,6 @@ describe("viewport culling", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 0 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -393,7 +352,6 @@ describe("viewport culling", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -419,7 +377,6 @@ describe("viewport culling", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 0 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -429,8 +386,8 @@ describe("viewport culling", () => {
     const data = canvas.getGraphData();
     // Position link endpoints far offscreen
     const link = data.links[0];
-    link.source = { ...data.nodes[0], x: -5000, y: -5000, size: 6 } as RuntimeNode;
-    link.target = { ...data.nodes[1], x: -4000, y: -4000, size: 6 } as RuntimeNode;
+    link.source = { ...data.nodes[0], x: -5000, y: -5000, size: 6 } as GraphNode;
+    link.target = { ...data.nodes[1], x: -4000, y: -4000, size: 6 } as GraphNode;
 
     triggerZoom({ k: 1, x: 0, y: 0 });
 
@@ -456,9 +413,7 @@ describe("low-zoom draw skipping", () => {
       width: 800,
       height: 600,
       largeGraph: {
-        enabled: true,
-        lowZoomThreshold: 2,
-        skipLabelsAtLowZoom: true,
+        lowZoomThreshold: 0.5,
       },
     });
     canvas.setData(SIMPLE_DATA);
@@ -471,7 +426,7 @@ describe("low-zoom draw skipping", () => {
     data.nodes[0].y = 0;
     data.nodes[0].size = 6;
 
-    // Zoom out beyond threshold (k=0.3, ratio=3.3 > 2) — labels should be skipped
+    // Zoom out beyond threshold (k=0.3 < 0.5) — labels should be skipped
     triggerZoom({ k: 0.3, x: 0, y: 0 });
     const ctxLow = createCtxSpy();
     instance.callbacks.nodeCanvasObject!(data.nodes[0], ctxLow);
@@ -480,7 +435,7 @@ describe("low-zoom draw skipping", () => {
     // But label text is skipped
     expect(ctxLow.fillText).not.toHaveBeenCalled();
 
-    // Zoom above threshold (k=0.8, ratio=1.25 < 2) — labels should be drawn
+    // Zoom above threshold (k=0.8 > 0.5) — labels should be drawn
     triggerZoom({ k: 0.8, x: 0, y: 0 });
     const ctxHigh = createCtxSpy();
     instance.callbacks.nodeCanvasObject!(data.nodes[0], ctxHigh);
@@ -494,9 +449,7 @@ describe("low-zoom draw skipping", () => {
       width: 800,
       height: 600,
       largeGraph: {
-        enabled: true,
-        lowZoomThreshold: 1.25,
-        skipLabelsAtLowZoom: true,
+        lowZoomThreshold: 0.8,
       },
     });
     canvas.setData(SIMPLE_DATA);
@@ -509,14 +462,14 @@ describe("low-zoom draw skipping", () => {
     data.nodes[0].y = 0;
     data.nodes[0].size = 6;
 
-    // At k=0.7 — ratio=1.43, above custom threshold of 1.25 — labels skipped
+    // At k=0.7 — below custom threshold of 0.8 — labels skipped
     triggerZoom({ k: 0.7, x: 0, y: 0 });
     const ctxLow = createCtxSpy();
     instance.callbacks.nodeCanvasObject!(data.nodes[0], ctxLow);
     expect(ctxLow.arc).toHaveBeenCalled();
     expect(ctxLow.fillText).not.toHaveBeenCalled();
 
-    // At k=0.9 — ratio=1.11, below threshold — labels drawn
+    // At k=0.9 — above threshold — labels drawn
     triggerZoom({ k: 0.9, x: 0, y: 0 });
     const ctxHigh = createCtxSpy();
     instance.callbacks.nodeCanvasObject!(data.nodes[0], ctxHigh);
@@ -530,9 +483,7 @@ describe("low-zoom draw skipping", () => {
       width: 800,
       height: 600,
       largeGraph: {
-        enabled: true,
-        lowZoomThreshold: 2,
-        skipArrowsAtLowZoom: true,
+        lowZoomThreshold: 0.5,
       },
     });
     canvas.setData(SIMPLE_DATA);
@@ -543,18 +494,18 @@ describe("low-zoom draw skipping", () => {
     const data = canvas.getGraphData();
     // Position a link with enough separation for an arrowhead to render
     const link = data.links[0];
-    link.source = { ...data.nodes[0], x: -100, y: 0, size: 6 } as RuntimeNode;
-    link.target = { ...data.nodes[1], x: 100, y: 0, size: 6 } as RuntimeNode;
+    link.source = { ...data.nodes[0], x: -100, y: 0, size: 6 } as GraphNode;
+    link.target = { ...data.nodes[1], x: 100, y: 0, size: 6 } as GraphNode;
     link.curve = 0;
 
-    // Above threshold (k=0.8, ratio=1.25 < 2) — arrow should be drawn
+    // Above threshold (k=0.8 > 0.5) — arrow should be drawn
     triggerZoom({ k: 0.8, x: 0, y: 0 });
     const ctxHigh = createCtxSpy();
     const linkPainter = instance.callbacks.linkCanvasObject!;
     linkPainter(link, ctxHigh, 1);
     expect(ctxHigh.fill).toHaveBeenCalled();
 
-    // Below threshold (k=0.3, ratio=3.3 > 2) — arrow should be skipped
+    // Below threshold (k=0.3 < 0.5) — arrow should be skipped
     triggerZoom({ k: 0.3, x: 0, y: 0 });
     const ctxLow = createCtxSpy();
     linkPainter(link, ctxLow, 1);
@@ -569,9 +520,7 @@ describe("low-zoom draw skipping", () => {
       width: 800,
       height: 600,
       largeGraph: {
-        enabled: true,
-        lowZoomThreshold: 2,
-        skipLinkLabelsAtLowZoom: true,
+        lowZoomThreshold: 0.5,
       },
     });
     canvas.setData(SIMPLE_DATA);
@@ -581,18 +530,18 @@ describe("low-zoom draw skipping", () => {
 
     const data = canvas.getGraphData();
     const link = data.links[0];
-    link.source = { ...data.nodes[0], x: -100, y: 0, size: 6 } as RuntimeNode;
-    link.target = { ...data.nodes[1], x: 100, y: 0, size: 6 } as RuntimeNode;
+    link.source = { ...data.nodes[0], x: -100, y: 0, size: 6 } as GraphNode;
+    link.target = { ...data.nodes[1], x: 100, y: 0, size: 6 } as GraphNode;
     link.curve = 0;
 
-    // Above threshold (k=0.8, ratio=1.25 < 2) — link label should be drawn
+    // Above threshold (k=0.8 > 0.5) — link label should be drawn
     triggerZoom({ k: 0.8, x: 0, y: 0 });
     const ctxHigh = createCtxSpy();
     const linkPainter = instance.callbacks.linkCanvasObject!;
     linkPainter(link, ctxHigh, 1);
     expect(ctxHigh.fillText).toHaveBeenCalled();
 
-    // Below threshold (k=0.3, ratio=3.3 > 2) — link label text should not be drawn
+    // Below threshold (k=0.3 < 0.5) — link label text should not be drawn
     triggerZoom({ k: 0.3, x: 0, y: 0 });
     const ctxLow = createCtxSpy();
     linkPainter(link, ctxLow, 1);
@@ -608,7 +557,7 @@ describe("getCullingStats", () => {
 
   it("returns disabled with no bounds when largeGraph is not enabled", () => {
     const canvas = createCanvas() as CanvasTestElement & { getCullingStats: () => unknown };
-    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setConfig({ width: 800, height: 600, largeGraph: { enabled: false } });
     canvas.setData(SIMPLE_DATA);
 
     const stats = canvas.getCullingStats() as any;
@@ -625,7 +574,6 @@ describe("getCullingStats", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 0 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -661,7 +609,6 @@ describe("getCullingStats", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 0 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -696,7 +643,6 @@ describe("getCullingStats", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, viewportPadding: 0 },
     });
     canvas.setData(SIMPLE_DATA);
 

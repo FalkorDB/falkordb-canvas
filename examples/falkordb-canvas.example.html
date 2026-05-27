@@ -4,479 +4,969 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FalkorDB Canvas Web Component Example</title>
+  <title>FalkorDB Canvas — Interactive Example</title>
 
   <style>
+    /* ===== Reset & Base ===== */
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 20px;
-      font-family: Arial, sans-serif;
-      background-color: #f0f0f0;
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    h1 {
-      color: #333;
-      margin-bottom: 20px;
-    }
-
-    .graph-container {
-      height: 600px;
-      width: 100%;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      font-size: 13px;
+      height: 100vh;
       overflow: hidden;
     }
 
-    .controls {
-      margin-bottom: 20px;
-      padding: 15px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    /* ===== Layout ===== */
+    .app-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
     }
 
-    .config-panels {
-      margin-bottom: 20px;
+    .app-header {
+      grid-column: 1 / -1;
+      padding: 10px 20px;
+      background: #1a1a2e;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .app-header h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+
+    .app-header .subtitle {
+      font-size: 11px;
+      opacity: 0.6;
+    }
+
+    .sidebar {
+      grid-column: 1;
+      grid-row: 2;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 12px;
+      background: #fff;
+      border-right: 1px solid #e2e8f0;
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
 
-    details {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
-    }
-
-    summary {
-      padding: 12px 15px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 14px;
-      color: #333;
-      user-select: none;
-      background: #fafafa;
-      border-bottom: 1px solid #eee;
-    }
-
-    summary:hover {
-      background: #f0f0f0;
-    }
-
-    .panel-content {
-      padding: 15px;
+    .main-area {
+      grid-column: 2;
+      grid-row: 2;
       display: flex;
-      gap: 10px;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .toolbar {
+      padding: 8px 12px;
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      gap: 6px;
       flex-wrap: wrap;
       align-items: center;
     }
 
-    .config-field {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+    .graph-container {
+      flex: 1;
+      position: relative;
+      background: white;
+      overflow: hidden;
+      min-height: 0;
     }
 
-    .config-field label {
+    .graph-container falkordb-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .status-bar {
+      grid-column: 1 / -1;
+      padding: 6px 16px;
+      background: #fff;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    /* ===== Sidebar Sections ===== */
+    .sidebar-section {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .sidebar-section summary {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #475569;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sidebar-section summary::before {
+      content: '▸';
+      font-size: 10px;
+      transition: transform 0.15s;
+    }
+
+    .sidebar-section[open] > summary::before {
+      transform: rotate(90deg);
+    }
+
+    .sidebar-section summary:hover {
+      background: #f1f5f9;
+    }
+
+    .section-body {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ===== Form Elements ===== */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .field label {
       font-size: 11px;
-      color: #666;
+      color: #64748b;
       font-weight: 500;
     }
 
-    .config-field input,
-    .config-field select {
-      padding: 4px 8px;
-      border: 1px solid #ccc;
+    .field input,
+    .field select {
+      padding: 5px 8px;
+      border: 1px solid #e2e8f0;
       border-radius: 4px;
-      font-size: 13px;
+      font-size: 12px;
+      background: #fff;
+      transition: border-color 0.15s;
     }
 
-    .config-field input[type="number"] {
-      width: 70px;
+    .field input:focus,
+    .field select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
     }
 
-    .config-field input[type="color"] {
-      width: 40px;
-      height: 28px;
-      padding: 2px;
+    .field input[type="number"] { width: 70px; }
+    .field input[type="color"] { width: 36px; height: 28px; padding: 2px; cursor: pointer; }
+    .field input[type="checkbox"] { width: auto; }
+
+    .field-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: flex-end;
     }
 
-    .config-field input[type="text"] {
-      width: 120px;
+    .field-inline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
+    .field-inline label {
+      font-size: 12px;
+      color: #334155;
+      cursor: pointer;
+    }
+
+    /* ===== Buttons ===== */
     button {
-      margin-right: 10px;
-      padding: 8px 16px;
-      background: #4CAF50;
-      color: white;
+      padding: 5px 10px;
       border: none;
       border-radius: 4px;
       cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    button:active { transform: scale(0.97); }
+
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+
+    .btn-success { background: #10b981; color: white; }
+    .btn-success:hover { background: #059669; }
+
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-secondary:hover { background: #cbd5e1; }
+
+    .btn-warning { background: #f59e0b; color: white; }
+    .btn-warning:hover { background: #d97706; }
+
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+
+    .btn-sm { padding: 4px 8px; font-size: 11px; }
+
+    /* ===== Toolbar ===== */
+    .toolbar .separator {
+      width: 1px;
+      height: 22px;
+      background: #e2e8f0;
+      margin: 0 2px;
+    }
+
+    .toolbar .group-label {
+      font-size: 10px;
+      color: #94a3b8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ===== API Reference ===== */
+    .api-ref {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      width: 500px;
+      max-height: 60vh;
+      background: white;
+      border-top: 1px solid #e2e8f0;
+      border-left: 1px solid #e2e8f0;
+      border-top-left-radius: 8px;
+      box-shadow: -4px -4px 12px rgba(0, 0, 0, 0.05);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+    }
+
+    .api-ref.open { display: flex; }
+
+    .api-ref-header {
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      border-top-left-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
       font-size: 13px;
     }
 
-    button:hover {
-      background: #45a049;
+    .api-ref-body {
+      padding: 14px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.5;
     }
 
-    button.secondary {
-      background: #2196F3;
+    .api-ref-body h4 {
+      margin: 16px 0 6px;
+      font-size: 12px;
+      color: #334155;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 4px;
     }
 
-    button.secondary:hover {
-      background: #1976D2;
+    .api-ref-body h4:first-child { margin-top: 0; }
+
+    .api-ref-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+      font-size: 11px;
     }
 
-    .info {
-      margin-top: 20px;
-      padding: 15px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    .api-ref-body th {
+      text-align: left;
+      padding: 4px 6px;
+      background: #f8fafc;
+      font-weight: 600;
+      color: #475569;
     }
 
-    #selected-info {
-      color: #666;
+    .api-ref-body td {
+      padding: 3px 6px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    .api-ref-body code {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 10.5px;
+      background: #f1f5f9;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .api-ref-body pre {
+      background: #f8fafc;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 10.5px;
+      margin: 0;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    /* ===== Debug Panel ===== */
+    .debug-panel {
+      padding: 6px 10px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #475569;
+      display: none;
+    }
+
+    .debug-panel.visible { display: block; }
+
+    /* ===== Scrollbar ===== */
+    .sidebar::-webkit-scrollbar,
+    .api-ref-body::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb,
+    .api-ref-body::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
     }
   </style>
 </head>
 
 <body>
-  <div class="container">
-    <h1>FalkorDB Canvas Web Component</h1>
+  <div class="app-layout">
 
-    <!-- Query & Actions -->
-    <div class="controls">
-      <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          <label for="api-key" style="font-size: 12px; color: #666;">OpenAI API Key</label>
-          <input id="api-key" type="password" placeholder="sk-..." style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 200px;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          <label for="domain-input" style="font-size: 12px; color: #666;">Domain</label>
-          <input id="domain-input" type="text" placeholder="https://browser.falkordb.com" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 250px;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          <label for="graph-name" style="font-size: 12px; color: #666;">Graph Name</label>
-          <input id="graph-name" type="text" placeholder="e.g. movies" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 150px;">
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px;">
-          <label for="query-input" style="font-size: 12px; color: #666;">Query</label>
-          <input id="query-input" type="text" placeholder="MATCH (n)-[e]->(m) RETURN n, e, m LIMIT 25" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-        </div>
-        <button onclick="sendQuery()">Send</button>
+    <!-- ===== Header ===== -->
+    <header class="app-header">
+      <div>
+        <h1>FalkorDB Canvas</h1>
+        <span class="subtitle">Interactive Graph Visualization Component</span>
       </div>
-      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-        <button onclick="addNode()">Add Node</button>
-        <button onclick="addLink()">Add Link</button>
-        <button onclick="generateLargeGraph()">Generate 100 Nodes</button>
-        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; color: #333;">
-          <input type="checkbox" id="animation-toggle" onchange="toggleAnimation()">
-          Animation
-        </label>
-        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; color: #333;">
-          <input type="checkbox" id="pin-toggle" onchange="togglePin()">
-          Pin
-        </label>
-        <label style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #333;">
-          Layout:
-          <select id="layout-select" onchange="changeLayout(this.value)" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;">
-            <option value="force">Force</option>
-            <option value="tree">Tree</option>
-            <option value="flow">Flow</option>
-            <option value="radial">Radial</option>
-          </select>
-        </label>
-        <label style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #333;">
-          Direction:
-          <select id="direction-select" onchange="changeDirection(this.value)" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;">
-            <option value="td">Top-Down</option>
-            <option value="bu">Bottom-Up</option>
-          </select>
-        </label>
-        <label style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #333;">
-          Level Dist:
-          <input id="level-distance" type="number" value="80" min="30" max="500" step="10" oninput="changeSpacing()" style="width: 60px; padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
-        </label>
-        <label style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #333;">
-          Node Spacing:
-          <input id="node-spacing" type="number" value="60" min="20" max="300" step="10" oninput="changeSpacing()" style="width: 60px; padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
-        </label>
-        <label style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #333;">
-          Edge Gap:
-          <input id="edge-gap" type="number" value="2" min="0" max="15" step="1" oninput="changeEdgeGap()" style="width: 60px; padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
-        </label>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-secondary btn-sm" onclick="toggleApiRef()">API Reference</button>
       </div>
-    </div>
+    </header>
 
-    <!-- Config Sub-Panels -->
-    <div class="config-panels">
+    <!-- ===== Sidebar ===== -->
+    <aside class="sidebar">
+
+      <!-- Query -->
+      <details class="sidebar-section" open>
+        <summary>Query</summary>
+        <div class="section-body">
+          <div class="field">
+            <label for="api-key">API Key</label>
+            <input id="api-key" type="password" placeholder="sk-...">
+          </div>
+          <div class="field">
+            <label for="domain-input">Domain</label>
+            <input id="domain-input" type="text" placeholder="https://browser.falkordb.com">
+          </div>
+          <div class="field-row">
+            <div class="field" style="flex: 1;">
+              <label for="graph-name">Graph</label>
+              <input id="graph-name" type="text" placeholder="movies" style="width: 100%;">
+            </div>
+          </div>
+          <div class="field">
+            <label for="query-input">Cypher Query</label>
+            <input id="query-input" type="text" placeholder="MATCH (n)-[e]->(m) RETURN n, e, m LIMIT 25">
+          </div>
+          <button class="btn-primary" onclick="sendQuery()" style="align-self: flex-start;">Run Query</button>
+        </div>
+      </details>
+
+      <!-- Data Controls -->
+      <details class="sidebar-section" open>
+        <summary>Data</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <button class="btn-success btn-sm" onclick="addNode()">+ Node</button>
+            <button class="btn-success btn-sm" onclick="addLink()">+ Link</button>
+            <button class="btn-secondary btn-sm" onclick="generateLargeGraph()">100 Nodes</button>
+          </div>
+          <div class="field-row">
+            <button class="btn-danger btn-sm" onclick="clearGraph()">Clear</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Layout -->
+      <details class="sidebar-section" open>
+        <summary>Layout</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label for="layout-select">Mode</label>
+              <select id="layout-select" onchange="changeLayout(this.value)">
+                <option value="force">Force</option>
+                <option value="tree">Tree</option>
+                <option value="flow">Flow</option>
+                <option value="radial">Radial</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="direction-select">Direction</label>
+              <select id="direction-select" onchange="changeDirection(this.value)">
+                <option value="td">Top-Down</option>
+                <option value="bu">Bottom-Up</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="level-distance">Level Dist</label>
+              <input id="level-distance" type="number" value="80" min="30" max="500" step="10" oninput="changeSpacing()">
+            </div>
+            <div class="field">
+              <label for="node-spacing">Node Space</label>
+              <input id="node-spacing" type="number" value="60" min="20" max="300" step="10" oninput="changeSpacing()">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-inline">
+              <input type="checkbox" id="animation-toggle" onchange="toggleAnimation()">
+              <label for="animation-toggle">Animation</label>
+            </div>
+            <div class="field-inline">
+              <input type="checkbox" id="pin-toggle" onchange="togglePin()">
+              <label for="pin-toggle">Pin on Drag</label>
+            </div>
+          </div>
+        </div>
+      </details>
 
       <!-- Node Style -->
-      <details>
+      <details class="sidebar-section">
         <summary>Node Style</summary>
-        <div class="panel-content">
-          <div class="config-field">
-            <label>Font Family</label>
-            <input type="text" id="ns-fontFamily" value="SofiaSans">
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Font</label>
+              <input type="text" id="ns-fontFamily" value="SofiaSans" style="width: 90px;">
+            </div>
+            <div class="field">
+              <label>Size</label>
+              <input type="number" id="ns-fontSize" value="2" min="0.5" max="8" step="0.5">
+            </div>
+            <div class="field">
+              <label>Fill Ratio</label>
+              <input type="number" id="ns-textFillRatio" value="0.85" min="0.1" max="1" step="0.05">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Font Weight (Unselected)</label>
-            <input type="number" id="ns-fontWeightUnselected" value="400" min="100" max="900" step="100">
+          <div class="field-row">
+            <div class="field">
+              <label>Weight (normal)</label>
+              <input type="number" id="ns-fontWeightUnselected" value="400" min="100" max="900" step="100">
+            </div>
+            <div class="field">
+              <label>Weight (selected)</label>
+              <input type="number" id="ns-fontWeightSelected" value="700" min="100" max="900" step="100">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Font Weight (Selected)</label>
-            <input type="number" id="ns-fontWeightSelected" value="700" min="100" max="900" step="100">
+          <div class="field-row">
+            <div class="field">
+              <label>Stroke (normal)</label>
+              <input type="number" id="ns-strokeWidthUnselected" value="0.5" min="0" max="5" step="0.25">
+            </div>
+            <div class="field">
+              <label>Stroke (selected)</label>
+              <input type="number" id="ns-strokeWidthSelected" value="1" min="0" max="5" step="0.5">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Font Size</label>
-            <input type="number" id="ns-fontSize" value="2" min="0.5" max="8" step="0.5">
+          <div class="field-row">
+            <div class="field">
+              <label>Glow Color</label>
+              <input type="color" id="ns-glowColor" value="#3b82f6">
+            </div>
+            <div class="field">
+              <label>Glow Spread</label>
+              <input type="number" id="ns-glowSpread" value="12" min="0" max="40" step="2">
+            </div>
+            <div class="field">
+              <label>Glow Steps</label>
+              <input type="number" id="ns-glowSteps" value="16" min="1" max="32" step="1">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Text Fill Ratio</label>
-            <input type="number" id="ns-textFillRatio" value="0.85" min="0.1" max="1" step="0.05">
+          <div class="field-row">
+            <div class="field">
+              <label>Glow Duration</label>
+              <input type="number" id="ns-glowDuration" value="10000" min="0" max="30000" step="1000">
+            </div>
+            <div class="field">
+              <label>Glow Opacity</label>
+              <input type="number" id="ns-glowMaxOpacity" value="0.6" min="0" max="1" step="0.1">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Stroke (Selected)</label>
-            <input type="number" id="ns-strokeWidthSelected" value="1" min="0" max="5" step="0.5">
-          </div>
-          <div class="config-field">
-            <label>Stroke (Unselected)</label>
-            <input type="number" id="ns-strokeWidthUnselected" value="0.5" min="0" max="5" step="0.25">
-          </div>
-          <div class="config-field">
-            <label>Glow Duration (ms)</label>
-            <input type="number" id="ns-glowDuration" value="10000" min="0" max="30000" step="1000">
-          </div>
-          <div class="config-field">
-            <label>Glow Spread</label>
-            <input type="number" id="ns-glowSpread" value="12" min="0" max="40" step="2">
-          </div>
-          <div class="config-field">
-            <label>Glow Steps</label>
-            <input type="number" id="ns-glowSteps" value="16" min="1" max="32" step="1">
-          </div>
-          <div class="config-field">
-            <label>Glow Color</label>
-            <input type="color" id="ns-glowColor" value="#3b82f6">
-          </div>
-          <div class="config-field">
-            <label>Glow Max Opacity</label>
-            <input type="number" id="ns-glowMaxOpacity" value="0.6" min="0" max="1" step="0.1">
-          </div>
-          <button class="secondary" onclick="applyNodeStyle()">Apply</button>
+          <button class="btn-primary btn-sm" onclick="applyNodeStyle()">Apply Node Style</button>
         </div>
       </details>
 
       <!-- Link Style -->
-      <details>
+      <details class="sidebar-section">
         <summary>Link Style</summary>
-        <div class="panel-content">
-          <div class="config-field">
-            <label>Font Family</label>
-            <input type="text" id="ls-fontFamily" value="SofiaSans">
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Font</label>
+              <input type="text" id="ls-fontFamily" value="SofiaSans" style="width: 90px;">
+            </div>
+            <div class="field">
+              <label>Size</label>
+              <input type="number" id="ls-fontSize" value="2" min="0.5" max="8" step="0.5">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Font Size</label>
-            <input type="number" id="ls-fontSize" value="2" min="0.5" max="8" step="0.5">
+          <div class="field-row">
+            <div class="field">
+              <label>Weight (normal)</label>
+              <input type="number" id="ls-fontWeightUnselected" value="400" min="100" max="900" step="100">
+            </div>
+            <div class="field">
+              <label>Weight (selected)</label>
+              <input type="number" id="ls-fontWeightSelected" value="700" min="100" max="900" step="100">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Weight (Unselected)</label>
-            <input type="number" id="ls-fontWeightUnselected" value="400" min="100" max="900" step="100">
+          <div class="field-row">
+            <div class="field">
+              <label>Line (normal)</label>
+              <input type="number" id="ls-lineWidthUnselected" value="1" min="0.25" max="10" step="0.25">
+            </div>
+            <div class="field">
+              <label>Line (selected)</label>
+              <input type="number" id="ls-lineWidthSelected" value="2" min="0.5" max="10" step="0.5">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Weight (Selected)</label>
-            <input type="number" id="ls-fontWeightSelected" value="700" min="100" max="900" step="100">
+          <div class="field-row">
+            <div class="field">
+              <label>Arrow (normal)</label>
+              <input type="number" id="ls-arrowLengthUnselected" value="8" min="0" max="40" step="2">
+            </div>
+            <div class="field">
+              <label>Arrow (selected)</label>
+              <input type="number" id="ls-arrowLengthSelected" value="16" min="0" max="40" step="2">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Line Width (Selected)</label>
-            <input type="number" id="ls-lineWidthSelected" value="2" min="0.5" max="10" step="0.5">
+          <div class="field-row">
+            <div class="field">
+              <label>Arrow Width</label>
+              <input type="number" id="ls-arrowWidthRatio" value="1.6" min="0.5" max="4" step="0.2">
+            </div>
+            <div class="field">
+              <label>Arrow Notch</label>
+              <input type="number" id="ls-arrowNotchRatio" value="0.2" min="0" max="1" step="0.1">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Line Width (Unselected)</label>
-            <input type="number" id="ls-lineWidthUnselected" value="1" min="0.25" max="10" step="0.25">
+          <div class="field-row">
+            <div class="field">
+              <label>Self-Loop Curve</label>
+              <input type="number" id="ls-selfLoopCurveFactor" value="11.67" min="1" max="30" step="0.5">
+            </div>
+            <div class="field">
+              <label>Parallel Curve</label>
+              <input type="number" id="ls-parallelEdgeCurveMultiplier" value="0.4" min="0.1" max="2" step="0.1">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Arrow Len (Selected)</label>
-            <input type="number" id="ls-arrowLengthSelected" value="16" min="0" max="40" step="2">
-          </div>
-          <div class="config-field">
-            <label>Arrow Len (Unselected)</label>
-            <input type="number" id="ls-arrowLengthUnselected" value="8" min="0" max="40" step="2">
-          </div>
-          <div class="config-field">
-            <label>Arrow Width Ratio</label>
-            <input type="number" id="ls-arrowWidthRatio" value="1.6" min="0.5" max="4" step="0.2">
-          </div>
-          <div class="config-field">
-            <label>Arrow Notch Ratio</label>
-            <input type="number" id="ls-arrowNotchRatio" value="0.2" min="0" max="1" step="0.1">
-          </div>
-          <div class="config-field">
-            <label>Self-Loop Curve</label>
-            <input type="number" id="ls-selfLoopCurveFactor" value="11.67" min="1" max="30" step="0.5">
-          </div>
-          <div class="config-field">
-            <label>Parallel Edge Curve</label>
-            <input type="number" id="ls-parallelEdgeCurveMultiplier" value="0.4" min="0.1" max="2" step="0.1">
-          </div>
-          <div class="config-field">
+          <div class="field">
             <label>Label BG Padding</label>
             <input type="number" id="ls-labelBackgroundPadding" value="0.3" min="0" max="2" step="0.1">
           </div>
-          <button class="secondary" onclick="applyLinkStyle()">Apply</button>
+          <div class="field">
+            <label for="edge-gap">Edge Gap</label>
+            <input id="edge-gap" type="number" value="2" min="0" max="15" step="1" oninput="changeEdgeGap()">
+          </div>
+          <button class="btn-primary btn-sm" onclick="applyLinkStyle()">Apply Link Style</button>
         </div>
       </details>
 
       <!-- Simulation -->
-      <details>
+      <details class="sidebar-section">
         <summary>Simulation</summary>
-        <div class="panel-content">
-          <div class="config-field">
-            <label>Center Strength</label>
-            <input type="number" id="sim-centerStrength" value="0.03" min="0" max="1" step="0.01">
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Center Force</label>
+              <input type="number" id="sim-centerStrength" value="0.03" min="0" max="1" step="0.01">
+            </div>
+            <div class="field">
+              <label>Charge</label>
+              <input type="number" id="sim-chargeStrength" value="-400" min="-2000" max="0" step="50">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Charge Strength</label>
-            <input type="number" id="sim-chargeStrength" value="-400" min="-2000" max="0" step="50">
+          <div class="field-row">
+            <div class="field">
+              <label>Velocity Decay</label>
+              <input type="number" id="sim-velocityDecay" value="0.4" min="0" max="1" step="0.05">
+            </div>
+            <div class="field">
+              <label>Alpha Min</label>
+              <input type="number" id="sim-alphaMin" value="0.05" min="0.001" max="0.5" step="0.01">
+            </div>
+            <div class="field">
+              <label>Warmup</label>
+              <input type="number" id="sim-warmupTicks" value="300" min="0" max="1000" step="50">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Velocity Decay</label>
-            <input type="number" id="sim-velocityDecay" value="0.4" min="0" max="1" step="0.05">
-          </div>
-          <div class="config-field">
-            <label>Alpha Min</label>
-            <input type="number" id="sim-alphaMin" value="0.05" min="0.001" max="0.5" step="0.01">
-          </div>
-          <div class="config-field">
-            <label>Warmup Ticks</label>
-            <input type="number" id="sim-warmupTicks" value="300" min="0" max="1000" step="50">
-          </div>
-          <button class="secondary" onclick="applySimulation()">Apply</button>
+          <button class="btn-primary btn-sm" onclick="applySimulation()">Apply Simulation</button>
         </div>
       </details>
 
       <!-- Interaction -->
-      <details>
+      <details class="sidebar-section">
         <summary>Interaction</summary>
-        <div class="panel-content">
-          <div class="config-field">
-            <label>Tooltip Font Size</label>
-            <input type="number" id="int-tooltipFontSize" value="12" min="8" max="24" step="1">
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Tooltip Size</label>
+              <input type="number" id="int-tooltipFontSize" value="12" min="8" max="24" step="1">
+            </div>
+            <div class="field">
+              <label>Tooltip Padding</label>
+              <input type="text" id="int-tooltipPadding" value="4px 8px" style="width: 70px;">
+            </div>
+            <div class="field">
+              <label>Border Radius</label>
+              <input type="text" id="int-tooltipBorderRadius" value="4px" style="width: 50px;">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Tooltip Padding</label>
-            <input type="text" id="int-tooltipPadding" value="4px 8px" style="width: 80px;">
+          <div class="field-row">
+            <div class="field">
+              <label>Z-Index</label>
+              <input type="number" id="int-tooltipZIndex" value="1000" min="1" max="10000" step="100">
+            </div>
+            <div class="field">
+              <label>Fit Padding</label>
+              <input type="number" id="int-zoomToFitPadding" value="0.1" min="0" max="1" step="0.05">
+            </div>
+            <div class="field">
+              <label>Fit Delay</label>
+              <input type="number" id="int-zoomToFitDelay" value="50" min="0" max="500" step="10">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Tooltip Border Radius</label>
-            <input type="text" id="int-tooltipBorderRadius" value="4px" style="width: 60px;">
+          <div class="field-row">
+            <div class="field">
+              <label>Link Hit Width</label>
+              <input type="number" id="int-linkHitWidth" value="10" min="1" max="30" step="1">
+            </div>
+            <div class="field">
+              <label>Contrast</label>
+              <input type="number" id="int-contrastThreshold" value="0.5" min="0" max="1" step="0.05">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Tooltip Z-Index</label>
-            <input type="number" id="int-tooltipZIndex" value="1000" min="1" max="10000" step="100">
-          </div>
-          <div class="config-field">
-            <label>Zoom-to-Fit Padding</label>
-            <input type="number" id="int-zoomToFitPadding" value="0.1" min="0" max="1" step="0.05">
-          </div>
-          <div class="config-field">
-            <label>Zoom-to-Fit Delay (ms)</label>
-            <input type="number" id="int-zoomToFitDelay" value="50" min="0" max="500" step="10">
-          </div>
-          <div class="config-field">
-            <label>Link Hit Width</label>
-            <input type="number" id="int-linkHitWidth" value="10" min="1" max="30" step="1">
-          </div>
-          <div class="config-field">
-            <label>Contrast Threshold</label>
-            <input type="number" id="int-contrastThreshold" value="0.5" min="0" max="1" step="0.05">
-          </div>
-          <button class="secondary" onclick="applyInteraction()">Apply</button>
+          <button class="btn-primary btn-sm" onclick="applyInteraction()">Apply Interaction</button>
         </div>
       </details>
 
       <!-- Large Graph -->
-      <details>
-        <summary>Large Graph Optimizations</summary>
-        <div class="panel-content">
-          <div class="config-field">
-            <label>Enabled</label>
-            <input type="checkbox" id="lg-enabled">
+      <details class="sidebar-section">
+        <summary>Large Graph</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field-inline">
+              <input type="checkbox" checked id="lg-enabled">
+              <label for="lg-enabled">Enable Culling</label>
+            </div>
           </div>
-          <div class="config-field">
-            <label>Viewport Padding</label>
-            <input type="number" id="lg-viewportPadding" value="0" min="0" max="500" step="10">
+          <div class="field-row">
+            <div class="field">
+              <label>Viewport Pad</label>
+              <input type="number" id="lg-viewportPadding" value="0" min="0" max="500" step="10">
+            </div>
+            <div class="field">
+              <label>Low Zoom Threshold</label>
+              <input type="number" id="lg-lowZoomThreshold" value="0.5" min="0.05" max="1" step="0.05">
+            </div>
           </div>
-          <div class="config-field">
-            <label>Low Zoom Threshold</label>
-            <input type="number" id="lg-lowZoomThreshold" value="2" min="1" max="10" step="0.5">
+          <div class="field-row">
+            <div class="field-inline">
+              <input type="checkbox" id="lg-skipLabelsAtLowZoom" checked>
+              <label for="lg-skipLabelsAtLowZoom">Skip Labels</label>
+            </div>
+            <div class="field-inline">
+              <input type="checkbox" id="lg-skipArrowsAtLowZoom" checked>
+              <label for="lg-skipArrowsAtLowZoom">Skip Arrows</label>
+            </div>
+            <div class="field-inline">
+              <input type="checkbox" id="lg-skipLinkLabelsAtLowZoom" checked>
+              <label for="lg-skipLinkLabelsAtLowZoom">Skip Link Labels</label>
+            </div>
           </div>
-          <div class="config-field">
-            <label>Skip Labels at Low Zoom</label>
-            <input type="checkbox" id="lg-skipLabelsAtLowZoom" checked>
-          </div>
-          <div class="config-field">
-            <label>Skip Arrows at Low Zoom</label>
-            <input type="checkbox" id="lg-skipArrowsAtLowZoom" checked>
-          </div>
-          <div class="config-field">
-            <label>Skip Link Labels at Low Zoom</label>
-            <input type="checkbox" id="lg-skipLinkLabelsAtLowZoom" checked>
-          </div>
-          <button class="secondary" onclick="applyLargeGraph()">Apply</button>
-          <div id="lg-debug" style="margin-top: 8px; padding: 8px; background: #f0f0f0; border-radius: 4px; font-family: monospace; font-size: 11px; display: none;">
-            <div>Zoom: <span id="lg-debug-zoom">-</span> | Culling zoom: <span id="lg-debug-culling-zoom">-</span></div>
-            <div>Low-zoom active: <span id="lg-debug-low-zoom">-</span> (threshold: k ≤ <span id="lg-debug-threshold">-</span>)</div>
-            <div>Nodes visible: <span id="lg-debug-nodes">-</span> | Links visible: <span id="lg-debug-links">-</span></div>
+          <button class="btn-primary btn-sm" onclick="applyLargeGraph()">Apply Large Graph</button>
+          <div id="lg-debug" class="debug-panel">
+            <div>Zoom: <span id="lg-debug-zoom">-</span> | Culling: <span id="lg-debug-culling-zoom">-</span></div>
+            <div>Low-zoom: <span id="lg-debug-low-zoom">-</span> (≤ <span id="lg-debug-threshold">-</span>)</div>
+            <div>Visible: <span id="lg-debug-nodes">-</span> nodes | <span id="lg-debug-links">-</span> links</div>
           </div>
         </div>
       </details>
 
       <!-- Colors & Display -->
-      <details>
-        <summary>Colors &amp; Display</summary>
-        <div class="panel-content">
-          <div class="config-field">
-            <label>Background Color</label>
-            <input type="color" id="cfg-backgroundColor" value="#ffffff">
+      <details class="sidebar-section">
+        <summary>Colors & Display</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Background</label>
+              <input type="color" id="cfg-backgroundColor" value="#ffffff">
+            </div>
+            <div class="field">
+              <label>Foreground</label>
+              <input type="color" id="cfg-foregroundColor" value="#1a1a1a">
+            </div>
+            <div class="field-inline">
+              <input type="checkbox" id="cfg-showPropertyKeyPrefix">
+              <label for="cfg-showPropertyKeyPrefix">Show Key Prefix</label>
+            </div>
           </div>
-          <div class="config-field">
-            <label>Foreground Color</label>
-            <input type="color" id="cfg-foregroundColor" value="#1a1a1a">
-          </div>
-          <div class="config-field">
-            <label>Show Property Key Prefix</label>
-            <input type="checkbox" id="cfg-showPropertyKeyPrefix">
-          </div>
-          <button class="secondary" onclick="applyColors()">Apply</button>
+          <button class="btn-primary btn-sm" onclick="applyColors()">Apply Colors</button>
         </div>
       </details>
 
-    </div>
+    </aside>
 
-    <div class="graph-container">
-      <falkordb-canvas id="graph"></falkordb-canvas>
-    </div>
+    <!-- ===== Main Area ===== -->
+    <main class="main-area">
 
-    <div class="info">
-      <h3>Selected Element:</h3>
-      <div id="selected-info">Click on a node or link to see details</div>
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <span class="group-label">View</span>
+        <button class="btn-secondary btn-sm" onclick="zoomToFit()">Fit</button>
+        <button class="btn-secondary btn-sm" onclick="zoomIn()">+</button>
+        <button class="btn-secondary btn-sm" onclick="zoomOut()">−</button>
+        <button class="btn-secondary btn-sm" onclick="resetViewport()">Reset</button>
+        <div class="separator" id="delete-separator" style="display:none"></div>
+        <button class="btn-warning btn-sm" id="btn-delete-node" style="display:none" onclick="deleteSelectedNode()">Delete Node</button>
+        <button class="btn-warning btn-sm" id="btn-delete-link" style="display:none" onclick="deleteSelectedLink()">Delete Link</button>
+      </div>
+
+      <!-- Graph Canvas -->
+      <div class="graph-container">
+        <falkordb-canvas id="graph"></falkordb-canvas>
+      </div>
+
+    </main>
+
+    <!-- ===== Status Bar ===== -->
+    <footer class="status-bar">
+      <span id="selected-info">Click on a node or link to see details</span>
+      <span id="zoom-info"></span>
+    </footer>
+
+  </div>
+
+  <!-- ===== API Reference Panel ===== -->
+  <div class="api-ref" id="api-ref-panel">
+    <div class="api-ref-header">
+      <span>API Reference</span>
+      <button class="btn-secondary btn-sm" onclick="toggleApiRef()">Close</button>
+    </div>
+    <div class="api-ref-body">
+
+      <h4>Methods</h4>
+      <table>
+        <tr><th>Method</th><th>Description</th></tr>
+        <tr><td><code>setConfig(config)</code></td><td>Set/update configuration (deep-merges nested objects)</td></tr>
+        <tr><td><code>setData(data)</code></td><td>Replace all graph data (triggers layout)</td></tr>
+        <tr><td><code>setGraphData(data)</code></td><td>Incremental update — reuses existing nodes</td></tr>
+        <tr><td><code>getData()</code></td><td>Get current data (source format)</td></tr>
+        <tr><td><code>getGraphData()</code></td><td>Get internal graph data (with x/y/size)</td></tr>
+        <tr><td><code>refresh()</code></td><td>Repaint after mutating node/link properties</td></tr>
+        <tr><td><code>zoomToFit(padding?, filter?)</code></td><td>Fit all/filtered nodes in view</td></tr>
+        <tr><td><code>zoom(level)</code></td><td>Set zoom level</td></tr>
+        <tr><td><code>getZoom()</code></td><td>Get current zoom level</td></tr>
+        <tr><td><code>setViewport({zoom, centerX, centerY})</code></td><td>Set viewport position and zoom</td></tr>
+        <tr><td><code>getViewport()</code></td><td>Get current viewport state</td></tr>
+        <tr><td><code>setLayout(mode)</code></td><td>'force' | 'tree' | 'flow' | 'radial'</td></tr>
+        <tr><td><code>setLayoutOptions(opts)</code></td><td>Update layout-specific options</td></tr>
+        <tr><td><code>setAnimation(enabled)</code></td><td>Enable/disable simulation</td></tr>
+        <tr><td><code>setPinOnDragEnd(pin)</code></td><td>Pin nodes after dragging</td></tr>
+        <tr><td><code>setWidth(w) / setHeight(h)</code></td><td>Set canvas dimensions</td></tr>
+        <tr><td><code>setBackgroundColor(color)</code></td><td>Set background</td></tr>
+        <tr><td><code>setForegroundColor(color)</code></td><td>Set stroke color</td></tr>
+        <tr><td><code>getGraph()</code></td><td>Access force-graph instance</td></tr>
+        <tr><td><code>getCullingStats()</code></td><td>Get viewport culling stats</td></tr>
+        <tr><td><code>setDebug(enabled)</code></td><td>Enable/disable console debug logging</td></tr>
+      </table>
+
+      <h4>Node Style (<code>nodeStyle</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>fontFamily</code></td><td>string</td><td>'SofiaSans'</td><td>Font for node labels</td></tr>
+        <tr><td><code>fontWeightUnselected</code></td><td>number</td><td>400</td><td>Font weight (normal)</td></tr>
+        <tr><td><code>fontWeightSelected</code></td><td>number</td><td>700</td><td>Font weight (selected)</td></tr>
+        <tr><td><code>fontSize</code></td><td>number</td><td>2</td><td>Base font size (world units)</td></tr>
+        <tr><td><code>textFillRatio</code></td><td>number</td><td>0.85</td><td>Fraction of node radius text fills</td></tr>
+        <tr><td><code>strokeWidthSelected</code></td><td>number</td><td>1</td><td>Border width (selected)</td></tr>
+        <tr><td><code>strokeWidthUnselected</code></td><td>number</td><td>0.5</td><td>Border width (normal)</td></tr>
+        <tr><td><code>glowDuration</code></td><td>number</td><td>10000</td><td>Glow duration in ms</td></tr>
+        <tr><td><code>glowSpread</code></td><td>number</td><td>12</td><td>Glow radius in px</td></tr>
+        <tr><td><code>glowSteps</code></td><td>number</td><td>16</td><td>Gradient rings in glow</td></tr>
+        <tr><td><code>glowColor</code></td><td>[r,g,b]</td><td>[59,130,246]</td><td>Glow RGB color</td></tr>
+        <tr><td><code>glowMaxOpacity</code></td><td>number</td><td>0.6</td><td>Max glow opacity (0-1)</td></tr>
+      </table>
+
+      <h4>Link Style (<code>linkStyle</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>fontFamily</code></td><td>string</td><td>'SofiaSans'</td><td>Font for link labels</td></tr>
+        <tr><td><code>fontSize</code></td><td>number</td><td>2</td><td>Label font size</td></tr>
+        <tr><td><code>fontWeightUnselected</code></td><td>number</td><td>400</td><td>Weight (normal)</td></tr>
+        <tr><td><code>fontWeightSelected</code></td><td>number</td><td>700</td><td>Weight (selected)</td></tr>
+        <tr><td><code>lineWidthSelected</code></td><td>number</td><td>2</td><td>Thickness (selected)</td></tr>
+        <tr><td><code>lineWidthUnselected</code></td><td>number</td><td>1</td><td>Thickness (normal)</td></tr>
+        <tr><td><code>arrowLengthSelected</code></td><td>number</td><td>16</td><td>Arrow length (selected)</td></tr>
+        <tr><td><code>arrowLengthUnselected</code></td><td>number</td><td>8</td><td>Arrow length (normal)</td></tr>
+        <tr><td><code>arrowWidthRatio</code></td><td>number</td><td>1.6</td><td>Arrow width/height ratio</td></tr>
+        <tr><td><code>arrowNotchRatio</code></td><td>number</td><td>0.2</td><td>Arrow notch depth</td></tr>
+        <tr><td><code>selfLoopCurveFactor</code></td><td>number</td><td>11.67</td><td>Self-loop curvature</td></tr>
+        <tr><td><code>parallelEdgeCurveMultiplier</code></td><td>number</td><td>0.4</td><td>Parallel edge spread</td></tr>
+        <tr><td><code>labelBackgroundPadding</code></td><td>number</td><td>0.3</td><td>Label BG padding</td></tr>
+        <tr><td><code>edgeGap</code></td><td>number</td><td>2</td><td>Gap between edge and node</td></tr>
+      </table>
+
+      <h4>Simulation (<code>simulation</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>centerStrength</code></td><td>number</td><td>0.03</td><td>Center pull (0-1)</td></tr>
+        <tr><td><code>chargeStrength</code></td><td>number</td><td>-400</td><td>Repulsion (negative=repel)</td></tr>
+        <tr><td><code>velocityDecay</code></td><td>number</td><td>0.4</td><td>Friction/damping</td></tr>
+        <tr><td><code>alphaMin</code></td><td>number</td><td>0.05</td><td>Sim stops below this</td></tr>
+        <tr><td><code>warmupTicks</code></td><td>number</td><td>300</td><td>Pre-display ticks</td></tr>
+      </table>
+
+      <h4>Interaction (<code>interaction</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>tooltipFontSize</code></td><td>number</td><td>12</td><td>Tooltip text size (px)</td></tr>
+        <tr><td><code>tooltipPadding</code></td><td>string</td><td>'4px 8px'</td><td>Tooltip CSS padding</td></tr>
+        <tr><td><code>tooltipBorderRadius</code></td><td>string</td><td>'4px'</td><td>Tooltip border radius</td></tr>
+        <tr><td><code>tooltipZIndex</code></td><td>number</td><td>1000</td><td>Tooltip z-index</td></tr>
+        <tr><td><code>zoomToFitPadding</code></td><td>number</td><td>0.1</td><td>Padding fraction for fit</td></tr>
+        <tr><td><code>zoomToFitDelay</code></td><td>number</td><td>50</td><td>Auto-fit delay (ms)</td></tr>
+        <tr><td><code>linkHitWidth</code></td><td>number</td><td>10</td><td>Link click area (px)</td></tr>
+        <tr><td><code>contrastThreshold</code></td><td>number</td><td>0.5</td><td>Text contrast threshold</td></tr>
+      </table>
+
+      <h4>Large Graph (<code>largeGraph</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>enabled</code></td><td>boolean</td><td>true</td><td>Enable viewport culling</td></tr>
+        <tr><td><code>viewportPadding</code></td><td>number</td><td>0</td><td>Extra cull padding (world units)</td></tr>
+        <tr><td><code>lowZoomThreshold</code></td><td>number</td><td>1</td><td>Skip details at this zoom or below</td></tr>
+        <tr><td><code>skipLabelsAtLowZoom</code></td><td>boolean</td><td>true</td><td>Skip node labels</td></tr>
+        <tr><td><code>skipArrowsAtLowZoom</code></td><td>boolean</td><td>true</td><td>Skip arrowheads</td></tr>
+        <tr><td><code>skipLinkLabelsAtLowZoom</code></td><td>boolean</td><td>true</td><td>Skip link labels</td></tr>
+      </table>
+
+      <h4>Top-Level Config</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>width / height</code></td><td>number</td><td>800 / 600</td><td>Canvas dimensions</td></tr>
+        <tr><td><code>backgroundColor</code></td><td>string</td><td>'#ffffff'</td><td>Canvas background</td></tr>
+        <tr><td><code>foregroundColor</code></td><td>string</td><td>'#1a1a1a'</td><td>Stroke/border color</td></tr>
+        <tr><td><code>animation</code></td><td>boolean</td><td>false</td><td>Continuous simulation</td></tr>
+        <tr><td><code>pinOnDragEnd</code></td><td>boolean</td><td>false</td><td>Pin after drag</td></tr>
+        <tr><td><code>captionsKeys</code></td><td>Array</td><td>[]</td><td>Node label keys: ['name', true]</td></tr>
+        <tr><td><code>showPropertyKeyPrefix</code></td><td>boolean</td><td>false</td><td>Show "key: value" in labels</td></tr>
+        <tr><td><code>layoutMode</code></td><td>string</td><td>'force'</td><td>Layout algorithm</td></tr>
+        <tr><td><code>isNodeSelected</code></td><td>function</td><td>undefined</td><td>(node) => boolean</td></tr>
+        <tr><td><code>isLinkSelected</code></td><td>function</td><td>undefined</td><td>(link) => boolean</td></tr>
+        <tr><td><code>linkLineDash</code></td><td>function</td><td>undefined</td><td>(link) => number[]</td></tr>
+      </table>
+
+      <h4>Layout Options (<code>layoutOptions</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>tree.direction</code></td><td>string</td><td>'td'</td><td>'td' | 'bu' | 'lr' | 'rl'</td></tr>
+        <tr><td><code>tree.levelDistance</code></td><td>number</td><td>80</td><td>Spacing between levels</td></tr>
+        <tr><td><code>tree.nodeSpacing</code></td><td>number</td><td>60</td><td>Sibling spacing</td></tr>
+        <tr><td><code>flow.direction</code></td><td>string</td><td>'lr'</td><td>Same as tree</td></tr>
+        <tr><td><code>flow.levelDistance</code></td><td>number</td><td>80</td><td>Level spacing</td></tr>
+        <tr><td><code>flow.nodeSpacing</code></td><td>number</td><td>60</td><td>Node spacing</td></tr>
+        <tr><td><code>radial.direction</code></td><td>string</td><td>'out'</td><td>'out' | 'in'</td></tr>
+        <tr><td><code>radial.levelDistance</code></td><td>number</td><td>80</td><td>Ring distance</td></tr>
+        <tr><td><code>force.linkDistance</code></td><td>number</td><td>30</td><td>Desired link length</td></tr>
+        <tr><td><code>force.collisionPadding</code></td><td>number</td><td>25</td><td>Collision padding</td></tr>
+      </table>
+
+      <h4>Event Handlers (<code>eventHandlers</code>)</h4>
+      <table>
+        <tr><th>Handler</th><th>Signature</th><th>Description</th></tr>
+        <tr><td><code>onNodeClick</code></td><td>(node, event) => void</td><td>Node clicked</td></tr>
+        <tr><td><code>onNodeRightClick</code></td><td>(node, event) => void</td><td>Node right-clicked</td></tr>
+        <tr><td><code>onNodeHover</code></td><td>(node) => void</td><td>Hovered (null on leave)</td></tr>
+        <tr><td><code>onNodeDragEnd</code></td><td>(node) => void</td><td>Drag finished</td></tr>
+        <tr><td><code>onLinkClick</code></td><td>(link, event) => void</td><td>Link clicked</td></tr>
+        <tr><td><code>onLinkRightClick</code></td><td>(link, event) => void</td><td>Link right-clicked</td></tr>
+        <tr><td><code>onLinkHover</code></td><td>(link) => void</td><td>Link hovered</td></tr>
+        <tr><td><code>onBackgroundClick</code></td><td>(event) => void</td><td>Background clicked</td></tr>
+        <tr><td><code>onBackgroundRightClick</code></td><td>(event) => void</td><td>Background right-clicked</td></tr>
+        <tr><td><code>onZoom</code></td><td>(transform) => void</td><td>Zoom changed {k, x, y}</td></tr>
+        <tr><td><code>onEngineStop</code></td><td>() => void</td><td>Simulation cooled</td></tr>
+        <tr><td><code>onPinChange</code></td><td>(pinned) => void</td><td>Pin state changed</td></tr>
+        <tr><td><code>onLayoutChange</code></td><td>(layout) => void</td><td>Layout changed</td></tr>
+      </table>
+
+      <h4>Data Format</h4>
+      <pre>{
+  nodes: [{
+    id: number | string,
+    labels: string[],
+    data: Record&lt;string, any&gt;,
+    visible: boolean,
+    color: string,
+    size?: number,           // Radius in world units (default: 9)
+    expand?: boolean,
+  }],
+  links: [{
+    id: number | string,
+    source: number | string,
+    target: number | string,
+    relationship: string,
+    data: Record&lt;string, any&gt;,
+    color: string,
+    visible: boolean,
+  }]
+}</pre>
+
     </div>
   </div>
 
-  <!-- Import map for module resolution -->
+  <!-- ===== Scripts ===== -->
   <script type="importmap">
     {
       "imports": {
@@ -486,13 +976,12 @@
     }
   </script>
 
-  <!-- Import the web component -->
   <script type="module">
     import '../dist/index.js';
 
     let canvas;
 
-    // Color palettes
+    // ===== Color Utilities =====
     const labelColors = {};
     const relationshipColors = {};
     const colorPalette = [
@@ -518,7 +1007,6 @@
       return relationshipColors[type];
     };
 
-    // --- Utility: parse hex color to [r, g, b] ---
     const hexToRgb = (hex) => {
       const r = parseInt(hex.slice(1, 3), 16);
       const g = parseInt(hex.slice(3, 5), 16);
@@ -526,7 +1014,7 @@
       return [r, g, b];
     };
 
-    // --- Local Storage ---
+    // ===== Local Storage =====
     const loadFromStorage = () => {
       const domain = localStorage.getItem('falkordb-canvas-domain');
       const graph = localStorage.getItem('falkordb-canvas-graph');
@@ -537,33 +1025,25 @@
     };
 
     const saveToStorage = () => {
-      const domain = document.getElementById('domain-input').value.trim();
-      const graph = document.getElementById('graph-name').value.trim();
-      const query = document.getElementById('query-input').value.trim();
-      localStorage.setItem('falkordb-canvas-domain', domain);
-      localStorage.setItem('falkordb-canvas-graph', graph);
-      localStorage.setItem('falkordb-canvas-query', query);
+      localStorage.setItem('falkordb-canvas-domain', document.getElementById('domain-input').value.trim());
+      localStorage.setItem('falkordb-canvas-graph', document.getElementById('graph-name').value.trim());
+      localStorage.setItem('falkordb-canvas-query', document.getElementById('query-input').value.trim());
     };
 
-    // --- Animation toggle ---
-    window.toggleAnimation = () => {
-      const enabled = document.getElementById('animation-toggle').checked;
-      canvas.setAnimation(enabled);
+    // ===== API Reference Toggle =====
+    window.toggleApiRef = () => {
+      document.getElementById('api-ref-panel').classList.toggle('open');
     };
 
-    // --- Pin toggle ---
-    window.togglePin = () => {
-      const pinEnabled = document.getElementById('pin-toggle').checked;
-      canvas.setPinOnDragEnd(pinEnabled);
-    };
-
-    // --- Layout selector ---
+    // ===== Layout Controls =====
     const directionsByLayout = {
       force: [],
       tree: [['td', 'Top-Down'], ['bu', 'Bottom-Up'], ['lr', 'Left-Right'], ['rl', 'Right-Left']],
       flow: [['lr', 'Left-Right'], ['rl', 'Right-Left'], ['td', 'Top-Down'], ['bu', 'Bottom-Up']],
       radial: [['out', 'Outward'], ['in', 'Inward']],
     };
+
+    let currentLayout = 'force';
 
     function updateDirectionOptions(layout) {
       const dirSelect = document.getElementById('direction-select');
@@ -577,7 +1057,6 @@
       }
       dirSelect.disabled = options.length === 0;
 
-      // Select the stored direction for this layout (if any)
       if (canvas) {
         const layoutOptions = canvas.config?.layoutOptions;
         let storedDir;
@@ -589,13 +1068,9 @@
         }
       }
 
-      // Level distance applies to tree/flow/radial (not force)
       document.getElementById('level-distance').disabled = layout === 'force';
-      // Node spacing applies to tree/flow only
       document.getElementById('node-spacing').disabled = (layout === 'force' || layout === 'radial');
     }
-
-    let currentLayout = 'force';
 
     window.changeLayout = (layout) => {
       currentLayout = layout;
@@ -620,7 +1095,6 @@
       let nodeSpacing = parseInt(spacingInput.value);
       if (isNaN(levelDistance)) levelDistance = 80;
       if (isNaN(nodeSpacing)) nodeSpacing = 60;
-      // Clamp to min/max
       levelDistance = Math.max(+levelInput.min, Math.min(+levelInput.max, levelDistance));
       nodeSpacing = Math.max(+spacingInput.min, Math.min(+spacingInput.max, nodeSpacing));
       levelInput.value = levelDistance;
@@ -640,10 +1114,18 @@
       if (isNaN(edgeGap)) edgeGap = 2;
       edgeGap = Math.max(+input.min, Math.min(+input.max, edgeGap));
       input.value = edgeGap;
-      canvas.setConfig({ edgeGap });
+      canvas.setConfig({ linkStyle: { edgeGap } });
     };
 
-    // --- Config panel apply handlers ---
+    window.toggleAnimation = () => {
+      canvas.setAnimation(document.getElementById('animation-toggle').checked);
+    };
+
+    window.togglePin = () => {
+      canvas.setPinOnDragEnd(document.getElementById('pin-toggle').checked);
+    };
+
+    // ===== Config Apply Handlers =====
     window.applyNodeStyle = () => {
       canvas.setConfig({
         nodeStyle: {
@@ -722,29 +1204,27 @@
           skipLinkLabelsAtLowZoom: document.getElementById('lg-skipLinkLabelsAtLowZoom').checked,
         }
       });
-      // Start/stop debug display
       if (enabled && !lgDebugInterval) {
         lgDebugInterval = setInterval(window.updateLgDebug, 200);
         window.updateLgDebug();
       } else if (!enabled && lgDebugInterval) {
         clearInterval(lgDebugInterval);
         lgDebugInterval = null;
-        document.getElementById('lg-debug').style.display = 'none';
+        document.getElementById('lg-debug').classList.remove('visible');
       }
     };
 
     window.applyColors = () => {
-      const bg = document.getElementById('cfg-backgroundColor').value;
-      const fg = document.getElementById('cfg-foregroundColor').value;
       canvas.setConfig({
-        backgroundColor: bg,
-        foregroundColor: fg,
+        backgroundColor: document.getElementById('cfg-backgroundColor').value,
+        foregroundColor: document.getElementById('cfg-foregroundColor').value,
         showPropertyKeyPrefix: document.getElementById('cfg-showPropertyKeyPrefix').checked,
       });
     };
 
-    // --- Action buttons ---
+    // ===== Data Actions =====
     let nodeCounter = 0;
+
     window.addNode = () => {
       const currentData = canvas.getData();
       const id = `node-${++nodeCounter}`;
@@ -761,15 +1241,10 @@
 
     window.addLink = () => {
       const currentData = canvas.getData();
-      if (currentData.nodes.length < 2) {
-        alert('Need at least 2 nodes to add a link');
-        return;
-      }
+      if (currentData.nodes.length < 2) { alert('Need at least 2 nodes'); return; }
       const src = currentData.nodes[Math.floor(Math.random() * currentData.nodes.length)];
       let tgt = src;
-      while (tgt === src) {
-        tgt = currentData.nodes[Math.floor(Math.random() * currentData.nodes.length)];
-      }
+      while (tgt === src) tgt = currentData.nodes[Math.floor(Math.random() * currentData.nodes.length)];
       const relType = ['ACTED_IN', 'DIRECTED', 'KNOWS'][Math.floor(Math.random() * 3)];
       currentData.links.push({
         id: `link-${Date.now()}`,
@@ -790,87 +1265,143 @@
       const links = [];
       for (let i = 1; i <= 100; i++) {
         const label = labels[Math.floor(Math.random() * labels.length)];
-        nodes.push({
-          id: `lg-${i}`,
-          labels: [label],
-          data: { name: `${label} ${i}` },
-          visible: true,
-          color: getColorForLabel(label)
-        });
+        nodes.push({ id: `lg-${i}`, labels: [label], data: { name: `${label} ${i}` }, visible: true, color: getColorForLabel(label) });
       }
-      // Create ~150 random links
       for (let i = 0; i < 150; i++) {
         const srcIdx = Math.floor(Math.random() * 100);
         let tgtIdx = srcIdx;
         while (tgtIdx === srcIdx) tgtIdx = Math.floor(Math.random() * 100);
         const rel = relTypes[Math.floor(Math.random() * relTypes.length)];
-        links.push({
-          id: `lg-link-${i}`,
-          source: nodes[srcIdx].id,
-          target: nodes[tgtIdx].id,
-          relationship: rel,
-          data: {},
-          color: getColorForRelationship(rel),
-          visible: true
-        });
+        links.push({ id: `lg-link-${i}`, source: nodes[srcIdx].id, target: nodes[tgtIdx].id, relationship: rel, data: {}, color: getColorForRelationship(rel), visible: true });
       }
       canvas.setData({ nodes, links });
     };
 
-    // --- Large Graph Debug ---
+    // --- Selection state ---
+    let selectedNode = null;
+    let selectedLink = null;
+
+    function updateDeleteButtons() {
+      const sep = document.getElementById('delete-separator');
+      const btnNode = document.getElementById('btn-delete-node');
+      const btnLink = document.getElementById('btn-delete-link');
+      btnNode.style.display = selectedNode ? '' : 'none';
+      btnLink.style.display = selectedLink ? '' : 'none';
+      sep.style.display = (selectedNode || selectedLink) ? '' : 'none';
+    }
+
+    window.deleteSelectedNode = () => {
+      if (!selectedNode) return;
+      const data = canvas.getData();
+      const id = selectedNode.id;
+      data.nodes = data.nodes.filter(n => n.id !== id);
+      data.links = data.links.filter(l => l.source !== id && l.target !== id);
+      selectedNode = null;
+      updateDeleteButtons();
+      canvas.setGraphData(data);
+    };
+
+    window.deleteSelectedLink = () => {
+      if (!selectedLink) return;
+      const data = canvas.getData();
+      const id = selectedLink.id;
+      data.links = data.links.filter(l => l.id !== id);
+      selectedLink = null;
+      updateDeleteButtons();
+      canvas.setGraphData(data);
+    };
+
+    window.duplicateGraph = () => {
+      const data = canvas.getData();
+      const offset = data.nodes.length + 1000;
+      const newNodes = data.nodes.map(n => ({ ...n, id: n.id + offset, data: { ...n.data } }));
+      const newLinks = data.links.map(l => ({ ...l, id: l.id + '-dup-' + Date.now(), source: l.source + offset, target: l.target + offset }));
+      if (data.nodes.length > 0) {
+        newLinks.push({ id: 'bridge-' + Date.now(), source: data.nodes[0].id, target: newNodes[0].id, relationship: 'CLONED', data: {}, color: '#999', visible: true });
+      }
+      canvas.setData({ nodes: [...data.nodes, ...newNodes], links: [...data.links, ...newLinks] });
+    };
+
+    window.clearGraph = () => { canvas.setData({ nodes: [], links: [] }); };
+
+    // ===== View Actions =====
+    window.zoomToFit = () => { canvas.zoomToFit(); };
+    window.zoomIn = () => { canvas.zoom(canvas.getZoom() * 1.5); };
+    window.zoomOut = () => { canvas.zoom(canvas.getZoom() / 1.5); };
+    window.resetViewport = () => { canvas.setViewport({ zoom: 1, centerX: 0, centerY: 0 }); };
+
+    // ===== Style Actions =====
+    window.randomizeAllColors = () => {
+      const graphData = canvas.getGraphData();
+      const palette = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#96CEB4', '#FFEAA7', '#74B9FF', '#A29BFE', '#FD79A8', '#FDCB6E', '#6C5CE7', '#00B894', '#E17055', '#0984E3', '#D63031'];
+      graphData.nodes.forEach(node => { node.color = palette[Math.floor(Math.random() * palette.length)]; });
+      graphData.links.forEach(link => { link.color = palette[Math.floor(Math.random() * palette.length)]; });
+      canvas.refresh();
+    };
+
+    window.resizeAllNodes = () => {
+      const graphData = canvas.getGraphData();
+      const size = [4, 6, 8, 10, 12, 14][Math.floor(Math.random() * 6)];
+      graphData.nodes.forEach(node => { node.size = size + Math.random() * 4; });
+      canvas.refresh();
+    };
+
+    window.toggleNodeVisibility = () => {
+      const graphData = canvas.getGraphData();
+      graphData.nodes.forEach(node => { if (Math.random() < 0.3) node.visible = !node.visible; });
+      canvas.refresh();
+    };
+
+    window.reheatSim = () => {
+      const fg = canvas.getGraph();
+      if (fg) {
+        canvas.setAnimation(true);
+        document.getElementById('animation-toggle').checked = true;
+        fg.d3ReheatSimulation();
+      }
+    };
+
+    // ===== Large Graph Debug =====
     let lgDebugInterval = null;
+
     window.updateLgDebug = () => {
       const debugEl = document.getElementById('lg-debug');
-      const enabled = document.getElementById('lg-enabled').checked;
-      if (!enabled) {
-        debugEl.style.display = 'none';
+      if (!document.getElementById('lg-enabled').checked) {
+        debugEl.classList.remove('visible');
         return;
       }
-      debugEl.style.display = 'block';
+      debugEl.classList.add('visible');
       const stats = canvas.getCullingStats();
-      const threshold = parseFloat(document.getElementById('lg-lowZoomThreshold').value) || 2;
-      const skipThreshold = 1 / threshold;
-      const atLowZoom = stats.zoom <= skipThreshold;
+      const threshold = parseFloat(document.getElementById('lg-lowZoomThreshold').value) || 0.5;
       document.getElementById('lg-debug-zoom').textContent = stats.zoom.toFixed(3);
       document.getElementById('lg-debug-culling-zoom').textContent = stats.zoom.toFixed(3);
-      document.getElementById('lg-debug-low-zoom').textContent = atLowZoom ? 'YES' : 'no';
-      document.getElementById('lg-debug-threshold').textContent = skipThreshold.toFixed(3);
+      document.getElementById('lg-debug-low-zoom').textContent = stats.zoom <= threshold ? 'YES' : 'no';
+      document.getElementById('lg-debug-threshold').textContent = threshold.toFixed(3);
       document.getElementById('lg-debug-nodes').textContent = `${stats.visibleNodes}/${stats.totalNodes}`;
       document.getElementById('lg-debug-links').textContent = `${stats.visibleLinks}/${stats.totalLinks}`;
     };
 
-    // --- Send Query ---
+    // ===== Query =====
     window.sendQuery = async () => {
       const apiKey = document.getElementById('api-key').value.trim();
       const domain = document.getElementById('domain-input').value.trim() || 'https://browser.falkordb.com';
       const graphName = document.getElementById('graph-name').value.trim();
       const query = document.getElementById('query-input').value.trim();
 
-      if (!graphName || !query) {
-        alert('Please provide both a graph name and a query.');
-        return;
-      }
-
+      if (!graphName || !query) { alert('Provide both a graph name and a query.'); return; }
       saveToStorage();
 
       document.getElementById('selected-info').textContent = 'Sending query...';
-
       const graphData = { nodes: [], links: [] };
-
       const base = domain.replace(/\/+$/, '');
       const url = `${base}/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
 
       try {
         const headers = {};
-        if (apiKey) {
-          headers['Authorization'] = `Bearer ${apiKey}`;
-        }
+        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
         const response = await fetch(url, { method: 'GET', headers });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -879,7 +1410,6 @@
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           buffer += decoder.decode(value, { stream: true });
 
           const events = buffer.split('\n\n');
@@ -887,77 +1417,47 @@
 
           for (const event of events) {
             if (!event.trim()) continue;
-
             const lines = event.split('\n');
             let eventType = '';
             let data = '';
-
             for (const line of lines) {
-              if (line.startsWith('event:')) {
-                eventType = line.substring(6).trim();
-              } else if (line.startsWith('data:')) {
-                data += line.substring(5);
-              }
+              if (line.startsWith('event:')) eventType = line.substring(6).trim();
+              else if (line.startsWith('data:')) data += line.substring(5);
             }
 
             if (eventType === 'result' && data) {
               const result = JSON.parse(data);
-              console.log('Query result:', result);
-
               if (result.data && Array.isArray(result.data)) {
                 result.data.forEach(row => {
-                  // Process nodes (any key that looks like a node)
-                  for (const [key, val] of Object.entries(row)) {
+                  for (const [, val] of Object.entries(row)) {
                     if (val && val.labels && val.id !== undefined) {
                       const primaryLabel = val.labels[0] || 'Unknown';
-                      const node = {
-                        id: val.id,
-                        labels: val.labels,
-                        data: val.properties || {},
-                        visible: true,
-                        color: getColorForLabel(primaryLabel)
-                      };
-                      if (!graphData.nodes.find(n => n.id === node.id)) {
-                        graphData.nodes.push(node);
-                      }
+                      const node = { id: val.id, labels: val.labels, data: val.properties || {}, visible: true, color: getColorForLabel(primaryLabel) };
+                      if (!graphData.nodes.find(n => n.id === node.id)) graphData.nodes.push(node);
                     }
-                    // Process edges
                     if (val && val.relationshipType && val.sourceId !== undefined) {
                       const relType = val.relationshipType || 'RELATED';
-                      const link = {
-                        id: val.id,
-                        source: val.sourceId,
-                        target: val.destinationId,
-                        relationship: relType,
-                        data: val.properties || {},
-                        color: getColorForRelationship(relType),
-                        visible: true
-                      };
-                      if (!graphData.links.find(l => l.id === link.id)) {
-                        graphData.links.push(link);
-                      }
+                      const link = { id: val.id, source: val.sourceId, target: val.destinationId, relationship: relType, data: val.properties || {}, color: getColorForRelationship(relType), visible: true };
+                      if (!graphData.links.find(l => l.id === link.id)) graphData.links.push(link);
                     }
                   }
                 });
               }
             } else if (eventType === 'error' && data) {
-              const { message } = JSON.parse(data);
-              throw new Error(message);
+              throw new Error(JSON.parse(data).message);
             }
           }
         }
 
         canvas.setData(graphData);
-        document.getElementById('selected-info').textContent =
-          `Loaded ${graphData.nodes.length} nodes and ${graphData.links.length} links`;
-
+        document.getElementById('selected-info').textContent = `Loaded ${graphData.nodes.length} nodes and ${graphData.links.length} links`;
       } catch (error) {
         document.getElementById('selected-info').textContent = `Error: ${error.message}`;
         console.error('Query error:', error);
       }
     };
 
-    // Initialize canvas
+    // ===== Initialization =====
     canvas = document.getElementById('graph');
     await customElements.whenDefined('falkordb-canvas');
 
@@ -965,29 +1465,48 @@
     canvas.setWidth(graphContainer.clientWidth);
     canvas.setHeight(graphContainer.clientHeight);
 
+    // Resize canvas when container changes (debounced to avoid feedback loop)
+    let lastW = graphContainer.clientWidth;
+    let lastH = graphContainer.clientHeight;
+    const ro = new ResizeObserver(() => {
+      const w = graphContainer.clientWidth;
+      const h = graphContainer.clientHeight;
+      if (w !== lastW || h !== lastH) {
+        lastW = w;
+        lastH = h;
+        canvas.setWidth(w);
+        canvas.setHeight(h);
+      }
+    });
+    ro.observe(graphContainer);
+
     canvas.setConfig({
+      isNodeSelected: (node) => selectedNode && node.id === selectedNode.id,
+      isLinkSelected: (link) => selectedLink && link.id === selectedLink.id,
       eventHandlers: {
-        onNodeClick: (node, event) => {
-          document.getElementById('selected-info').textContent =
-            `Node: ${node.data.name || node.id} (${node.labels.join(', ')})`;
+        onNodeClick: (node) => {
+          selectedNode = node;
+          selectedLink = null;
+          updateDeleteButtons();
+          document.getElementById('selected-info').textContent = `Node: ${node.data.name || node.id} (${node.labels.join(', ')})`;
         },
-        onLinkClick: (link, event) => {
-          document.getElementById('selected-info').textContent =
-            `Link: ${link.relationship}`;
+        onLinkClick: (link) => {
+          selectedLink = link;
+          selectedNode = null;
+          updateDeleteButtons();
+          document.getElementById('selected-info').textContent = `Link: ${link.relationship}`;
         },
         onBackgroundClick: () => {
-          document.getElementById('selected-info').textContent =
-            'Click on a node or link to see details';
+          selectedNode = null;
+          selectedLink = null;
+          updateDeleteButtons();
+          document.getElementById('selected-info').textContent = 'Click on a node or link to see details';
         },
-        onNodeHover: (node) => {
-          document.body.style.cursor = node ? 'pointer' : 'default';
-        },
-        onLinkHover: (link) => {
-          document.body.style.cursor = link ? 'pointer' : 'default';
-        },
+        onNodeHover: (node) => { document.body.style.cursor = node ? 'pointer' : 'default'; },
+        onLinkHover: (link) => { document.body.style.cursor = link ? 'pointer' : 'default'; },
         onPinChange: (pinned) => {
           document.getElementById('pin-toggle').checked = pinned;
-          document.getElementById('animation-toggle').disabled = document.getElementById('layout-select').value !== "force" || pinned;
+          document.getElementById('animation-toggle').disabled = document.getElementById('layout-select').value !== 'force' || pinned;
         },
         onLayoutChange: (layout) => {
           currentLayout = layout;
@@ -995,30 +1514,31 @@
           updateDirectionOptions(layout);
         },
         onZoom: (transform) => {
-          const info = document.getElementById('selected-info');
-          if (!info.textContent.startsWith('Node:') && !info.textContent.startsWith('Link:')) {
-            info.textContent = `Zoom: ${transform.k.toFixed(2)}x`;
-          }
+          document.getElementById('zoom-info').textContent = `Zoom: ${transform.k.toFixed(2)}x`;
           if (lgDebugInterval) window.updateLgDebug();
         },
-        onEngineStop: () => {
-          console.log('Force simulation stopped');
-        },
+        onEngineStop: () => { console.log('Simulation stopped'); },
       },
     });
 
-    // Allow pressing Enter in the query input to send
+    // Enter to send query
     document.getElementById('query-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') window.sendQuery();
     });
 
-    // Load saved values from localStorage
-    loadFromStorage();
+    // Delete key removes selected node/link
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if (selectedNode) { window.deleteSelectedNode(); }
+        else if (selectedLink) { window.deleteSelectedLink(); }
+      }
+    });
 
-    // Initialize direction dropdown for default layout (force = disabled)
+    loadFromStorage();
     updateDirectionOptions(document.getElementById('layout-select').value);
 
-    // Load default sample data so the canvas isn't empty
+    // Sample data
     const sampleData = {
       nodes: [
         { id: 1, labels: ['Movie'], data: { name: 'The Matrix', year: 1999 }, visible: true, color: getColorForLabel('Movie') },

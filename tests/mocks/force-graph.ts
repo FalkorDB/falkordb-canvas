@@ -94,6 +94,22 @@ export class MockForceGraphInstance {
 
   public destroyed = false;
 
+  public backgroundColorValue = "";
+
+  public backgroundColorHistory: string[] = [];
+
+  public widthValue = 0;
+
+  public widthHistory: number[] = [];
+
+  public heightValue = 0;
+
+  public heightHistory: number[] = [];
+
+  public dagModeValue: unknown = null;
+
+  public dagModeHistory: unknown[] = [];
+
   constructor(private readonly container: HTMLElement) {}
 
   resetTracking() {
@@ -103,20 +119,30 @@ export class MockForceGraphInstance {
     this.d3AlphaMinHistory = [];
     this.zoomToFitCalls = 0;
     this.zoomToFitArgs = [];
+    this.backgroundColorHistory = [];
+    this.widthHistory = [];
+    this.heightHistory = [];
+    this.dagModeHistory = [];
   }
 
   width(value?: number) {
-    if (value === undefined) return 0;
+    if (value === undefined) return this.widthValue;
+    this.widthValue = value;
+    this.widthHistory.push(value);
     return this;
   }
 
   height(value?: number) {
-    if (value === undefined) return 0;
+    if (value === undefined) return this.heightValue;
+    this.heightValue = value;
+    this.heightHistory.push(value);
     return this;
   }
 
   backgroundColor(value?: string) {
-    if (value === undefined) return "";
+    if (value === undefined) return this.backgroundColorValue;
+    this.backgroundColorValue = value;
+    this.backgroundColorHistory.push(value);
     return this;
   }
 
@@ -153,7 +179,12 @@ export class MockForceGraphInstance {
 
   warmupTicks(_value?: number) { return this; }
 
-  dagMode(_value?: unknown) { return this; }
+  dagMode(value?: unknown) {
+    if (value === undefined) return this.dagModeValue;
+    this.dagModeValue = value;
+    this.dagModeHistory.push(value);
+    return this;
+  }
 
   dagLevelDistance(_value?: number) { return this; }
 

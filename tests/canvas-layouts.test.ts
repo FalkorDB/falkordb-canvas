@@ -7,16 +7,9 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
+import type { CanvasTestElement } from "./test-types";
 
-type CanvasElement = HTMLElement & {
-  setConfig: (config: Record<string, unknown>) => void;
-  setData: (data: { nodes: unknown[]; links: unknown[] }) => void;
-  setLayout: (mode: string) => void;
-  setLayoutOptions: (options: Record<string, unknown>) => void;
-  setAnimation: (enabled: boolean) => void;
-  setPinOnDragEnd: (pin: boolean) => void;
-  getGraphData: () => { nodes: any[]; links: any[] };
-};
+type CanvasElement = CanvasTestElement;
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -101,9 +94,9 @@ describe("layout modes", () => {
       expect(node.fy).toBeDefined();
     }
     // Root should be at center (0,0)
-    const root = graphData.nodes.find((n: any) => n.id === 1);
-    expect(root.fx).toBe(0);
-    expect(root.fy).toBe(0);
+    const root = graphData.nodes.find((n) => n.id === 1);
+    expect(root!.fx).toBe(0);
+    expect(root!.fy).toBe(0);
   });
 
   it("switches to flow layout", () => {
@@ -145,11 +138,11 @@ describe("layout modes", () => {
     canvas.setLayoutOptions({ tree: { direction: "td" } });
     canvas.setLayout("tree");
     const tdData = canvas.getGraphData();
-    const tdRoot = tdData.nodes.find((n: any) => n.id === 1);
-    const tdChild = tdData.nodes.find((n: any) => n.id === 2);
+    const tdRoot = tdData.nodes.find((n) => n.id === 1);
+    const tdChild = tdData.nodes.find((n) => n.id === 2);
 
     // Root should be above child in top-down
-    expect(tdRoot.fy).toBeLessThan(tdChild.fy);
+    expect(tdRoot!.fy).toBeLessThan(tdChild!.fy!);
   });
 
   it("tree layout bottom-up puts root below children", () => {
@@ -160,10 +153,10 @@ describe("layout modes", () => {
     canvas.setLayoutOptions({ tree: { direction: "bu" } });
     canvas.setLayout("tree");
     const data = canvas.getGraphData();
-    const root = data.nodes.find((n: any) => n.id === 1);
-    const child = data.nodes.find((n: any) => n.id === 2);
+    const root = data.nodes.find((n) => n.id === 1);
+    const child = data.nodes.find((n) => n.id === 2);
 
-    expect(root.fy).toBeGreaterThan(child.fy);
+    expect(root!.fy).toBeGreaterThan(child!.fy!);
   });
 
   it("tree layout left-right puts root to the left", () => {
@@ -174,10 +167,10 @@ describe("layout modes", () => {
     canvas.setLayoutOptions({ tree: { direction: "lr" } });
     canvas.setLayout("tree");
     const data = canvas.getGraphData();
-    const root = data.nodes.find((n: any) => n.id === 1);
-    const child = data.nodes.find((n: any) => n.id === 2);
+    const root = data.nodes.find((n) => n.id === 1);
+    const child = data.nodes.find((n) => n.id === 2);
 
-    expect(root.fx).toBeLessThan(child.fx);
+    expect(root!.fx).toBeLessThan(child!.fx!);
   });
 
   it("handles disconnected nodes in tree layout", () => {

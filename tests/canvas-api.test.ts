@@ -7,55 +7,9 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
+import type { CanvasTestElement } from "./test-types";
 
-type CanvasElement = HTMLElement & {
-  setConfig: (config: Record<string, unknown>) => void;
-  setData: (data: { nodes: NodeInput[]; links: LinkInput[] }) => void;
-  getData: () => { nodes: NodeInput[]; links: LinkInput[] };
-  setWidth: (w: number) => void;
-  setHeight: (h: number) => void;
-  setBackgroundColor: (color: string) => void;
-  setForegroundColor: (color: string) => void;
-  setAnimation: (enabled: boolean) => void;
-  setPinOnDragEnd: (pin: boolean) => void;
-  refresh: () => void;
-  getGraph: () => unknown;
-  getZoom: () => number;
-  getCullingStats: () => unknown;
-  setGraphData: (data: { nodes: NodeInput[]; links: LinkInput[] }) => void;
-  getGraphData: () => { nodes: RuntimeNode[]; links: RuntimeLink[] };
-  zoomToFit: (paddingMultiplier?: number, filter?: (node: unknown) => boolean) => void;
-};
-
-type NodeInput = {
-  id: number | string;
-  labels: string[];
-  visible: boolean;
-  color: string;
-  data: Record<string, unknown>;
-};
-
-type LinkInput = {
-  id: number | string;
-  relationship: string;
-  source: number | string;
-  target: number | string;
-  visible: boolean;
-  color: string;
-  data: Record<string, unknown>;
-};
-
-type RuntimeNode = NodeInput & {
-  x?: number;
-  y?: number;
-  size: number;
-};
-
-type RuntimeLink = Omit<LinkInput, "source" | "target"> & {
-  source: RuntimeNode;
-  target: RuntimeNode;
-  curve?: number;
-};
+type CanvasElement = CanvasTestElement;
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -147,10 +101,12 @@ describe("setForegroundColor", () => {
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setData(SIMPLE_DATA);
 
-    // Setting foreground should not throw
     canvas.setForegroundColor("#ffffff");
-    // And the config should be updated (verify via setConfig readback - indirect)
-    // No assertion on internal state, just no-throw
+    const internalConfig = (canvas as any).config;
+    expect(internalConfig.foregroundColor).toBe("#ffffff");
+    // Verify tooltip styles were updated with the new color
+    const style = canvas.shadowRoot?.querySelector("style");
+    expect(style?.textContent).toContain("#ffffff");
   });
 
   it("is a no-op when color is the same", () => {
@@ -158,8 +114,11 @@ describe("setForegroundColor", () => {
     canvas.setConfig({ width: 800, height: 600, foregroundColor: "#fff" });
     canvas.setData(SIMPLE_DATA);
 
-    // Should not throw or trigger unnecessary updates
+    const styleBefore = canvas.shadowRoot?.querySelector("style")?.textContent;
     canvas.setForegroundColor("#fff");
+    const styleAfter = canvas.shadowRoot?.querySelector("style")?.textContent;
+    // Style should not have been re-written (no-op)
+    expect(styleAfter).toBe(styleBefore);
   });
 });
 
@@ -174,8 +133,18 @@ describe("refresh", () => {
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setData(SIMPLE_DATA);
 
-    // Should not throw
+    // Seed internal caches
+    const internalCanvas = canvas as any;
+    internalCanvas.nodeDisplayFontSize.set("test-node", 12);
+    const data = canvas.getGraphData();
+    data.nodes[0].displayName = ["cached", "value"];
+
     canvas.refresh();
+
+    // Font size cache should be cleared
+    expect(internalCanvas.nodeDisplayFontSize.size).toBe(0);
+    // Display names should be reset
+    expect(data.nodes[0].displayName).toEqual(["", ""]);
   });
 
   it("recomputes layout for tree mode", () => {

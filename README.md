@@ -124,15 +124,19 @@ function GraphVisualization() {
 | **setHeight**(*height*) | | Set canvas height in pixels. |
 | **setBackgroundColor**(*color*) | | Set background color (hex or CSS color). |
 | **setForegroundColor**(*color*) | | Set foreground color for text and borders. |
-| **setIsLoading**(*isLoading*) | | Show/hide loading skeleton. |
-| **setCooldownTicks**(*ticks*) | | Set simulation ticks before stopping (undefined = infinite). |
+| **setAnimation**(*enabled*) | | Enable or disable force simulation animation. When disabled, pins all nodes in place. |
+| **setPinOnDragEnd**(*pin*) | | Enable or disable pinning nodes after dragging. |
+| **setLayout**(*layoutMode*) | `'force'` | Switch layout mode: `'force'` \| `'tree'` \| `'flow'` \| `'radial'`. |
+| **setLayoutOptions**(*options*) | | Update per-layout options (tree, flow, radial, force). Triggers re-layout. |
 | **setDebug**(*enabled*) | `false` | Enable or disable debug logging to console. All log messages are prefixed with `[FalkorDBCanvas]`. |
+| **refresh**() | | Trigger a repaint after in-place property mutations (visibility, color, size). Recomputes positions for deterministic layouts. |
 | **getViewport**() | | Get current zoom and center position as `ViewportState`. |
 | **setViewport**(*viewport*) | | Restore a previously saved viewport state. |
 | **getZoom**() | | Get current zoom level. |
 | **zoom**(*zoomLevel*) | | Set zoom level. |
 | **zoomToFit**(*paddingMultiplier*, *filter*) | `1.0`, `undefined` | Auto-fit all visible nodes in view. Optional padding multiplier and node filter function. |
 | **getGraph**() | | Get the underlying force-graph instance for advanced control. |
+| **getCullingStats**() | | Get viewport culling statistics (bounds, visible vs total node/link counts). |
 
 ### Configuration Options
 
@@ -148,7 +152,6 @@ Configuration is passed to `setConfig()` as a `ForceGraphConfig` object. It is o
 | `foregroundColor` | `'#1A1A1A'` | Foreground color for borders and text |
 | `layoutMode` | `'force'` | Layout algorithm: `'force'` \| `'tree'` \| `'flow'` \| `'radial'` |
 | `layoutOptions` | `{}` | Per-layout options (see [Layout Modes](#layout-modes)) |
-| `edgeGap` | `2` | Gap between edge tip and node border (px) |
 | `animation` | | Enable/disable layout animation |
 | `captionsKeys` | `[]` | Node property keys to display as labels |
 | `showPropertyKeyPrefix` | `false` | Show property key prefix in node labels |
@@ -194,6 +197,7 @@ Configuration is passed to `setConfig()` as a `ForceGraphConfig` object. It is o
 | `selfLoopCurveFactor` | `11.67` | Self-loop curve factor |
 | `parallelEdgeCurveMultiplier` | `0.4` | Parallel edge curve multiplier |
 | `labelBackgroundPadding` | `0.3` | Label background padding (world units) |
+| `edgeGap` | `2` | Gap between edge tip and visible node border (px) |
 
 #### `simulation` — Force Simulation Tuning
 
@@ -283,7 +287,7 @@ Notes:
 | `labels` | *required* | Array of label names for the node |
 | `color` | *required* | Node color (hex or CSS color) |
 | `visible` | *required* | Whether the node is visible |
-| `size` | `6` | Node radius |
+| `size` | `9` | Node radius (world units) |
 | `caption` | `'id'` | Property key to use from the data for display text |
 | `data` | *required* | Node properties as key-value pairs |
 
@@ -304,7 +308,7 @@ Internal format with computed properties:
 ```typescript
 {
   ...Node;
-  size: number;                    // Always present (defaults to 6)
+  size: number;                    // Always present (defaults to 9)
   displayName: [string, string];  // Computed text lines
   x?: number;                     // Position from simulation
   y?: number;
@@ -476,8 +480,8 @@ while (true) {
 
 ## Performance Tips
 
-1. **Large graphs**: Use `cooldownTicks` to limit simulation iterations
-2. **Static graphs**: Set `cooldownTicks: 0` after initial layout
+1. **Large graphs**: Disable animation (`setAnimation(false)`) once the layout stabilises
+2. **Static graphs**: Use a deterministic layout (`setLayout('tree')`) to avoid simulation overhead
 3. **Custom rendering**: Optimize your custom `nodeCanvasObject` and `linkCanvasObject` functions
 4. **Viewport**: Use `getViewport()` and `setViewport()` to preserve user's view when updating data
 5. **Very large graphs**: Enable viewport culling via the `largeGraph` option (see below)
@@ -494,7 +498,7 @@ For graphs with thousands of nodes and links, enable the built-in viewport culli
 ```typescript
 canvas.setConfig({
   largeGraph: {
-    enabled: true,           // master switch (false by default – no behavioural change unless true)
+    enabled: true,           // master switch (true by default)
     viewportPadding: 50,     // world-unit padding around the visible viewport (default: 0)
     lowZoomThreshold: 0.5,  // zoom level below which expensive details are skipped
     skipLabelsAtLowZoom: true,      // skip node labels at low zoom (default: true)
@@ -525,7 +529,6 @@ Node and link shapes are always drawn so the overall graph structure remains vis
 ```typescript
 // Good starting point for graphs with 1,000 – 10,000+ elements
 canvas.setConfig({
-  cooldownTicks: 300,   // limit physics simulation ticks
   largeGraph: {
     enabled: true,
     viewportPadding: 100,  // pre-render elements slightly off-screen to avoid pop-in
@@ -536,7 +539,7 @@ canvas.setConfig({
 
 ### Backward compatibility
 
-The feature is **disabled by default** (`enabled: false` / property absent).  Existing code that does not set `largeGraph` is completely unaffected.
+The feature is **enabled by default** (`enabled: true`).  The `lowZoomThreshold` defaults to `1` (always active) and viewport culling uses zero padding.
 
 ## Debugging
 

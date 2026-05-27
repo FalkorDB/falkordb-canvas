@@ -7,16 +7,9 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
+import type { CanvasTestElement } from "./test-types";
 
-type CanvasElement = HTMLElement & {
-  setConfig: (config: Record<string, unknown>) => void;
-  setData: (data: { nodes: unknown[]; links: unknown[] }) => void;
-  getViewport: () => { zoom: number; centerX: number; centerY: number } | undefined;
-  setViewport: (viewport: { zoom: number; centerX: number; centerY: number }) => void;
-  zoomToFit: (paddingMultiplier?: number) => void;
-  getZoom: () => number;
-  zoom: (zoomLevel: number) => void;
-};
+type CanvasElement = CanvasTestElement;
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -190,7 +183,7 @@ describe("onZoom updates culling bounds", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, lowZoomThreshold: 2, viewportPadding: 10 },
+      largeGraph: { lowZoomThreshold: 0.5, viewportPadding: 10 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -219,7 +212,7 @@ describe("onZoom updates culling bounds", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, lowZoomThreshold: 2, viewportPadding: 10 },
+      largeGraph: { lowZoomThreshold: 0.5, viewportPadding: 10 },
     });
     canvas.setData(SIMPLE_DATA);
 
@@ -248,7 +241,7 @@ describe("onZoom updates culling bounds", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, lowZoomThreshold: 2, viewportPadding: 10 },
+      largeGraph: { lowZoomThreshold: 0.5, viewportPadding: 10 },
     });
     canvas.setData(SIMPLE_DATA);
 

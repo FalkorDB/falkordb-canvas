@@ -6,16 +6,9 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
+import type { CanvasTestElement } from "./test-types";
 
-type CanvasElement = HTMLElement & {
-  setConfig: (config: Record<string, unknown>) => void;
-  setData: (data: { nodes: unknown[]; links: unknown[] }) => void;
-  setGraphData: (data: { nodes: unknown[]; links: unknown[] }) => void;
-  getData: () => { nodes: unknown[]; links: unknown[] };
-  getGraphData: () => { nodes: any[]; links: any[] };
-  setWidth: (w: number) => void;
-  setHeight: (h: number) => void;
-};
+type CanvasElement = CanvasTestElement;
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -138,7 +131,7 @@ describe("setData and getData", () => {
     }
 
     // Nodes should not all be at the same position
-    const positions = graphData.nodes.map((n: any) => `${n.x},${n.y}`);
+    const positions = graphData.nodes.map((n) => `${n.x},${n.y}`);
     const unique = new Set(positions);
     expect(unique.size).toBe(3);
   });
@@ -161,7 +154,7 @@ describe("setData and getData", () => {
 
     const graphData = canvas.getGraphData();
     // Parallel edges should have different curve values
-    const curves = graphData.links.map((l: any) => l.curve);
+    const curves = graphData.links.map((l) => l.curve);
     const uniqueCurves = new Set(curves);
     expect(uniqueCurves.size).toBe(3);
   });
@@ -237,10 +230,10 @@ describe("setGraphData incremental updates", () => {
     });
 
     const graphData2 = canvas.getGraphData();
-    const reusedNode = graphData2.nodes.find((n: any) => n.id === 1);
+    const reusedNode = graphData2.nodes.find((n) => n.id === 1);
     expect(reusedNode).toBe(originalNode); // Same object reference
-    expect(reusedNode.x).toBe(42);
-    expect(reusedNode.y).toBe(99);
+    expect(reusedNode!.x).toBe(42);
+    expect(reusedNode!.y).toBe(99);
   });
 
   it("adds new nodes and removes missing ones", () => {
@@ -266,7 +259,7 @@ describe("setGraphData incremental updates", () => {
 
     const graphData = canvas.getGraphData();
     expect(graphData.nodes.length).toBe(2);
-    const ids = graphData.nodes.map((n: any) => n.id);
+    const ids = graphData.nodes.map((n) => n.id);
     expect(ids).toContain(1);
     expect(ids).toContain(3);
     expect(ids).not.toContain(2);

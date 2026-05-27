@@ -7,12 +7,9 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
+import type { CanvasTestElement } from "./test-types";
 
-type CanvasElement = HTMLElement & {
-  setConfig: (config: Record<string, unknown>) => void;
-  setData: (data: { nodes: unknown[]; links: unknown[] }) => void;
-  getGraphData: () => { nodes: any[]; links: any[] };
-};
+type CanvasElement = CanvasTestElement;
 
 beforeAll(() => {
   class ResizeObserverMock {

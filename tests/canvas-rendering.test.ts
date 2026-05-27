@@ -7,15 +7,12 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
+import type { CanvasTestElement } from "./test-types";
 
-type CanvasElement = HTMLElement & {
-  setConfig: (config: Record<string, unknown>) => void;
-  setData: (data: { nodes: unknown[]; links: unknown[] }) => void;
-  getGraphData: () => { nodes: any[]; links: any[] };
-};
+type CanvasElement = CanvasTestElement;
 
 function createCtxSpy() {
-  return {
+  const spy = {
     beginPath: vi.fn(),
     arc: vi.fn(),
     stroke: vi.fn(),
@@ -51,7 +48,8 @@ function createCtxSpy() {
     textAlign: "center" as CanvasTextAlign,
     textBaseline: "middle" as CanvasTextBaseline,
     globalAlpha: 1,
-  } as unknown as CanvasRenderingContext2D;
+  };
+  return spy as typeof spy & CanvasRenderingContext2D;
 }
 
 beforeAll(() => {
@@ -151,8 +149,8 @@ describe("node rendering", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      nodeStyle: { textFillRatio: 0.85 },
       captionsKeys: [["name", true]],
+      largeGraph: { lowZoomThreshold: 0.5 },
     });
     canvas.setData({
       nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", data: { name: "Alice" } }],
@@ -180,6 +178,7 @@ describe("node rendering", () => {
       height: 600,
       nodeStyle: { textFillRatio: 0, fontSize: 3 },
       captionsKeys: [["name", true]],
+      largeGraph: { lowZoomThreshold: 0.5 },
     });
     canvas.setData({
       nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", data: { name: "Bob" } }],
@@ -204,7 +203,7 @@ describe("node rendering", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      nodeStyle: { glowSize: 5, glowColor: "rgba(255,0,0,0.5)" },
+      nodeStyle: { glowSpread: 5, glowColor: [255, 0, 0] },
     });
     canvas.setData({
       nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", data: {} }],
@@ -231,9 +230,10 @@ describe("node rendering", () => {
       width: 800,
       height: 600,
       nodeStyle: { strokeWidthSelected: 1.5 },
+      isNodeSelected: () => true,
     });
     canvas.setData({
-      nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", data: {}, selected: true }],
+      nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", data: {} }],
       links: [],
     });
 
@@ -256,7 +256,7 @@ describe("node rendering", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, lowZoomThreshold: 2, viewportPadding: 10 },
+      largeGraph: { lowZoomThreshold: 0.5, viewportPadding: 10 },
     });
     canvas.setData({
       nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", data: {} }],
@@ -285,6 +285,7 @@ describe("node rendering", () => {
       width: 800,
       height: 600,
       captionsKeys: [["Name", false]], // non-exact match (case-insensitive includes)
+      largeGraph: { lowZoomThreshold: 0.5 },
     });
     canvas.setData({
       nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", data: { displayName: "Hello" } }],
@@ -313,6 +314,7 @@ describe("node rendering", () => {
       width: 800,
       height: 600,
       captionsKeys: [["nonexistent", true]],
+      largeGraph: { lowZoomThreshold: 0.5 },
     });
     canvas.setData({
       nodes: [{ id: 42, labels: ["A"], visible: true, color: "#f00", data: { x: "y" } }],
@@ -454,7 +456,7 @@ describe("link rendering", () => {
 
   it("renders link label", () => {
     const canvas = createCanvas();
-    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setConfig({ width: 800, height: 600, largeGraph: { lowZoomThreshold: 0.5 } });
     canvas.setData({
       nodes: [
         { id: 1, labels: ["A"], visible: true, color: "#f00", data: {} },
@@ -488,7 +490,7 @@ describe("link rendering", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      largeGraph: { enabled: true, lowZoomThreshold: 2, viewportPadding: 10 },
+      largeGraph: { lowZoomThreshold: 2, viewportPadding: 10 },
     });
     canvas.setData({
       nodes: [
@@ -526,7 +528,7 @@ describe("link rendering", () => {
     canvas.setConfig({
       width: 800,
       height: 600,
-      linkStyle: { dashPattern: [5, 3] },
+      linkLineDash: () => [5, 3],
     });
     canvas.setData({
       nodes: [

@@ -7,14 +7,9 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
+import type { CanvasTestElement } from "./test-types";
 
-type CanvasElement = HTMLElement & {
-  setConfig: (config: Record<string, unknown>) => void;
-  setData: (data: { nodes: unknown[]; links: unknown[] }) => void;
-  getData: () => { nodes: unknown[]; links: unknown[] };
-  getGraphData: () => { nodes: any[]; links: any[] };
-  destroy: () => void;
-};
+type CanvasElement = CanvasTestElement;
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -86,10 +81,11 @@ describe("lifecycle", () => {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setData({ nodes: [], links: [] });
+    const instance = getLastInstance();
 
-    if (canvas.destroy) {
-      canvas.destroy();
-    }
+    // Removing from DOM triggers disconnectedCallback which calls _destructor
+    canvas.remove();
+    expect(instance.destroyed).toBe(true);
   });
 });
 
@@ -210,7 +206,7 @@ describe("edge cases", () => {
     const graphData = canvas.getGraphData();
     expect(graphData.links.length).toBe(3);
     // All self-loops should have different curves
-    const curves = graphData.links.map((l: any) => l.curve);
+    const curves = graphData.links.map((l) => l.curve);
     const uniqueCurves = new Set(curves);
     expect(uniqueCurves.size).toBe(3);
   });
@@ -278,17 +274,24 @@ describe("setConfig triggers render", () => {
       links: [],
     });
 
-    // This should not throw and should trigger a render
     canvas.setConfig({ nodeStyle: { strokeWidthSelected: 3 } });
+    const internalConfig = (canvas as any).config;
+    expect(internalConfig.nodeStyle.strokeWidthSelected).toBe(3);
+
     canvas.setConfig({ linkStyle: { lineWidthSelected: 2 } });
+    expect(internalConfig.linkStyle.lineWidthSelected).toBe(2);
   });
 
   it("setConfig before setData does not throw", () => {
     const canvas = createCanvas();
-    // Config before data — should be fine
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setConfig({ nodeStyle: { fontSize: 4 } });
     canvas.setConfig({ linkStyle: { lineWidthUnselected: 0.3 } });
     canvas.setConfig({ simulation: { chargeStrength: -100 } });
+
+    const internalConfig = (canvas as any).config;
+    expect(internalConfig.nodeStyle.fontSize).toBe(4);
+    expect(internalConfig.linkStyle.lineWidthUnselected).toBe(0.3);
+    expect(internalConfig.simulation.chargeStrength).toBe(-100);
   });
 });

@@ -13,6 +13,11 @@ import {
   Transform,
   CanvasRenderMode,
   InternalForceGraphConfig,
+  NodeStyleConfig,
+  LinkStyleConfig,
+  SimulationConfig,
+  InteractionConfig,
+  LargeGraphConfig,
 } from "./canvas-types.js";
 import {
   dataToGraphData,
@@ -28,7 +33,7 @@ const PADDING = 2;
 
 // ─── Default Sub-Configs ───────────────────────────────────────────────────────
 
-const DEFAULT_NODE_STYLE: Required<import('./canvas-types.js').NodeStyleConfig> = {
+const DEFAULT_NODE_STYLE: Required<NodeStyleConfig> = {
   fontFamily: 'SofiaSans',
   fontWeightUnselected: 400,
   fontWeightSelected: 700,
@@ -43,7 +48,7 @@ const DEFAULT_NODE_STYLE: Required<import('./canvas-types.js').NodeStyleConfig> 
   glowMaxOpacity: 0.6,
 };
 
-const DEFAULT_LINK_STYLE: Required<import('./canvas-types.js').LinkStyleConfig> = {
+const DEFAULT_LINK_STYLE: Required<LinkStyleConfig> = {
   fontFamily: 'SofiaSans',
   fontSize: 2,
   fontWeightUnselected: 400,
@@ -57,9 +62,10 @@ const DEFAULT_LINK_STYLE: Required<import('./canvas-types.js').LinkStyleConfig> 
   selfLoopCurveFactor: 11.67,
   parallelEdgeCurveMultiplier: 0.4,
   labelBackgroundPadding: 0.3,
+  edgeGap: PADDING,
 };
 
-const DEFAULT_SIMULATION: Required<import('./canvas-types.js').SimulationConfig> = {
+const DEFAULT_SIMULATION: Required<SimulationConfig> = {
   centerStrength: 0.03,
   chargeStrength: -400,
   velocityDecay: 0.4,
@@ -67,7 +73,7 @@ const DEFAULT_SIMULATION: Required<import('./canvas-types.js').SimulationConfig>
   warmupTicks: 300,
 };
 
-const DEFAULT_INTERACTION: Required<import('./canvas-types.js').InteractionConfig> = {
+const DEFAULT_INTERACTION: Required<InteractionConfig> = {
   tooltipFontSize: 12,
   tooltipPadding: '4px 8px',
   tooltipBorderRadius: '4px',
@@ -76,6 +82,15 @@ const DEFAULT_INTERACTION: Required<import('./canvas-types.js').InteractionConfi
   zoomToFitDelay: 50,
   linkHitWidth: 10,
   contrastThreshold: 0.5,
+};
+
+const DEFAULT_LARGE_GRAPH: Required<LargeGraphConfig> = {
+  enabled: true,
+  viewportPadding: 0,
+  lowZoomThreshold: 1,
+  skipLabelsAtLowZoom: true,
+  skipArrowsAtLowZoom: true,
+  skipLinkLabelsAtLowZoom: true,
 };
 
 /** Axis-aligned bounding box in world-space coordinates. */
@@ -140,11 +155,11 @@ class FalkorDBCanvas extends HTMLElement {
     layoutOptions: {},
 
     // ─── Style Sub-Configs ───────────────────────────────────────────────────
-    edgeGap: PADDING,
     nodeStyle: { ...DEFAULT_NODE_STYLE },
     linkStyle: { ...DEFAULT_LINK_STYLE },
     simulation: { ...DEFAULT_SIMULATION },
     interaction: { ...DEFAULT_INTERACTION },
+    largeGraph: { ...DEFAULT_LARGE_GRAPH },
 
     // ─── Display Options ─────────────────────────────────────────────────────
     captionsKeys: [],
@@ -166,7 +181,6 @@ class FalkorDBCanvas extends HTMLElement {
     {
       textWidth: number;
       textHeight: number;
-      textYOffset: number;
     }
   > = new Map();
 
@@ -194,7 +208,7 @@ class FalkorDBCanvas extends HTMLElement {
 
   /** Returns the configured edge gap (distance between edge tip and node border). */
   private get edgeGap(): number {
-    return this.config.edgeGap;
+    return this.config.linkStyle.edgeGap;
   }
 
   constructor() {
@@ -260,9 +274,10 @@ class FalkorDBCanvas extends HTMLElement {
   setConfig(config: Partial<ForceGraphConfig>) {
     this.log('Setting config:', config);
 
-    // If captionsKeys changed, invalidate cached display names and font sizes
+    // If captionsKeys or showPropertyKeyPrefix changed, invalidate cached display names and font sizes
     // so text is recomputed with the new keys on the next render.
-    if (config.captionsKeys && JSON.stringify(config.captionsKeys) !== JSON.stringify(this.config.captionsKeys)) {
+    if ((config.captionsKeys && JSON.stringify(config.captionsKeys) !== JSON.stringify(this.config.captionsKeys))
+      || (config.showPropertyKeyPrefix !== undefined && config.showPropertyKeyPrefix !== this.config.showPropertyKeyPrefix)) {
       this.nodeDisplayFontSize.clear();
       for (const node of this.data.nodes) {
         node.displayName = ["", ""];
@@ -305,6 +320,11 @@ class FalkorDBCanvas extends HTMLElement {
       }
     }
 
+    // Clear cached link label metrics when link style changes
+    if (config.linkStyle) {
+      this.relationshipsTextCache.clear();
+    }
+
     // Re-apply simulation forces when simulation config changes
     if (config.simulation && this.graph) {
       this.setupForces();
@@ -323,6 +343,15 @@ class FalkorDBCanvas extends HTMLElement {
     if (config.eventHandlers) {
       this.log('Updating event handlers');
       this.updateEventHandlers();
+    }
+
+    // Apply background/foreground colors through their dedicated methods
+    // which also update the force-graph instance and tooltip styles.
+    if (config.backgroundColor && this.graph) {
+      this.graph.backgroundColor(this.config.backgroundColor);
+    }
+    if (config.backgroundColor || config.foregroundColor || config.interaction) {
+      this.updateTooltipStyles();
     }
 
     // Always trigger a re-render so visual changes apply immediately
@@ -584,6 +613,12 @@ class FalkorDBCanvas extends HTMLElement {
   refresh() {
     // Clear font size cache so text re-fits updated node sizes
     this.nodeDisplayFontSize.clear();
+    // Clear display names so text re-wraps for the new node sizes
+    for (const node of this.data.nodes) {
+      node.displayName = ["", ""];
+    }
+    // Clear link label cache in case link colors/properties changed
+    this.relationshipsTextCache.clear();
 
     const layoutMode = this.config.layoutMode;
     if (layoutMode === 'tree' || layoutMode === 'flow' || layoutMode === 'radial') {
@@ -612,6 +647,14 @@ class FalkorDBCanvas extends HTMLElement {
     ).length - removedNodes;
 
     this.data = converted;
+
+    // Invalidate display caches — reused nodes may have new color/size/data
+    // that affects text wrapping or font sizing.
+    this.nodeDisplayFontSize.clear();
+    for (const node of this.data.nodes) {
+      node.displayName = ["", ""];
+    }
+    this.relationshipsTextCache.clear();
 
     if (!this.graph) return;
 
@@ -1026,7 +1069,7 @@ class FalkorDBCanvas extends HTMLElement {
     if (link.source.id === link.target.id) {
       // Self-loop: the cubic bezier extends roughly |curve| * nodeSize * factor
       // away from the node centre. Use that as a conservative radius.
-      const nodeSize = link.source.size || 6;
+      const nodeSize = link.source.size;
       const loopRadius = Math.abs(link.curve || 1) * nodeSize * this.config.linkStyle.selfLoopCurveFactor;
       return (
         sx + loopRadius >= minX && sx - loopRadius <= maxX &&
@@ -1109,12 +1152,11 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.fill();
 
     // Low-zoom optimisation: skip labels when zoomed out beyond threshold.
-    // lowZoomThreshold is a zoom-out ratio (1=default, 2=zoomed out 2x).
-    // Skip when 1/k >= threshold, i.e., k <= 1/threshold.
-    const nodeZoomThreshold = this.config.largeGraph?.lowZoomThreshold ?? 2;
-    const skipLabels = this.config.largeGraph?.enabled &&
-      (this.config.largeGraph?.skipLabelsAtLowZoom ?? true) &&
-      this.cullingZoom <= 1 / nodeZoomThreshold;
+    // lowZoomThreshold is the zoom level below which details are hidden (e.g. 0.5 = skip at half zoom).
+    const nodeZoomThreshold = this.config.largeGraph.lowZoomThreshold;
+    const skipLabels = this.config.largeGraph.enabled &&
+      this.config.largeGraph.skipLabelsAtLowZoom  &&
+      this.cullingZoom <= nodeZoomThreshold;
     if (skipLabels) return;
 
     // Draw text
@@ -1232,11 +1274,11 @@ class FalkorDBCanvas extends HTMLElement {
     const arrowLen = isLinkSelected ? this.config.linkStyle.arrowLengthSelected : this.config.linkStyle.arrowLengthUnselected;
 
     // Low-zoom flags – evaluated once per link draw.
-    // lowZoomThreshold is a zoom-out ratio (1=default, 2=zoomed out 2x).
-    const lowZoomThreshold = this.config.largeGraph?.lowZoomThreshold ?? 2;
-    const atLowZoom = this.config.largeGraph?.enabled && this.cullingZoom <= 1 / lowZoomThreshold;
-    const skipArrows = atLowZoom && (this.config.largeGraph?.skipArrowsAtLowZoom ?? true);
-    const skipLinkLabels = atLowZoom && (this.config.largeGraph?.skipLinkLabelsAtLowZoom ?? true);
+    // lowZoomThreshold is the zoom level below which details are hidden (e.g. 0.5 = skip at half zoom).
+    const lowZoomThreshold = this.config.largeGraph.lowZoomThreshold;
+    const atLowZoom = this.config.largeGraph.enabled && this.cullingZoom <= lowZoomThreshold;
+    const skipArrows = atLowZoom && this.config.largeGraph.skipArrowsAtLowZoom;
+    const skipLinkLabels = atLowZoom && this.config.largeGraph.skipLinkLabelsAtLowZoom;
 
     // Deferred arrowhead — drawn after the label so it is never covered by
     // the label background rect (which happens for short links where the
@@ -1244,7 +1286,7 @@ class FalkorDBCanvas extends HTMLElement {
     let pendingArrow: { tipX: number; tipY: number; nx: number; ny: number; arrowLen: number; arrowHalfWidth: number } | null = null;
 
     if (start.id === end.id) {
-      const nodeSize = start.size || 6;
+      const nodeSize = start.size;
       const d = (link.curve || 0) * nodeSize * this.config.linkStyle.selfLoopCurveFactor;
 
       ctx.lineWidth = (isLinkSelected ? this.config.linkStyle.lineWidthSelected : this.config.linkStyle.lineWidthUnselected) / globalScale;
@@ -1373,7 +1415,7 @@ class FalkorDBCanvas extends HTMLElement {
       // Target-side clip: place edge tip at borderRadius from node center
       // along the bezier tangent direction. Near t=1 the bezier is linear,
       // so t offset = borderRadius / (2 * |control - end|).
-      const endNodeSize = end.size || 6;
+      const endNodeSize = end.size;
       const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected) + this.edgeGap;
 
       const ceX = controlX - end.x;
@@ -1386,7 +1428,7 @@ class FalkorDBCanvas extends HTMLElement {
       const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
 
       // Source-side clip: place edge start at srcBorderRadius from node center
-      const startNodeSize = start.size || 6;
+      const startNodeSize = start.size;
       const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + this.edgeGap;
 
       const csX = controlX - start.x;
@@ -1431,46 +1473,30 @@ class FalkorDBCanvas extends HTMLElement {
 
     ctx.font = isLinkSelected ? `${this.config.linkStyle.fontWeightSelected} ${this.config.linkStyle.fontSize}px ${this.config.linkStyle.fontFamily}` : `${this.config.linkStyle.fontWeightUnselected} ${this.config.linkStyle.fontSize}px ${this.config.linkStyle.fontFamily}`;
     ctx.textAlign = "center";
-    // Draw text with alphabetic baseline, positioned so visual center is at y=0
-    ctx.textBaseline = "alphabetic";
+    ctx.textBaseline = "middle";
 
     if (!skipLinkLabels) {
-      // Separate cache entries per weight so each state is measured with its own
-      // font, giving equal visual padding regardless of selection state.
       const cacheKey = `${link.relationship}_${isLinkSelected ? "700" : "400"}`;
       let cached = this.relationshipsTextCache.get(cacheKey);
 
       if (!cached) {
-        // ctx.font is already set to the correct weight above; measure it directly.
         const metrics = ctx.measureText(link.relationship);
-        // Use actual ink bounds for vertical metrics; fontBoundingBox* is the full
-        // line-box and adds excessive space for lighter weights.
-        // Use metrics.width for horizontal extent: actualBoundingBoxLeft/Right are
-        // unreliable with textAlign="center" and can double the value on some engines.
-        const inkAscent = metrics.actualBoundingBoxAscent ?? metrics.fontBoundingBoxAscent;
-        const inkDescent = metrics.actualBoundingBoxDescent ?? metrics.fontBoundingBoxDescent;
-        const inkWidth = metrics.width;
         const bgPadding = this.config.linkStyle.labelBackgroundPadding;
 
         cached = {
-          textWidth: inkWidth + bgPadding * 2,
-          textHeight: inkAscent + inkDescent + bgPadding * 2,
-          // Shift baseline up so the ink block is centred inside the bg rect.
-          textYOffset: (inkAscent - inkDescent) / 2,
+          textWidth: metrics.width + bgPadding * 2,
+          textHeight: this.config.linkStyle.fontSize + bgPadding * 2,
         };
         this.relationshipsTextCache.set(cacheKey, cached);
       }
 
-      const { textWidth, textHeight, textYOffset } = cached;
+      const { textWidth, textHeight } = cached;
 
       ctx.save();
       ctx.translate(textX, textY);
       ctx.rotate(angle);
 
-      // Draw background centered on the link line (y=0)
       ctx.fillStyle = this.config.backgroundColor;
-
-      // Offset background to match text visual center
       ctx.fillRect(
         -textWidth / 2,
         -textHeight / 2,
@@ -1479,7 +1505,7 @@ class FalkorDBCanvas extends HTMLElement {
       );
 
       ctx.fillStyle = getContrastTextColor(this.config.backgroundColor, this.config.interaction.contrastThreshold);
-      ctx.fillText(link.relationship, 0, textYOffset);
+      ctx.fillText(link.relationship, 0, 0);
       ctx.restore();
     }
 
@@ -1520,7 +1546,7 @@ class FalkorDBCanvas extends HTMLElement {
 
     if (start.id === end.id) {
       // Self-loop: replicate exact cubic bezier clip from drawLink
-      const nodeSize = start.size || 6;
+      const nodeSize = start.size;
       const d = (link.curve || 0) * nodeSize * this.config.linkStyle.selfLoopCurveFactor;
 
       const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected;
@@ -1571,7 +1597,7 @@ class FalkorDBCanvas extends HTMLElement {
         const controlY = (start.y + end.y) / 2 + perpY * curvature * distance;
 
         // Target-side clip: constant gap from node center along tangent direction
-        const endNodeSize = end.size || 6;
+        const endNodeSize = end.size;
         const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected) + this.edgeGap;
 
         const ceX = controlX - end.x;
@@ -1583,7 +1609,7 @@ class FalkorDBCanvas extends HTMLElement {
         const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
 
         // Source-side clip: constant gap from node center along tangent direction
-        const startNodeSize = start.size || 6;
+        const startNodeSize = start.size;
         const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + this.edgeGap;
 
         const csX = controlX - start.x;
@@ -1626,15 +1652,19 @@ class FalkorDBCanvas extends HTMLElement {
     this.graph
       .onNodeClick((node: GraphNode, event: MouseEvent) => {
         this.config.eventHandlers?.onNodeClick?.(node, event);
+        this.triggerRender();
       })
       .onLinkClick((link: GraphLink, event: MouseEvent) => {
         this.config.eventHandlers?.onLinkClick?.(link, event);
+        this.triggerRender();
       })
       .onNodeRightClick((node: GraphNode, event: MouseEvent) => {
         this.config.eventHandlers?.onNodeRightClick?.(node, event);
+        this.triggerRender();
       })
       .onLinkRightClick((link: GraphLink, event: MouseEvent) => {
         this.config.eventHandlers?.onLinkRightClick?.(link, event);
+        this.triggerRender();
       })
       .onNodeDragEnd((node: GraphNode, translate: {x: number, y: number}) => {
         if (this.config.pinOnDragEnd && node.fx !== undefined && node.fy !== undefined) {
@@ -1660,6 +1690,7 @@ class FalkorDBCanvas extends HTMLElement {
       })
       .onBackgroundClick((event: MouseEvent) => {
         this.config.eventHandlers?.onBackgroundClick?.(event);
+        this.triggerRender();
       })
       .onBackgroundRightClick((event: MouseEvent) => {
         this.config.eventHandlers?.onBackgroundRightClick?.(event);
