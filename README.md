@@ -5,7 +5,7 @@ A standalone web component for visualizing FalkorDB graphs using force-directed 
 ## Features
 
 - 🎨 **Force-directed graph layout** - Automatic positioning using D3 force simulation with smart collision detection
-- 🧭 **Multiple layout modes** - Switch between `force`, `tree`, `flow`, `radial-tree`, `concentric`, `components`, and `arc` graph views
+- 🧭 **Multiple layout modes** - Switch between `force`, `tree`, and `radial` graph views
 - 🎯 **Interactive** - Click, hover, right-click interactions on nodes, links, and background
 - 🌓 **Theme support** - Light and dark mode compatible with customizable colors
 - ⚡ **Performance** - Optimized rendering with HTML5 canvas, including viewport culling and low-zoom draw skipping for large graphs
@@ -57,7 +57,9 @@ npm install @falkordb/canvas
       height: 600,
       backgroundColor: '#FFFFFF',
       foregroundColor: '#1A1A1A',
-      onNodeClick: (node) => console.log('Clicked:', node)
+      eventHandlers: {
+        onNodeClick: (node) => console.log('Clicked:', node),
+      },
     });
   </script>
 </body>
@@ -90,9 +92,11 @@ function GraphVisualization() {
 
     canvas.setData(data);
     canvas.setConfig({
-      onNodeClick: (node: GraphNode) => {
-        console.log('Clicked node:', node);
-      }
+      eventHandlers: {
+        onNodeClick: (node: GraphNode) => {
+          console.log('Clicked node:', node);
+        },
+      },
     });
   }, []);
 
@@ -120,46 +124,121 @@ function GraphVisualization() {
 | **setHeight**(*height*) | | Set canvas height in pixels. |
 | **setBackgroundColor**(*color*) | | Set background color (hex or CSS color). |
 | **setForegroundColor**(*color*) | | Set foreground color for text and borders. |
-| **setIsLoading**(*isLoading*) | | Show/hide loading skeleton. |
-| **setCooldownTicks**(*ticks*) | | Set simulation ticks before stopping (undefined = infinite). |
+| **setAnimation**(*enabled*) | | Enable or disable force simulation animation. When disabled, pins all nodes in place. |
+| **setPinOnDragEnd**(*pin*) | | Enable or disable pinning nodes after dragging. |
+| **setLayout**(*layoutMode*) | `'force'` | Switch layout mode: `'force'` \| `'tree'` \| `'radial'`. |
+| **setLayoutOptions**(*options*) | | Update per-layout options (tree, radial, force). Triggers re-layout. |
 | **setDebug**(*enabled*) | `false` | Enable or disable debug logging to console. All log messages are prefixed with `[FalkorDBCanvas]`. |
+| **refresh**() | | Trigger a repaint after in-place property mutations (visibility, color, size). Recomputes positions for deterministic layouts. |
 | **getViewport**() | | Get current zoom and center position as `ViewportState`. |
 | **setViewport**(*viewport*) | | Restore a previously saved viewport state. |
 | **getZoom**() | | Get current zoom level. |
 | **zoom**(*zoomLevel*) | | Set zoom level. |
 | **zoomToFit**(*paddingMultiplier*, *filter*) | `1.0`, `undefined` | Auto-fit all visible nodes in view. Optional padding multiplier and node filter function. |
 | **getGraph**() | | Get the underlying force-graph instance for advanced control. |
+| **getCullingStats**() | | Get viewport culling statistics (bounds, visible vs total node/link counts). |
 
 ### Configuration Options
+
+Configuration is passed to `setConfig()` as a `ForceGraphConfig` object. It is organized into sub-configs:
+
+#### Top-Level Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `width` | `<window width>` | Canvas width in pixels |
 | `height` | `<window height>` | Canvas height in pixels |
-| `backgroundColor` | | Background color (hex or CSS color) |
-| `foregroundColor` | | Foreground color for borders and text |
-| `layoutMode` | `force` | Layout algorithm to use: `force` \| `tree` \| `flow` \| `radial-tree` \| `concentric` \| `components` \| `arc` |
-| `layoutOptions` | `{}` | Per-layout options for each mode: `tree`, `flow`, `radialTree`, `concentric`, `components`, and `arc` |
-| `cooldownTicks` | `undefined` | Number of simulation ticks before stopping (undefined = infinite) |
-| `cooldownTime` | `1000` | Time in ms for each simulation tick |
-| `autoStopOnSettle` | `true` | Automatically stop simulation when settled |
-| `isLoading` | `false` | Show/hide loading skeleton |
-| `onNodeClick` | | Callback when a node is clicked. Signature: `(node: GraphNode, event: MouseEvent) => void` |
-| `onNodeRightClick` | | Callback when a node is right-clicked. Signature: `(node: GraphNode, event: MouseEvent) => void` |
-| `onLinkClick` | | Callback when a link is clicked. Signature: `(link: GraphLink, event: MouseEvent) => void` |
-| `onLinkRightClick` | | Callback when a link is right-clicked. Signature: `(link: GraphLink, event: MouseEvent) => void` |
-| `onNodeHover` | | Callback when hovering over a node. Signature: `(node: GraphNode \| null) => void` |
-| `onLinkHover` | | Callback when hovering over a link. Signature: `(link: GraphLink \| null) => void` |
-| `onBackgroundClick` | | Callback when clicking the background. Signature: `(event: MouseEvent) => void` |
-| `onBackgroundRightClick` | | Callback when right-clicking the background. Signature: `(event: MouseEvent) => void` |
-| `onZoom` | | Callback when zoom/pan changes. Signature: `(transform: Transform) => void` |
-| `onEngineStop` | | Callback when the force simulation stops. Signature: `() => void` |
-| `onLoadingChange` | | Callback when loading state changes. Signature: `(loading: boolean) => void` |
-| `isNodeSelected` | | Function to determine if a node is selected. Signature: `(node: GraphNode) => boolean` |
-| `isLinkSelected` | | Function to determine if a link is selected. Signature: `(link: GraphLink) => boolean` |
-| `node` | | Custom node rendering functions (see Custom Rendering) |
-| `link` | | Custom link rendering functions (see Custom Rendering) |
-| `largeGraph` | | Large-graph rendering optimizations (see [Large-Graph Optimizations](#large-graph-optimizations)) |
+| `backgroundColor` | `'#FFFFFF'` | Background color (hex or CSS color) |
+| `foregroundColor` | `'#1A1A1A'` | Foreground color for borders and text |
+| `layoutMode` | `'force'` | Layout algorithm: `'force'` \| `'tree'` \| `'radial'` |
+| `layoutOptions` | `{}` | Per-layout options (see [Layout Modes](#layout-modes)) |
+| `animation` | | Enable/disable layout animation |
+| `captionsKeys` | `[]` | Node property keys to display as labels |
+| `showPropertyKeyPrefix` | `false` | Show property key prefix in node labels |
+| `pinOnDragEnd` | `false` | Pin nodes after dragging |
+| `isNodeSelected` | | Function: `(node: GraphNode) => boolean` |
+| `isLinkSelected` | | Function: `(link: GraphLink) => boolean` |
+| `linkLineDash` | | Function: `(link: GraphLink) => number[]` |
+| `node` | | Custom node rendering (see [Custom Rendering](#custom-rendering)) |
+| `link` | | Custom link rendering (see [Custom Rendering](#custom-rendering)) |
+| `largeGraph` | | Large-graph optimizations (see [Large-Graph Optimizations](#large-graph-optimizations)) |
+
+#### `nodeStyle` — Node Visual Style
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `fontFamily` | `'SofiaSans'` | Font family for node labels |
+| `fontWeightUnselected` | `400` | Font weight when not selected |
+| `fontWeightSelected` | `700` | Font weight when selected |
+| `fontSize` | `2` | Fixed font size (world units). Used when `textFillRatio` is 0 or unset |
+| `textFillRatio` | `0.85` | Auto-size: fraction of node radius that text fills (0–1). Takes precedence over `fontSize` |
+| `strokeWidthSelected` | `1` | Border width when selected |
+| `strokeWidthUnselected` | `0.5` | Border width when not selected |
+| `glowDuration` | `10000` | Glow effect duration (ms) after expand/collapse |
+| `glowSpread` | `12` | Glow spread radius (px) |
+| `glowSteps` | `16` | Number of gradient rings in glow |
+| `glowColor` | `[59, 130, 246]` | Glow color as `[r, g, b]` |
+| `glowMaxOpacity` | `0.6` | Maximum glow opacity (0–1) |
+
+#### `linkStyle` — Link/Edge Visual Style
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `fontFamily` | `'SofiaSans'` | Font family for link labels |
+| `fontSize` | `2` | Font size for link labels (world units) |
+| `fontWeightUnselected` | `400` | Font weight when not selected |
+| `fontWeightSelected` | `700` | Font weight when selected |
+| `lineWidthSelected` | `2` | Line width when selected |
+| `lineWidthUnselected` | `1` | Line width when not selected |
+| `arrowLengthSelected` | `16` | Arrow length when selected |
+| `arrowLengthUnselected` | `8` | Arrow length when not selected |
+| `arrowWidthRatio` | `1.6` | Arrow width-to-height ratio |
+| `arrowNotchRatio` | `0.2` | Arrow notch depth ratio |
+| `selfLoopCurveFactor` | `11.67` | Self-loop curve factor |
+| `parallelEdgeCurveMultiplier` | `0.4` | Parallel edge curve multiplier |
+| `labelBackgroundPadding` | `0.3` | Label background padding (world units) |
+| `edgeGap` | `2` | Gap between edge tip and visible node border (px) |
+
+#### `simulation` — Force Simulation Tuning
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `centerStrength` | `0.03` | Center force strength (X and Y) |
+| `chargeStrength` | `-400` | Charge repulsion strength |
+| `velocityDecay` | `0.4` | Velocity decay (damping) |
+| `alphaMin` | `0.05` | Alpha min (convergence threshold) |
+| `warmupTicks` | `300` | Warmup ticks for force simulation |
+
+#### `interaction` — Interaction / UX Parameters
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `tooltipFontSize` | `12` | Tooltip font size (px) |
+| `tooltipPadding` | `'4px 8px'` | Tooltip padding CSS value |
+| `tooltipBorderRadius` | `'4px'` | Tooltip border radius CSS value |
+| `tooltipZIndex` | `1000` | Tooltip z-index |
+| `zoomToFitPadding` | `0.1` | Zoom-to-fit padding as fraction of smallest dimension |
+| `zoomToFitDelay` | `50` | Delay (ms) before zoom-to-fit after layout change |
+| `linkHitWidth` | `10` | Link pointer hit-test width (screen px) |
+| `contrastThreshold` | `0.5` | Luminance threshold for text color contrast |
+
+#### `eventHandlers` — Event Callbacks
+
+| Option | Description |
+|--------|-------------|
+| `onNodeClick` | `(node: GraphNode, event: MouseEvent) => void` |
+| `onNodeRightClick` | `(node: GraphNode, event: MouseEvent) => void` |
+| `onLinkClick` | `(link: GraphLink, event: MouseEvent) => void` |
+| `onLinkRightClick` | `(link: GraphLink, event: MouseEvent) => void` |
+| `onNodeHover` | `(node: GraphNode \| null) => void` |
+| `onNodeDragEnd` | `(node: GraphNode) => void` |
+| `onPinChange` | `(pinned: boolean) => void` |
+| `onLinkHover` | `(link: GraphLink \| null) => void` |
+| `onBackgroundClick` | `(event: MouseEvent) => void` |
+| `onBackgroundRightClick` | `(event: MouseEvent) => void` |
+| `onZoom` | `(transform: Transform) => void` |
+| `onEngineStop` | `() => void` |
+| `onLayoutChange` | `(layout: LayoutMode) => void` |
 
 ### Layout Modes
 
@@ -167,64 +246,35 @@ Use `layoutMode` in `setConfig` to choose the graph view style:
 
 ```typescript
 canvas.setConfig({
-  layoutMode: 'flow',
+  layoutMode: 'tree',
   layoutOptions: {
-    flow: {
-      direction: 'LR',      // 'LR' | 'RL' | 'TB' | 'BT'
-      layerSpacing: 180,
+    tree: {
+      direction: 'lr',      // 'lr' | 'rl' | 'td' | 'bu'
+      levelDistance: 180,
       nodeSpacing: 110
     }
   }
 });
 ```
-Tree / radial tree example:
+
+Radial example:
 
 ```typescript
 canvas.setConfig({
-  layoutMode: 'radial-tree',
+  layoutMode: 'radial',
   layoutOptions: {
-    radialTree: {
-      rootNodeId: 1,
-      direction: 'TB',
-      radiusStep: 130
-    }
-  }
-});
-```
-
-Concentric / components / arc examples:
-
-```typescript
-canvas.setConfig({
-  layoutMode: 'concentric',
-  layoutOptions: {
-    concentric: {
-      metric: 'degree', // 'degree' | 'inDegree' | 'outDegree' | 'bfsDepth'
-      ringSpacing: 130
-    },
-    components: {
-      innerLayout: 'concentric', // 'concentric' | 'tree' | 'flow' | 'radial-tree'
-      maxColumns: 3
-    },
-    arc: {
-      direction: 'LR', // 'LR' | 'RL'
-      orderBy: 'degree', // 'id' | 'label' | 'degree'
-      curveScale: 0.22
+    radial: {
+      direction: 'out',   // 'out' | 'in'
+      levelDistance: 130
     }
   }
 });
 ```
 
 Notes:
-- `force` keeps simulation enabled.
-- All non-`force` layouts compute deterministic target positions, animate layout transitions, and support drag interactions while preserving layout structure.
-- `components` uses its own `innerLayout` strategy for each disconnected subgraph and arranges components in a tiled view.
-- `tree`: `rootNodeId`, `direction`, `levelSpacing`, `nodeSpacing`, `componentSpacing`.
-- `flow`: `direction`, `layerSpacing`, `nodeSpacing`, `componentSpacing`.
-- `radialTree`: `rootNodeId`, `direction`, `startAngle`, `endAngle`, `radiusStep`, `componentSpacing`.
-- `concentric`: `metric`, `rootNodeId`, `ringSpacing`, `minRingNodeSpacing`, `sortWithinRing`.
-- `components`: `innerLayout`, `componentGap`, `maxColumns`, `sortComponentsBy`.
-- `arc`: `orderBy`, `direction`, `nodeSpacing`, `curveScale`.
+- `force` keeps simulation enabled with configurable physics (see `simulation` config).
+- `tree`: `direction` (`'td'` | `'bu'` | `'lr'` | `'rl'`), `levelDistance`, `nodeSpacing`.
+- `radial`: `direction` (`'out'` | `'in'`), `levelDistance`, `nodeSpacing`.
 
 ### Data Types
 
@@ -236,7 +286,7 @@ Notes:
 | `labels` | *required* | Array of label names for the node |
 | `color` | *required* | Node color (hex or CSS color) |
 | `visible` | *required* | Whether the node is visible |
-| `size` | `6` | Node radius |
+| `size` | `9` | Node radius (world units) |
 | `caption` | `'id'` | Property key to use from the data for display text |
 | `data` | *required* | Node properties as key-value pairs |
 
@@ -257,7 +307,7 @@ Internal format with computed properties:
 ```typescript
 {
   ...Node;
-  size: number;                    // Always present (defaults to 6)
+  size: number;                    // Always present (defaults to 9)
   displayName: [string, string];  // Computed text lines
   x?: number;                     // Position from simulation
   y?: number;
@@ -429,8 +479,8 @@ while (true) {
 
 ## Performance Tips
 
-1. **Large graphs**: Use `cooldownTicks` to limit simulation iterations
-2. **Static graphs**: Set `cooldownTicks: 0` after initial layout
+1. **Large graphs**: Disable animation (`setAnimation(false)`) once the layout stabilizes
+2. **Static graphs**: Use a deterministic layout (`setLayout('tree')`) to avoid simulation overhead
 3. **Custom rendering**: Optimize your custom `nodeCanvasObject` and `linkCanvasObject` functions
 4. **Viewport**: Use `getViewport()` and `setViewport()` to preserve user's view when updating data
 5. **Very large graphs**: Enable viewport culling via the `largeGraph` option (see below)
@@ -447,7 +497,7 @@ For graphs with thousands of nodes and links, enable the built-in viewport culli
 ```typescript
 canvas.setConfig({
   largeGraph: {
-    enabled: true,           // master switch (false by default – no behavioural change unless true)
+    enabled: true,           // master switch (true by default)
     viewportPadding: 50,     // world-unit padding around the visible viewport (default: 0)
     lowZoomThreshold: 0.5,  // zoom level below which expensive details are skipped
     skipLabelsAtLowZoom: true,      // skip node labels at low zoom (default: true)
@@ -478,7 +528,6 @@ Node and link shapes are always drawn so the overall graph structure remains vis
 ```typescript
 // Good starting point for graphs with 1,000 – 10,000+ elements
 canvas.setConfig({
-  cooldownTicks: 300,   // limit physics simulation ticks
   largeGraph: {
     enabled: true,
     viewportPadding: 100,  // pre-render elements slightly off-screen to avoid pop-in
@@ -489,7 +538,7 @@ canvas.setConfig({
 
 ### Backward compatibility
 
-The feature is **disabled by default** (`enabled: false` / property absent).  Existing code that does not set `largeGraph` is completely unaffected.
+The feature is **enabled by default** (`enabled: true`).  The `lowZoomThreshold` defaults to `1` (always active) and viewport culling uses zero padding.
 
 ## Debugging
 

@@ -4,187 +4,966 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FalkorDB Canvas Web Component Example</title>
+  <title>FalkorDB Canvas — Interactive Example</title>
 
   <style>
+    /* ===== Reset & Base ===== */
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 20px;
-      font-family: Arial, sans-serif;
-      background-color: #f0f0f0;
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    h1 {
-      color: #333;
-      margin-bottom: 20px;
-    }
-
-    .graph-container {
-      height: 600px;
-      width: 100%;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      font-size: 13px;
+      height: 100vh;
       overflow: hidden;
     }
 
-    .controls {
-      margin-bottom: 20px;
-      padding: 15px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    /* ===== Layout ===== */
+    .app-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
     }
 
-    button {
-      margin-right: 10px;
-      padding: 8px 16px;
-      background: #4CAF50;
+    .app-header {
+      grid-column: 1 / -1;
+      padding: 10px 20px;
+      background: #1a1a2e;
       color: white;
-      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .app-header h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+
+    .app-header .subtitle {
+      font-size: 11px;
+      opacity: 0.6;
+    }
+
+    .sidebar {
+      grid-column: 1;
+      grid-row: 2;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 12px;
+      background: #fff;
+      border-right: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .main-area {
+      grid-column: 2;
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .toolbar {
+      padding: 8px 12px;
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .graph-container {
+      flex: 1;
+      position: relative;
+      background: white;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .graph-container falkordb-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .status-bar {
+      grid-column: 1 / -1;
+      padding: 6px 16px;
+      background: #fff;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    /* ===== Sidebar Sections ===== */
+    .sidebar-section {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .sidebar-section summary {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #475569;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sidebar-section summary::before {
+      content: '▸';
+      font-size: 10px;
+      transition: transform 0.15s;
+    }
+
+    .sidebar-section[open] > summary::before {
+      transform: rotate(90deg);
+    }
+
+    .sidebar-section summary:hover {
+      background: #f1f5f9;
+    }
+
+    .section-body {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ===== Form Elements ===== */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .field label {
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .field input,
+    .field select {
+      padding: 5px 8px;
+      border: 1px solid #e2e8f0;
       border-radius: 4px;
+      font-size: 12px;
+      background: #fff;
+      transition: border-color 0.15s;
+    }
+
+    .field input:focus,
+    .field select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    }
+
+    .field input[type="number"] { width: 70px; }
+    .field input[type="color"] { width: 36px; height: 28px; padding: 2px; cursor: pointer; }
+    .field input[type="checkbox"] { width: auto; }
+
+    .field-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .field-inline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .field-inline label {
+      font-size: 12px;
+      color: #334155;
       cursor: pointer;
     }
 
-    button:hover {
-      background: #45a049;
+    /* ===== Buttons ===== */
+    button {
+      padding: 5px 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
     }
 
-    .control-group {
+    button:active { transform: scale(0.97); }
+
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+
+    .btn-success { background: #10b981; color: white; }
+    .btn-success:hover { background: #059669; }
+
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-secondary:hover { background: #cbd5e1; }
+
+    .btn-warning { background: #f59e0b; color: white; }
+    .btn-warning:hover { background: #d97706; }
+
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+
+    .btn-sm { padding: 4px 8px; font-size: 11px; }
+
+    /* ===== Toolbar ===== */
+    .toolbar .separator {
+      width: 1px;
+      height: 22px;
+      background: #e2e8f0;
+      margin: 0 2px;
+    }
+
+    .toolbar .group-label {
+      font-size: 10px;
+      color: #94a3b8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ===== API Reference ===== */
+    .api-ref {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      width: 500px;
+      max-height: 60vh;
+      background: white;
+      border-top: 1px solid #e2e8f0;
+      border-left: 1px solid #e2e8f0;
+      border-top-left-radius: 8px;
+      box-shadow: -4px -4px 12px rgba(0, 0, 0, 0.05);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+    }
+
+    .api-ref.open { display: flex; }
+
+    .api-ref-header {
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      border-top-left-radius: 8px;
       display: flex;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
-    .control-group:last-child {
-      margin-bottom: 0;
-    }
-
-    label {
-      color: #333;
-      font-size: 14px;
+      justify-content: space-between;
       font-weight: 600;
+      font-size: 13px;
     }
 
-    select {
-      padding: 8px 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      background: #fff;
-      font-size: 14px;
+    .api-ref-body {
+      padding: 14px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.5;
     }
 
-    select:disabled {
-      background: #f3f3f3;
-      color: #777;
-      cursor: not-allowed;
+    .api-ref-body h4 {
+      margin: 16px 0 6px;
+      font-size: 12px;
+      color: #334155;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 4px;
     }
 
-    .info {
-      margin-top: 20px;
-      padding: 15px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
+    .api-ref-body h4:first-child { margin-top: 0; }
 
-    #selected-info {
-      color: #666;
-    }
-
-    #context-status {
-      color: #444;
+    .api-ref-body table {
+      width: 100%;
+      border-collapse: collapse;
       margin-bottom: 12px;
+      font-size: 11px;
+    }
+
+    .api-ref-body th {
+      text-align: left;
+      padding: 4px 6px;
+      background: #f8fafc;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .api-ref-body td {
+      padding: 3px 6px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    .api-ref-body code {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 10.5px;
+      background: #f1f5f9;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .api-ref-body pre {
+      background: #f8fafc;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 10.5px;
+      margin: 0;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    /* ===== Debug Panel ===== */
+    .debug-panel {
+      padding: 6px 10px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #475569;
+      display: none;
+    }
+
+    .debug-panel.visible { display: block; }
+
+    /* ===== Scrollbar ===== */
+    .sidebar::-webkit-scrollbar,
+    .api-ref-body::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb,
+    .api-ref-body::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
     }
   </style>
 </head>
 
 <body>
-  <div class="container">
-    <h1>FalkorDB Canvas Web Component</h1>
+  <div class="app-layout">
 
-    <div class="controls">
-      <div class="control-group">
-        <label for="context-layer-select">Context Layer</label>
-        <select id="context-layer-select" data-context-control>
-          <option value="collaboration" selected>Collaboration Graph</option>
-          <option value="organization">Organization Graph</option>
-          <option value="geography">Geography Graph</option>
-          <option value="delivery">Delivery Graph</option>
-        </select>
-        <button onclick="expandSelectedContext()" data-context-control>Expand Layer</button>
-        <button onclick="collapseSelectedContext()" data-context-control>Collapse Layer</button>
-        <button onclick="expandAllContexts()" data-context-control>Expand All Context</button>
-        <button onclick="collapseAllContexts()" data-context-control>Collapse All Context</button>
-        <button onclick="playExpandCollapseDemo()" data-context-control>Play Expand/Collapse Demo</button>
-        <button onclick="toggleLoading()">Toggle Loading</button>
+    <!-- ===== Header ===== -->
+    <header class="app-header">
+      <div>
+        <h1>FalkorDB Canvas</h1>
+        <span class="subtitle">Interactive Graph Visualization Component</span>
       </div>
-      <div class="control-group">
-        <label for="layout-select">Layout</label>
-        <select id="layout-select" onchange="changeLayout()">
-          <option value="force" selected>Force</option>
-          <option value="tree">Tree</option>
-          <option value="flow">Flow</option>
-          <option value="radial-tree">Radial Tree</option>
-          <option value="concentric">Concentric</option>
-          <option value="components">Components</option>
-          <option value="arc">Arc</option>
-        </select>
-
-        <label for="layout-direction-select">Direction</label>
-        <select id="layout-direction-select" onchange="changeLayout()">
-          <option value="TB">Top → Bottom</option>
-          <option value="BT">Bottom → Top</option>
-          <option value="LR" selected>Left → Right</option>
-          <option value="RL">Right → Left</option>
-        </select>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-secondary btn-sm" onclick="toggleApiRef()">API Reference</button>
       </div>
-      <div class="control-group">
-        <label for="concentric-metric-select">Concentric Metric</label>
-        <select id="concentric-metric-select" onchange="changeLayout()">
-          <option value="degree" selected>Degree</option>
-          <option value="inDegree">In Degree</option>
-          <option value="outDegree">Out Degree</option>
-          <option value="bfsDepth">BFS Depth</option>
-        </select>
+    </header>
 
-        <label for="components-inner-layout-select">Components Inner Layout</label>
-        <select id="components-inner-layout-select" onchange="changeLayout()">
-          <option value="concentric" selected>Concentric</option>
-          <option value="tree">Tree</option>
-          <option value="flow">Flow</option>
-          <option value="radial-tree">Radial Tree</option>
-        </select>
+    <!-- ===== Sidebar ===== -->
+    <aside class="sidebar">
 
-        <label for="arc-order-select">Arc Order</label>
-        <select id="arc-order-select" onchange="changeLayout()">
-          <option value="id" selected>ID</option>
-          <option value="degree">Degree</option>
-          <option value="label">Label</option>
-        </select>
+      <!-- Query -->
+      <details class="sidebar-section" open>
+        <summary>Query</summary>
+        <div class="section-body">
+          <div class="field">
+            <label for="api-key">API Key</label>
+            <input id="api-key" type="password" placeholder="sk-...">
+          </div>
+          <div class="field">
+            <label for="domain-input">Domain</label>
+            <input id="domain-input" type="text" placeholder="https://browser.falkordb.com">
+          </div>
+          <div class="field-row">
+            <div class="field" style="flex: 1;">
+              <label for="graph-name">Graph</label>
+              <input id="graph-name" type="text" placeholder="movies" style="width: 100%;">
+            </div>
+          </div>
+          <div class="field">
+            <label for="query-input">Cypher Query</label>
+            <input id="query-input" type="text" placeholder="MATCH (n)-[e]->(m) RETURN n, e, m LIMIT 25">
+          </div>
+          <button class="btn-primary" onclick="sendQuery()" style="align-self: flex-start;">Run Query</button>
+        </div>
+      </details>
+
+      <!-- Data Controls -->
+      <details class="sidebar-section" open>
+        <summary>Data</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <button class="btn-success btn-sm" onclick="addNode()">+ Node</button>
+            <button class="btn-success btn-sm" onclick="addLink()">+ Link</button>
+            <button class="btn-secondary btn-sm" onclick="generateLargeGraph()">100 Nodes</button>
+          </div>
+          <div class="field-row">
+            <button class="btn-danger btn-sm" onclick="clearGraph()">Clear</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Layout -->
+      <details class="sidebar-section" open>
+        <summary>Layout</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label for="layout-select">Mode</label>
+              <select id="layout-select" onchange="changeLayout(this.value)">
+                <option value="force">Force</option>
+                <option value="tree">Tree</option>
+                <option value="radial">Radial</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="direction-select">Direction</label>
+              <select id="direction-select" onchange="changeDirection(this.value)">
+                <option value="td">Top-Down</option>
+                <option value="bu">Bottom-Up</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="level-distance">Level Dist</label>
+              <input id="level-distance" type="number" value="80" min="30" max="500" step="10" oninput="changeSpacing()">
+            </div>
+            <div class="field">
+              <label for="node-spacing">Node Space</label>
+              <input id="node-spacing" type="number" value="60" min="20" max="300" step="10" oninput="changeSpacing()">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-inline">
+              <input type="checkbox" id="animation-toggle" onchange="toggleAnimation()">
+              <label for="animation-toggle">Animation</label>
+            </div>
+            <div class="field-inline">
+              <input type="checkbox" id="pin-toggle" onchange="togglePin()">
+              <label for="pin-toggle">Pin on Drag</label>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Node Style -->
+      <details class="sidebar-section">
+        <summary>Node Style</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Font</label>
+              <input type="text" id="ns-fontFamily" value="SofiaSans" style="width: 90px;">
+            </div>
+            <div class="field">
+              <label>Size</label>
+              <input type="number" id="ns-fontSize" value="2" min="0.5" max="8" step="0.5">
+            </div>
+            <div class="field">
+              <label>Fill Ratio</label>
+              <input type="number" id="ns-textFillRatio" value="0.85" min="0.1" max="1" step="0.05">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Weight (normal)</label>
+              <input type="number" id="ns-fontWeightUnselected" value="400" min="100" max="900" step="100">
+            </div>
+            <div class="field">
+              <label>Weight (selected)</label>
+              <input type="number" id="ns-fontWeightSelected" value="700" min="100" max="900" step="100">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Stroke (normal)</label>
+              <input type="number" id="ns-strokeWidthUnselected" value="0.5" min="0" max="5" step="0.25">
+            </div>
+            <div class="field">
+              <label>Stroke (selected)</label>
+              <input type="number" id="ns-strokeWidthSelected" value="1" min="0" max="5" step="0.5">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Glow Color</label>
+              <input type="color" id="ns-glowColor" value="#3b82f6">
+            </div>
+            <div class="field">
+              <label>Glow Spread</label>
+              <input type="number" id="ns-glowSpread" value="12" min="0" max="40" step="2">
+            </div>
+            <div class="field">
+              <label>Glow Steps</label>
+              <input type="number" id="ns-glowSteps" value="16" min="1" max="32" step="1">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Glow Duration</label>
+              <input type="number" id="ns-glowDuration" value="10000" min="0" max="30000" step="1000">
+            </div>
+            <div class="field">
+              <label>Glow Opacity</label>
+              <input type="number" id="ns-glowMaxOpacity" value="0.6" min="0" max="1" step="0.1">
+            </div>
+          </div>
+          <button class="btn-primary btn-sm" onclick="applyNodeStyle()">Apply Node Style</button>
+        </div>
+      </details>
+
+      <!-- Link Style -->
+      <details class="sidebar-section">
+        <summary>Link Style</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Font</label>
+              <input type="text" id="ls-fontFamily" value="SofiaSans" style="width: 90px;">
+            </div>
+            <div class="field">
+              <label>Size</label>
+              <input type="number" id="ls-fontSize" value="2" min="0.5" max="8" step="0.5">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Weight (normal)</label>
+              <input type="number" id="ls-fontWeightUnselected" value="400" min="100" max="900" step="100">
+            </div>
+            <div class="field">
+              <label>Weight (selected)</label>
+              <input type="number" id="ls-fontWeightSelected" value="700" min="100" max="900" step="100">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Line (normal)</label>
+              <input type="number" id="ls-lineWidthUnselected" value="1" min="0.25" max="10" step="0.25">
+            </div>
+            <div class="field">
+              <label>Line (selected)</label>
+              <input type="number" id="ls-lineWidthSelected" value="2" min="0.5" max="10" step="0.5">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Arrow (normal)</label>
+              <input type="number" id="ls-arrowLengthUnselected" value="8" min="0" max="40" step="2">
+            </div>
+            <div class="field">
+              <label>Arrow (selected)</label>
+              <input type="number" id="ls-arrowLengthSelected" value="16" min="0" max="40" step="2">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Arrow Width</label>
+              <input type="number" id="ls-arrowWidthRatio" value="1.6" min="0.5" max="4" step="0.2">
+            </div>
+            <div class="field">
+              <label>Arrow Notch</label>
+              <input type="number" id="ls-arrowNotchRatio" value="0.2" min="0" max="1" step="0.1">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Self-Loop Curve</label>
+              <input type="number" id="ls-selfLoopCurveFactor" value="11.67" min="1" max="30" step="0.5">
+            </div>
+            <div class="field">
+              <label>Parallel Curve</label>
+              <input type="number" id="ls-parallelEdgeCurveMultiplier" value="0.4" min="0.1" max="2" step="0.1">
+            </div>
+          </div>
+          <div class="field">
+            <label>Label BG Padding</label>
+            <input type="number" id="ls-labelBackgroundPadding" value="0.3" min="0" max="2" step="0.1">
+          </div>
+          <div class="field">
+            <label for="edge-gap">Edge Gap</label>
+            <input id="edge-gap" type="number" value="2" min="0" max="15" step="1" oninput="changeEdgeGap()">
+          </div>
+          <button class="btn-primary btn-sm" onclick="applyLinkStyle()">Apply Link Style</button>
+        </div>
+      </details>
+
+      <!-- Simulation -->
+      <details class="sidebar-section">
+        <summary>Simulation</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Center Force</label>
+              <input type="number" id="sim-centerStrength" value="0.03" min="0" max="1" step="0.01">
+            </div>
+            <div class="field">
+              <label>Charge</label>
+              <input type="number" id="sim-chargeStrength" value="-400" min="-2000" max="0" step="50">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Velocity Decay</label>
+              <input type="number" id="sim-velocityDecay" value="0.4" min="0" max="1" step="0.05">
+            </div>
+            <div class="field">
+              <label>Alpha Min</label>
+              <input type="number" id="sim-alphaMin" value="0.05" min="0.001" max="0.5" step="0.01">
+            </div>
+            <div class="field">
+              <label>Warmup</label>
+              <input type="number" id="sim-warmupTicks" value="300" min="0" max="1000" step="50">
+            </div>
+          </div>
+          <button class="btn-primary btn-sm" onclick="applySimulation()">Apply Simulation</button>
+        </div>
+      </details>
+
+      <!-- Interaction -->
+      <details class="sidebar-section">
+        <summary>Interaction</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Tooltip Size</label>
+              <input type="number" id="int-tooltipFontSize" value="12" min="8" max="24" step="1">
+            </div>
+            <div class="field">
+              <label>Tooltip Padding</label>
+              <input type="text" id="int-tooltipPadding" value="4px 8px" style="width: 70px;">
+            </div>
+            <div class="field">
+              <label>Border Radius</label>
+              <input type="text" id="int-tooltipBorderRadius" value="4px" style="width: 50px;">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Z-Index</label>
+              <input type="number" id="int-tooltipZIndex" value="1000" min="1" max="10000" step="100">
+            </div>
+            <div class="field">
+              <label>Fit Padding</label>
+              <input type="number" id="int-zoomToFitPadding" value="0.1" min="0" max="1" step="0.05">
+            </div>
+            <div class="field">
+              <label>Fit Delay</label>
+              <input type="number" id="int-zoomToFitDelay" value="50" min="0" max="500" step="10">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Link Hit Width</label>
+              <input type="number" id="int-linkHitWidth" value="10" min="1" max="30" step="1">
+            </div>
+            <div class="field">
+              <label>Contrast</label>
+              <input type="number" id="int-contrastThreshold" value="0.5" min="0" max="1" step="0.05">
+            </div>
+          </div>
+          <button class="btn-primary btn-sm" onclick="applyInteraction()">Apply Interaction</button>
+        </div>
+      </details>
+
+      <!-- Large Graph -->
+      <details class="sidebar-section">
+        <summary>Large Graph</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field-inline">
+              <input type="checkbox" checked id="lg-enabled">
+              <label for="lg-enabled">Enable Culling</label>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Viewport Pad</label>
+              <input type="number" id="lg-viewportPadding" value="0" min="0" max="500" step="10">
+            </div>
+            <div class="field">
+              <label>Low Zoom Threshold</label>
+              <input type="number" id="lg-lowZoomThreshold" value="0.5" min="0.05" max="1" step="0.05">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-inline">
+              <input type="checkbox" id="lg-skipLabelsAtLowZoom" checked>
+              <label for="lg-skipLabelsAtLowZoom">Skip Labels</label>
+            </div>
+            <div class="field-inline">
+              <input type="checkbox" id="lg-skipArrowsAtLowZoom" checked>
+              <label for="lg-skipArrowsAtLowZoom">Skip Arrows</label>
+            </div>
+            <div class="field-inline">
+              <input type="checkbox" id="lg-skipLinkLabelsAtLowZoom" checked>
+              <label for="lg-skipLinkLabelsAtLowZoom">Skip Link Labels</label>
+            </div>
+          </div>
+          <button class="btn-primary btn-sm" onclick="applyLargeGraph()">Apply Large Graph</button>
+          <div id="lg-debug" class="debug-panel">
+            <div>Zoom: <span id="lg-debug-zoom">-</span> | Culling: <span id="lg-debug-culling-zoom">-</span></div>
+            <div>Low-zoom: <span id="lg-debug-low-zoom">-</span> (≤ <span id="lg-debug-threshold">-</span>)</div>
+            <div>Visible: <span id="lg-debug-nodes">-</span> nodes | <span id="lg-debug-links">-</span> links</div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Colors & Display -->
+      <details class="sidebar-section">
+        <summary>Colors & Display</summary>
+        <div class="section-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Background</label>
+              <input type="color" id="cfg-backgroundColor" value="#ffffff">
+            </div>
+            <div class="field">
+              <label>Foreground</label>
+              <input type="color" id="cfg-foregroundColor" value="#1a1a1a">
+            </div>
+            <div class="field-inline">
+              <input type="checkbox" id="cfg-showPropertyKeyPrefix">
+              <label for="cfg-showPropertyKeyPrefix">Show Key Prefix</label>
+            </div>
+          </div>
+          <button class="btn-primary btn-sm" onclick="applyColors()">Apply Colors</button>
+        </div>
+      </details>
+
+    </aside>
+
+    <!-- ===== Main Area ===== -->
+    <main class="main-area">
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <span class="group-label">View</span>
+        <button class="btn-secondary btn-sm" onclick="zoomToFit()">Fit</button>
+        <button class="btn-secondary btn-sm" onclick="zoomIn()">+</button>
+        <button class="btn-secondary btn-sm" onclick="zoomOut()">−</button>
+        <button class="btn-secondary btn-sm" onclick="resetViewport()">Reset</button>
+        <div class="separator" id="delete-separator" style="display:none"></div>
+        <button class="btn-warning btn-sm" id="btn-delete-node" style="display:none" onclick="deleteSelectedNode()">Delete Node</button>
+        <button class="btn-warning btn-sm" id="btn-delete-link" style="display:none" onclick="deleteSelectedLink()">Delete Link</button>
       </div>
+
+      <!-- Graph Canvas -->
+      <div class="graph-container">
+        <falkordb-canvas id="graph"></falkordb-canvas>
+      </div>
+
+    </main>
+
+    <!-- ===== Status Bar ===== -->
+    <footer class="status-bar">
+      <span id="selected-info">Click on a node or link to see details</span>
+      <span id="zoom-info"></span>
+    </footer>
+
+  </div>
+
+  <!-- ===== API Reference Panel ===== -->
+  <div class="api-ref" id="api-ref-panel">
+    <div class="api-ref-header">
+      <span>API Reference</span>
+      <button class="btn-secondary btn-sm" onclick="toggleApiRef()">Close</button>
     </div>
+    <div class="api-ref-body">
 
-    <div class="graph-container">
-      <falkordb-canvas id="graph"></falkordb-canvas>
-    </div>
+      <h4>Methods</h4>
+      <table>
+        <tr><th>Method</th><th>Description</th></tr>
+        <tr><td><code>setConfig(config)</code></td><td>Set/update configuration (deep-merges nested objects)</td></tr>
+        <tr><td><code>setData(data)</code></td><td>Replace all graph data (triggers layout)</td></tr>
+        <tr><td><code>setGraphData(data)</code></td><td>Incremental update — reuses existing nodes</td></tr>
+        <tr><td><code>getData()</code></td><td>Get current data (source format)</td></tr>
+        <tr><td><code>getGraphData()</code></td><td>Get internal graph data (with x/y/size)</td></tr>
+        <tr><td><code>refresh()</code></td><td>Repaint after mutating node/link properties</td></tr>
+        <tr><td><code>zoomToFit(padding?, filter?)</code></td><td>Fit all/filtered nodes in view</td></tr>
+        <tr><td><code>zoom(level)</code></td><td>Set zoom level</td></tr>
+        <tr><td><code>getZoom()</code></td><td>Get current zoom level</td></tr>
+        <tr><td><code>setViewport({zoom, centerX, centerY})</code></td><td>Set viewport position and zoom</td></tr>
+        <tr><td><code>getViewport()</code></td><td>Get current viewport state</td></tr>
+        <tr><td><code>setLayout(mode)</code></td><td>'force' | 'tree' | 'radial'</td></tr>
+        <tr><td><code>setLayoutOptions(opts)</code></td><td>Update layout-specific options</td></tr>
+        <tr><td><code>setAnimation(enabled)</code></td><td>Enable/disable simulation</td></tr>
+        <tr><td><code>setPinOnDragEnd(pin)</code></td><td>Pin nodes after dragging</td></tr>
+        <tr><td><code>setWidth(w) / setHeight(h)</code></td><td>Set canvas dimensions</td></tr>
+        <tr><td><code>setBackgroundColor(color)</code></td><td>Set background</td></tr>
+        <tr><td><code>setForegroundColor(color)</code></td><td>Set stroke color</td></tr>
+        <tr><td><code>getGraph()</code></td><td>Access force-graph instance</td></tr>
+        <tr><td><code>getCullingStats()</code></td><td>Get viewport culling stats</td></tr>
+        <tr><td><code>setDebug(enabled)</code></td><td>Enable/disable console debug logging</td></tr>
+      </table>
 
-    <div class="info">
-      <h3>Animation Context:</h3>
-      <div id="context-status">No context layers expanded yet.</div>
-      <h3>Selected Element:</h3>
-      <div id="selected-info">Click on a node or link to see details</div>
+      <h4>Node Style (<code>nodeStyle</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>fontFamily</code></td><td>string</td><td>'SofiaSans'</td><td>Font for node labels</td></tr>
+        <tr><td><code>fontWeightUnselected</code></td><td>number</td><td>400</td><td>Font weight (normal)</td></tr>
+        <tr><td><code>fontWeightSelected</code></td><td>number</td><td>700</td><td>Font weight (selected)</td></tr>
+        <tr><td><code>fontSize</code></td><td>number</td><td>2</td><td>Base font size (world units)</td></tr>
+        <tr><td><code>textFillRatio</code></td><td>number</td><td>0.85</td><td>Fraction of node radius text fills</td></tr>
+        <tr><td><code>strokeWidthSelected</code></td><td>number</td><td>1</td><td>Border width (selected)</td></tr>
+        <tr><td><code>strokeWidthUnselected</code></td><td>number</td><td>0.5</td><td>Border width (normal)</td></tr>
+        <tr><td><code>glowDuration</code></td><td>number</td><td>10000</td><td>Glow duration in ms</td></tr>
+        <tr><td><code>glowSpread</code></td><td>number</td><td>12</td><td>Glow radius in px</td></tr>
+        <tr><td><code>glowSteps</code></td><td>number</td><td>16</td><td>Gradient rings in glow</td></tr>
+        <tr><td><code>glowColor</code></td><td>[r,g,b]</td><td>[59,130,246]</td><td>Glow RGB color</td></tr>
+        <tr><td><code>glowMaxOpacity</code></td><td>number</td><td>0.6</td><td>Max glow opacity (0-1)</td></tr>
+      </table>
+
+      <h4>Link Style (<code>linkStyle</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>fontFamily</code></td><td>string</td><td>'SofiaSans'</td><td>Font for link labels</td></tr>
+        <tr><td><code>fontSize</code></td><td>number</td><td>2</td><td>Label font size</td></tr>
+        <tr><td><code>fontWeightUnselected</code></td><td>number</td><td>400</td><td>Weight (normal)</td></tr>
+        <tr><td><code>fontWeightSelected</code></td><td>number</td><td>700</td><td>Weight (selected)</td></tr>
+        <tr><td><code>lineWidthSelected</code></td><td>number</td><td>2</td><td>Thickness (selected)</td></tr>
+        <tr><td><code>lineWidthUnselected</code></td><td>number</td><td>1</td><td>Thickness (normal)</td></tr>
+        <tr><td><code>arrowLengthSelected</code></td><td>number</td><td>16</td><td>Arrow length (selected)</td></tr>
+        <tr><td><code>arrowLengthUnselected</code></td><td>number</td><td>8</td><td>Arrow length (normal)</td></tr>
+        <tr><td><code>arrowWidthRatio</code></td><td>number</td><td>1.6</td><td>Arrow width/height ratio</td></tr>
+        <tr><td><code>arrowNotchRatio</code></td><td>number</td><td>0.2</td><td>Arrow notch depth</td></tr>
+        <tr><td><code>selfLoopCurveFactor</code></td><td>number</td><td>11.67</td><td>Self-loop curvature</td></tr>
+        <tr><td><code>parallelEdgeCurveMultiplier</code></td><td>number</td><td>0.4</td><td>Parallel edge spread</td></tr>
+        <tr><td><code>labelBackgroundPadding</code></td><td>number</td><td>0.3</td><td>Label BG padding</td></tr>
+        <tr><td><code>edgeGap</code></td><td>number</td><td>2</td><td>Gap between edge and node</td></tr>
+      </table>
+
+      <h4>Simulation (<code>simulation</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>centerStrength</code></td><td>number</td><td>0.03</td><td>Center pull (0-1)</td></tr>
+        <tr><td><code>chargeStrength</code></td><td>number</td><td>-400</td><td>Repulsion (negative=repel)</td></tr>
+        <tr><td><code>velocityDecay</code></td><td>number</td><td>0.4</td><td>Friction/damping</td></tr>
+        <tr><td><code>alphaMin</code></td><td>number</td><td>0.05</td><td>Sim stops below this</td></tr>
+        <tr><td><code>warmupTicks</code></td><td>number</td><td>300</td><td>Pre-display ticks</td></tr>
+      </table>
+
+      <h4>Interaction (<code>interaction</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>tooltipFontSize</code></td><td>number</td><td>12</td><td>Tooltip text size (px)</td></tr>
+        <tr><td><code>tooltipPadding</code></td><td>string</td><td>'4px 8px'</td><td>Tooltip CSS padding</td></tr>
+        <tr><td><code>tooltipBorderRadius</code></td><td>string</td><td>'4px'</td><td>Tooltip border radius</td></tr>
+        <tr><td><code>tooltipZIndex</code></td><td>number</td><td>1000</td><td>Tooltip z-index</td></tr>
+        <tr><td><code>zoomToFitPadding</code></td><td>number</td><td>0.1</td><td>Padding fraction for fit</td></tr>
+        <tr><td><code>zoomToFitDelay</code></td><td>number</td><td>50</td><td>Auto-fit delay (ms)</td></tr>
+        <tr><td><code>linkHitWidth</code></td><td>number</td><td>10</td><td>Link click area (px)</td></tr>
+        <tr><td><code>contrastThreshold</code></td><td>number</td><td>0.5</td><td>Text contrast threshold</td></tr>
+      </table>
+
+      <h4>Large Graph (<code>largeGraph</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>enabled</code></td><td>boolean</td><td>true</td><td>Enable viewport culling</td></tr>
+        <tr><td><code>viewportPadding</code></td><td>number</td><td>0</td><td>Extra cull padding (world units)</td></tr>
+        <tr><td><code>lowZoomThreshold</code></td><td>number</td><td>1</td><td>Skip details at this zoom or below</td></tr>
+        <tr><td><code>skipLabelsAtLowZoom</code></td><td>boolean</td><td>true</td><td>Skip node labels</td></tr>
+        <tr><td><code>skipArrowsAtLowZoom</code></td><td>boolean</td><td>true</td><td>Skip arrowheads</td></tr>
+        <tr><td><code>skipLinkLabelsAtLowZoom</code></td><td>boolean</td><td>true</td><td>Skip link labels</td></tr>
+      </table>
+
+      <h4>Top-Level Config</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>width / height</code></td><td>number</td><td>800 / 600</td><td>Canvas dimensions</td></tr>
+        <tr><td><code>backgroundColor</code></td><td>string</td><td>'#ffffff'</td><td>Canvas background</td></tr>
+        <tr><td><code>foregroundColor</code></td><td>string</td><td>'#1a1a1a'</td><td>Stroke/border color</td></tr>
+        <tr><td><code>animation</code></td><td>boolean</td><td>false</td><td>Continuous simulation</td></tr>
+        <tr><td><code>pinOnDragEnd</code></td><td>boolean</td><td>false</td><td>Pin after drag</td></tr>
+        <tr><td><code>captionsKeys</code></td><td>Array</td><td>[]</td><td>Node label keys: ['name', true]</td></tr>
+        <tr><td><code>showPropertyKeyPrefix</code></td><td>boolean</td><td>false</td><td>Show "key: value" in labels</td></tr>
+        <tr><td><code>layoutMode</code></td><td>string</td><td>'force'</td><td>Layout algorithm</td></tr>
+        <tr><td><code>isNodeSelected</code></td><td>function</td><td>undefined</td><td>(node) => boolean</td></tr>
+        <tr><td><code>isLinkSelected</code></td><td>function</td><td>undefined</td><td>(link) => boolean</td></tr>
+        <tr><td><code>linkLineDash</code></td><td>function</td><td>undefined</td><td>(link) => number[]</td></tr>
+      </table>
+
+      <h4>Layout Options (<code>layoutOptions</code>)</h4>
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>tree.direction</code></td><td>string</td><td>'td'</td><td>'td' | 'bu' | 'lr' | 'rl'</td></tr>
+        <tr><td><code>tree.levelDistance</code></td><td>number</td><td>80</td><td>Spacing between levels</td></tr>
+        <tr><td><code>tree.nodeSpacing</code></td><td>number</td><td>60</td><td>Sibling spacing</td></tr>
+        <tr><td><code>radial.direction</code></td><td>string</td><td>'out'</td><td>'out' | 'in'</td></tr>
+        <tr><td><code>radial.levelDistance</code></td><td>number</td><td>80</td><td>Ring distance</td></tr>
+        <tr><td><code>radial.nodeSpacing</code></td><td>number</td><td>10</td><td>Gap between nodes on ring</td></tr>
+        <tr><td><code>force.linkDistance</code></td><td>number</td><td>45</td><td>Desired link length</td></tr>
+        <tr><td><code>force.collisionPadding</code></td><td>number</td><td>25</td><td>Collision padding</td></tr>
+      </table>
+
+      <h4>Event Handlers (<code>eventHandlers</code>)</h4>
+      <table>
+        <tr><th>Handler</th><th>Signature</th><th>Description</th></tr>
+        <tr><td><code>onNodeClick</code></td><td>(node, event) => void</td><td>Node clicked</td></tr>
+        <tr><td><code>onNodeRightClick</code></td><td>(node, event) => void</td><td>Node right-clicked</td></tr>
+        <tr><td><code>onNodeHover</code></td><td>(node) => void</td><td>Hovered (null on leave)</td></tr>
+        <tr><td><code>onNodeDragEnd</code></td><td>(node) => void</td><td>Drag finished</td></tr>
+        <tr><td><code>onLinkClick</code></td><td>(link, event) => void</td><td>Link clicked</td></tr>
+        <tr><td><code>onLinkRightClick</code></td><td>(link, event) => void</td><td>Link right-clicked</td></tr>
+        <tr><td><code>onLinkHover</code></td><td>(link) => void</td><td>Link hovered</td></tr>
+        <tr><td><code>onBackgroundClick</code></td><td>(event) => void</td><td>Background clicked</td></tr>
+        <tr><td><code>onBackgroundRightClick</code></td><td>(event) => void</td><td>Background right-clicked</td></tr>
+        <tr><td><code>onZoom</code></td><td>(transform) => void</td><td>Zoom changed {k, x, y}</td></tr>
+        <tr><td><code>onEngineStop</code></td><td>() => void</td><td>Simulation cooled</td></tr>
+        <tr><td><code>onPinChange</code></td><td>(pinned) => void</td><td>Pin state changed</td></tr>
+        <tr><td><code>onLayoutChange</code></td><td>(layout) => void</td><td>Layout changed</td></tr>
+      </table>
+
+      <h4>Data Format</h4>
+      <pre>{
+  nodes: [{
+    id: number | string,
+    labels: string[],
+    data: Record&lt;string, any&gt;,
+    visible: boolean,
+    color: string,
+    size?: number,           // Radius in world units (default: 9)
+    expand?: boolean,
+  }],
+  links: [{
+    id: number | string,
+    source: number | string,
+    target: number | string,
+    relationship: string,
+    data: Record&lt;string, any&gt;,
+    color: string,
+    visible: boolean,
+  }]
+}</pre>
+
     </div>
   </div>
 
-  <!-- Import map for module resolution -->
+  <!-- ===== Scripts ===== -->
   <script type="importmap">
     {
       "imports": {
@@ -194,429 +973,12 @@
     }
   </script>
 
-  <!-- Import the web component -->
   <script type="module">
-    let loadedFromCdnFallback = false;
-    try {
-      const localBuildModulePath = `../dist/index.js?v=${Date.now()}`;
-      await import(localBuildModulePath);
-      console.log('Loaded local build from', localBuildModulePath);
-    } catch (error) {
-      loadedFromCdnFallback = true;
-      console.warn('Falling back to CDN package because local build could not be loaded.', error);
-      await import('https://cdn.jsdelivr.net/npm/@falkordb/canvas@0.0.45/dist/index.js');
-      console.warn('Loaded CDN fallback @falkordb/canvas@0.0.45. Run `npm run build` to use the local branch build.');
-    }
+    import '../dist/index.js';
 
-    // Define control functions FIRST so they're available immediately for onclick handlers
     let canvas;
-    let graphData = { nodes: [], links: [] };
-    let isLoading = false;
-    let isPlayingContextDemo = false;
-    const activeContextLayers = [];
-    const layoutSelect = document.getElementById('layout-select');
-    const layoutDirectionSelect = document.getElementById('layout-direction-select');
-    const concentricMetricSelect = document.getElementById('concentric-metric-select');
-    const componentsInnerLayoutSelect = document.getElementById('components-inner-layout-select');
-    const arcOrderSelect = document.getElementById('arc-order-select');
-    const contextLayerSelect = document.getElementById('context-layer-select');
-    const contextStatusElement = document.getElementById('context-status');
-    const contextControls = Array.from(document.querySelectorAll('[data-context-control]'));
 
-    const SAMPLE_GRAPH_BASE_DATA = {
-      nodes: [
-        { id: 1, labels: ['Person'], color: '#FF6B6B', visible: true, data: { name: 'Alice', role: 'Engineer' } },
-        { id: 2, labels: ['Person'], color: '#4ECDC4', visible: true, data: { name: 'Bob', role: 'Engineer' } },
-        { id: 3, labels: ['Person'], color: '#45B7D1', visible: true, data: { name: 'Charlie', role: 'Engineer' } },
-        { id: 4, labels: ['Person'], color: '#FFEAA7', visible: true, data: { name: 'Dana', role: 'Tech Lead' } },
-        { id: 5, labels: ['Company'], color: '#FFA07A', visible: true, data: { name: 'FalkorDB' } },
-        { id: 6, labels: ['Product'], color: '#74B9FF', visible: true, data: { name: 'Canvas' } },
-        { id: 7, labels: ['City'], color: '#96CEB4', visible: true, data: { name: 'Tel Aviv' } },
-        { id: 8, labels: ['Project'], color: '#A29BFE', visible: true, data: { name: 'Graph Query Engine' } }
-      ],
-      links: [
-        { id: 1, relationship: 'KNOWS', color: '#888', source: 1, target: 2, visible: true, data: {} },
-        { id: 2, relationship: 'KNOWS', color: '#888', source: 2, target: 3, visible: true, data: {} },
-        { id: 3, relationship: 'KNOWS', color: '#888', source: 3, target: 4, visible: true, data: {} },
-        { id: 4, relationship: 'WORKS_AT', color: '#666', source: 1, target: 5, visible: true, data: {} },
-        { id: 5, relationship: 'WORKS_AT', color: '#666', source: 2, target: 5, visible: true, data: {} },
-        { id: 6, relationship: 'WORKS_AT', color: '#666', source: 3, target: 5, visible: true, data: {} },
-        { id: 7, relationship: 'LEADS', color: '#5D5D5D', source: 4, target: 8, visible: true, data: {} },
-        { id: 8, relationship: 'BUILDS', color: '#5D5D5D', source: 5, target: 6, visible: true, data: {} },
-        { id: 9, relationship: 'LOCATED_IN', color: '#7C7C7C', source: 5, target: 7, visible: true, data: {} },
-        { id: 10, relationship: 'CONTRIBUTES_TO', color: '#7C7C7C', source: 1, target: 6, visible: true, data: {} },
-        { id: 11, relationship: 'CONTRIBUTES_TO', color: '#7C7C7C', source: 2, target: 6, visible: true, data: {} },
-        { id: 12, relationship: 'CONTRIBUTES_TO', color: '#7C7C7C', source: 3, target: 8, visible: true, data: {} }
-      ]
-    };
-
-    const SAMPLE_GRAPH_CONTEXT_LAYERS = {
-      collaboration: {
-        label: 'Collaboration Graph',
-        nodes: [
-          { id: 101, labels: ['Person'], color: '#FD79A8', visible: true, data: { name: 'Eve', role: 'Engineer' } },
-          { id: 102, labels: ['Person'], color: '#FDCB6E', visible: true, data: { name: 'Farid', role: 'Engineer' } },
-          { id: 103, labels: ['Team'], color: '#00B894', visible: true, data: { name: 'Graph UX Guild' } },
-          { id: 104, labels: ['Project'], color: '#E17055', visible: true, data: { name: 'Query Pipeline Initiative' } }
-        ],
-        links: [
-          { id: 1001, relationship: 'KNOWS', color: '#888', source: 2, target: 101, visible: true, data: {} },
-          { id: 1002, relationship: 'KNOWS', color: '#888', source: 3, target: 102, visible: true, data: {} },
-          { id: 1003, relationship: 'MEMBER_OF', color: '#666', source: 1, target: 103, visible: true, data: {} },
-          { id: 1004, relationship: 'MEMBER_OF', color: '#666', source: 101, target: 103, visible: true, data: {} },
-          { id: 1005, relationship: 'MEMBER_OF', color: '#666', source: 102, target: 103, visible: true, data: {} },
-          { id: 1006, relationship: 'COLLABORATES_ON', color: '#5D5D5D', source: 103, target: 6, visible: true, data: {} },
-          { id: 1007, relationship: 'CONTRIBUTES_TO', color: '#5D5D5D', source: 102, target: 104, visible: true, data: {} },
-          { id: 1008, relationship: 'DEPENDS_ON', color: '#7C7C7C', source: 104, target: 8, visible: true, data: {} }
-        ]
-      },
-      organization: {
-        label: 'Organization Graph',
-        nodes: [
-          { id: 201, labels: ['Team'], color: '#6C5CE7', visible: true, data: { name: 'Platform Team' } },
-          { id: 202, labels: ['Team'], color: '#0984E3', visible: true, data: { name: 'Runtime Team' } },
-          { id: 203, labels: ['Team'], color: '#55EFC4', visible: true, data: { name: 'Observability Team' } },
-          { id: 204, labels: ['Company'], color: '#FF7675', visible: true, data: { name: 'Redwood Ventures' } }
-        ],
-        links: [
-          { id: 2001, relationship: 'HAS_TEAM', color: '#666', source: 5, target: 201, visible: true, data: {} },
-          { id: 2002, relationship: 'HAS_TEAM', color: '#666', source: 5, target: 202, visible: true, data: {} },
-          { id: 2003, relationship: 'HAS_TEAM', color: '#666', source: 5, target: 203, visible: true, data: {} },
-          { id: 2004, relationship: 'OWNS', color: '#5D5D5D', source: 201, target: 6, visible: true, data: {} },
-          { id: 2005, relationship: 'OWNS', color: '#5D5D5D', source: 202, target: 8, visible: true, data: {} },
-          { id: 2006, relationship: 'SUPPORTS', color: '#5D5D5D', source: 203, target: 8, visible: true, data: {} },
-          { id: 2007, relationship: 'PARTNERS_WITH', color: '#7C7C7C', source: 5, target: 204, visible: true, data: {} },
-          { id: 2008, relationship: 'ADVISES', color: '#7C7C7C', source: 204, target: 6, visible: true, data: {} }
-        ]
-      },
-      geography: {
-        label: 'Geography Graph',
-        nodes: [
-          { id: 301, labels: ['City'], color: '#FFD166', visible: true, data: { name: 'Berlin' } },
-          { id: 302, labels: ['Country'], color: '#06D6A0', visible: true, data: { name: 'Germany' } },
-          { id: 303, labels: ['City'], color: '#118AB2', visible: true, data: { name: 'London' } },
-          { id: 304, labels: ['Country'], color: '#073B4C', visible: true, data: { name: 'United Kingdom' } }
-        ],
-        links: [
-          { id: 3001, relationship: 'LIVES_IN', color: '#888', source: 3, target: 301, visible: true, data: {} },
-          { id: 3002, relationship: 'LOCATED_IN', color: '#666', source: 301, target: 302, visible: true, data: {} },
-          { id: 3003, relationship: 'LIVES_IN', color: '#888', source: 4, target: 303, visible: true, data: {} },
-          { id: 3004, relationship: 'LOCATED_IN', color: '#666', source: 303, target: 304, visible: true, data: {} },
-          { id: 3005, relationship: 'HAS_OFFICE_IN', color: '#5D5D5D', source: 5, target: 301, visible: true, data: {} },
-          { id: 3006, relationship: 'HAS_OFFICE_IN', color: '#5D5D5D', source: 5, target: 303, visible: true, data: {} }
-        ]
-      },
-      delivery: {
-        label: 'Delivery Graph',
-        nodes: [
-          { id: 401, labels: ['Release'], color: '#C77DFF', visible: true, data: { name: 'Canvas v0.1' } },
-          { id: 402, labels: ['Task'], color: '#7B2CBF', visible: true, data: { name: 'Layout Stress Test' } },
-          { id: 403, labels: ['Epic'], color: '#9D4EDD', visible: true, data: { name: 'Expand/Collapse Animation' } },
-          { id: 404, labels: ['Product'], color: '#90BE6D', visible: true, data: { name: 'Customer Analytics Dashboard' } }
-        ],
-        links: [
-          { id: 4001, relationship: 'DELIVERS', color: '#666', source: 6, target: 401, visible: true, data: {} },
-          { id: 4002, relationship: 'VALIDATES', color: '#5D5D5D', source: 402, target: 403, visible: true, data: {} },
-          { id: 4003, relationship: 'INCLUDES', color: '#5D5D5D', source: 401, target: 403, visible: true, data: {} },
-          { id: 4004, relationship: 'ENABLES', color: '#5D5D5D', source: 401, target: 404, visible: true, data: {} },
-          { id: 4005, relationship: 'TESTED_BY', color: '#7C7C7C', source: 402, target: 6, visible: true, data: {} },
-          { id: 4006, relationship: 'DEPENDS_ON', color: '#7C7C7C', source: 403, target: 8, visible: true, data: {} },
-          { id: 4007, relationship: 'REQUESTED_BY', color: '#7C7C7C', source: 404, target: 4, visible: true, data: {} }
-        ]
-      }
-    };
-
-    const CONTEXT_LAYER_KEYS = Object.keys(SAMPLE_GRAPH_CONTEXT_LAYERS);
-
-    const cloneGraphData = (data) => JSON.parse(JSON.stringify(data));
-
-    const setContextControlsEnabled = (enabled) => {
-      contextControls.forEach((control) => {
-        control.disabled = !enabled;
-      });
-    };
-
-    const mergeGraphDataWithContexts = (baseData, contextLayerKeys) => {
-      const nodesById = new Map();
-      const linksById = new Map();
-
-      baseData.nodes.forEach((node) => {
-        nodesById.set(node.id, { ...node });
-      });
-      baseData.links.forEach((link) => {
-        linksById.set(link.id, { ...link });
-      });
-
-      contextLayerKeys.forEach((layerKey) => {
-        const layer = SAMPLE_GRAPH_CONTEXT_LAYERS[layerKey];
-        if (!layer) return;
-
-        layer.nodes.forEach((node) => {
-          nodesById.set(node.id, { ...node });
-        });
-        layer.links.forEach((link) => {
-          linksById.set(link.id, { ...link });
-        });
-      });
-
-      return {
-        nodes: Array.from(nodesById.values()),
-        links: Array.from(linksById.values())
-      };
-    };
-
-    const updateContextStatus = (isRemoteMode) => {
-      if (!contextStatusElement) return;
-
-      if (isRemoteMode) {
-        contextStatusElement.textContent =
-          'Context expand/collapse controls are disabled when loading remote query data.';
-        return;
-      }
-
-      if (activeContextLayers.length === 0) {
-        contextStatusElement.textContent =
-          'No context layers expanded yet. Expand one to visualize transition animations.';
-        return;
-      }
-
-      const activeLabels = activeContextLayers
-        .map((layerKey) => SAMPLE_GRAPH_CONTEXT_LAYERS[layerKey]?.label)
-        .filter(Boolean);
-
-      contextStatusElement.textContent =
-        `Active context layers (${activeLabels.length}/${CONTEXT_LAYER_KEYS.length}): ${activeLabels.join(', ')}`;
-    };
-
-    const applyExpandedContexts = (isRemoteMode) => {
-      if (isRemoteMode || !canvas) return;
-
-      graphData = mergeGraphDataWithContexts(SAMPLE_GRAPH_BASE_DATA, activeContextLayers);
-      canvas.setData(cloneGraphData(graphData));
-      updateContextStatus(false);
-    };
-
-    const expandContextLayer = (layerKey, isRemoteMode) => {
-      if (isRemoteMode) return;
-      if (!SAMPLE_GRAPH_CONTEXT_LAYERS[layerKey]) return;
-      if (activeContextLayers.includes(layerKey)) return;
-
-      activeContextLayers.push(layerKey);
-      applyExpandedContexts(false);
-    };
-
-    const collapseContextLayer = (layerKey, isRemoteMode) => {
-      if (isRemoteMode) return;
-      const index = activeContextLayers.indexOf(layerKey);
-      if (index < 0) return;
-
-      activeContextLayers.splice(index, 1);
-      applyExpandedContexts(false);
-    };
-
-    const updateDirectionControlState = (layoutMode) => {
-      if (!layoutDirectionSelect) return;
-      const supportsDirection =
-        layoutMode === 'tree' ||
-        layoutMode === 'flow' ||
-        layoutMode === 'radial-tree' ||
-        layoutMode === 'arc';
-
-      layoutDirectionSelect.disabled = !supportsDirection;
-      if (layoutMode === 'arc' && !['LR', 'RL'].includes(layoutDirectionSelect.value)) {
-        layoutDirectionSelect.value = 'LR';
-      }
-
-      if (concentricMetricSelect) concentricMetricSelect.disabled = layoutMode !== 'concentric';
-      if (componentsInnerLayoutSelect) componentsInnerLayoutSelect.disabled = layoutMode !== 'components';
-      if (arcOrderSelect) arcOrderSelect.disabled = layoutMode !== 'arc';
-    };
-
-    const getLayoutConfig = (layoutMode, direction) => {
-      const data = canvas?.getData?.();
-      const firstNodeId = data?.nodes?.[0]?.id;
-      const concentricMetric = concentricMetricSelect?.value || 'degree';
-      const componentsInnerLayout = componentsInnerLayoutSelect?.value || 'concentric';
-      const arcOrder = arcOrderSelect?.value || 'id';
-      if (layoutMode === 'tree') {
-
-        return {
-          layoutMode: 'tree',
-          layoutOptions: {
-            tree: {
-              direction,
-              ...(firstNodeId !== undefined ? { rootNodeId: firstNodeId } : {})
-            }
-          }
-        };
-      }
-
-      if (layoutMode === 'flow') {
-        return {
-          layoutMode: 'flow',
-          layoutOptions: {
-            flow: {
-              direction
-            }
-          }
-        };
-      }
-
-      if (layoutMode === 'radial-tree') {
-        return {
-          layoutMode: 'radial-tree',
-          layoutOptions: {
-            radialTree: {
-              direction,
-              ...(firstNodeId !== undefined ? { rootNodeId: firstNodeId } : {})
-            }
-          }
-        };
-      }
-
-      if (layoutMode === 'concentric') {
-        return {
-          layoutMode: 'concentric',
-          layoutOptions: {
-            concentric: {
-              metric: concentricMetric,
-              ...(firstNodeId !== undefined ? { rootNodeId: firstNodeId } : {})
-            }
-          }
-        };
-      }
-
-      if (layoutMode === 'components') {
-        return {
-          layoutMode: 'components',
-          layoutOptions: {
-            components: {
-              innerLayout: componentsInnerLayout
-            }
-          }
-        };
-      }
-
-      if (layoutMode === 'arc') {
-        const arcDirection = ['LR', 'RL'].includes(direction) ? direction : 'LR';
-        return {
-          layoutMode: 'arc',
-          layoutOptions: {
-            arc: {
-              direction: arcDirection,
-              orderBy: arcOrder
-            }
-          }
-        };
-      }
-      return {
-        layoutMode: 'force',
-        layoutOptions: {}
-      };
-    };
-
-    window.changeLayout = () => {
-      if (!layoutSelect || !layoutDirectionSelect) return;
-
-      const layoutMode = layoutSelect.value;
-      const direction = layoutDirectionSelect.value;
-      updateDirectionControlState(layoutMode);
-
-      if (!canvas) {
-        alert('Graph not loaded yet, please wait...');
-        return;
-      }
-
-      canvas.setConfig(getLayoutConfig(layoutMode, direction));
-      const details = [];
-      if (['tree', 'flow', 'radial-tree'].includes(layoutMode)) {
-        details.push(direction);
-      }
-      if (layoutMode === 'concentric') {
-        details.push(`metric=${concentricMetricSelect?.value || 'degree'}`);
-      }
-      if (layoutMode === 'components') {
-        details.push(`inner=${componentsInnerLayoutSelect?.value || 'concentric'}`);
-      }
-      if (layoutMode === 'arc') {
-        details.push(`dir=${layoutDirectionSelect.value}`);
-        details.push(`order=${arcOrderSelect?.value || 'id'}`);
-      }
-      document.getElementById('selected-info').textContent =
-        `Layout: ${layoutMode.toUpperCase()}${details.length > 0 ? ` (${details.join(', ')})` : ''}`;
-    };
-
-    window.toggleLoading = () => {
-      if (!canvas) {
-        alert('Graph not loaded yet, please wait...');
-        return;
-      }
-      isLoading = !isLoading;
-      canvas.setIsLoading(isLoading);
-      canvas.setCooldownTicks(isLoading ? undefined : 300);
-    };
-    const wait = (durationMs) =>
-      new Promise((resolve) => {
-        setTimeout(resolve, durationMs);
-      });
-
-    window.expandSelectedContext = () => {
-      if (!contextLayerSelect) return;
-      expandContextLayer(contextLayerSelect.value, shouldFetchRemote);
-    };
-
-    window.collapseSelectedContext = () => {
-      if (!contextLayerSelect) return;
-      collapseContextLayer(contextLayerSelect.value, shouldFetchRemote);
-    };
-
-    window.expandAllContexts = () => {
-      if (shouldFetchRemote) return;
-      activeContextLayers.splice(0, activeContextLayers.length, ...CONTEXT_LAYER_KEYS);
-      applyExpandedContexts(false);
-    };
-
-    window.collapseAllContexts = () => {
-      if (shouldFetchRemote) return;
-      activeContextLayers.length = 0;
-      applyExpandedContexts(false);
-    };
-
-    window.playExpandCollapseDemo = async () => {
-      if (shouldFetchRemote || isPlayingContextDemo) return;
-
-      isPlayingContextDemo = true;
-      try {
-        window.collapseAllContexts();
-        await wait(700);
-        expandContextLayer('collaboration', false);
-        await wait(900);
-        expandContextLayer('organization', false);
-        await wait(900);
-        expandContextLayer('geography', false);
-        await wait(900);
-        collapseContextLayer('organization', false);
-        await wait(900);
-        expandContextLayer('delivery', false);
-      } finally {
-        isPlayingContextDemo = false;
-      }
-    };
-
-    const API_TOKEN = 'your_api_token_here'; // Replace with your actual API token
-    const graphName = 'your_graph_name_here'; // Replace with your actual graph name
-    const query = 'your_query_here'; // Replace with your actual query
-
-    const shouldFetchRemote =
-      API_TOKEN !== 'your_api_token_here' &&
-      graphName !== 'your_graph_name_here' &&
-      query !== 'your_query_here';
-
-    const url = `https://browser.falkordb.com/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
-
-    graphData = cloneGraphData(SAMPLE_GRAPH_BASE_DATA);
-
-    // Color palettes
+    // ===== Color Utilities =====
     const labelColors = {};
     const relationshipColors = {};
     const colorPalette = [
@@ -626,7 +988,6 @@
     ];
     let colorIndex = 0;
 
-    // Helper function to get color for a label
     const getColorForLabel = (label) => {
       if (!labelColors[label]) {
         labelColors[label] = colorPalette[colorIndex % colorPalette.length];
@@ -635,7 +996,6 @@
       return labelColors[label];
     };
 
-    // Helper function to get color for a relationship type
     const getColorForRelationship = (type) => {
       if (!relationshipColors[type]) {
         relationshipColors[type] = colorPalette[colorIndex % colorPalette.length];
@@ -644,197 +1004,578 @@
       return relationshipColors[type];
     };
 
-    if (shouldFetchRemote) {
-      graphData = { nodes: [], links: [] };
-      try {
-        // Use fetch with manual SSE parsing (simpler than polyfill)
-        await new Promise(async (resolve, reject) => {
-          try {
-            const response = await fetch(url, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${API_TOKEN}`,
-              }
-            });
+    const hexToRgb = (hex) => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return [r, g, b];
+    };
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
+    // ===== Local Storage =====
+    const loadFromStorage = () => {
+      const domain = localStorage.getItem('falkordb-canvas-domain');
+      const graph = localStorage.getItem('falkordb-canvas-graph');
+      const query = localStorage.getItem('falkordb-canvas-query');
+      if (domain) document.getElementById('domain-input').value = domain;
+      if (graph) document.getElementById('graph-name').value = graph;
+      if (query) document.getElementById('query-input').value = query;
+    };
 
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
+    const saveToStorage = () => {
+      localStorage.setItem('falkordb-canvas-domain', document.getElementById('domain-input').value.trim());
+      localStorage.setItem('falkordb-canvas-graph', document.getElementById('graph-name').value.trim());
+      localStorage.setItem('falkordb-canvas-query', document.getElementById('query-input').value.trim());
+    };
 
-              buffer += decoder.decode(value, { stream: true });
+    // ===== API Reference Toggle =====
+    window.toggleApiRef = () => {
+      document.getElementById('api-ref-panel').classList.toggle('open');
+    };
 
-              // Process complete events
-              const events = buffer.split('\n\n');
-              buffer = events.pop(); // Keep incomplete event in buffer
+    // ===== Layout Controls =====
+    const directionsByLayout = {
+      force: [],
+      tree: [['td', 'Top-Down'], ['bu', 'Bottom-Up'], ['lr', 'Left-Right'], ['rl', 'Right-Left']],
+      radial: [['out', 'Outward'], ['in', 'Inward']],
+    };
 
-              for (const event of events) {
-                if (!event.trim()) continue;
+    let currentLayout = 'force';
 
-                const lines = event.split('\n');
-                let eventType = '';
-                let data = '';
-
-                for (const line of lines) {
-                  if (line.startsWith('event:')) {
-                    eventType = line.substring(6).trim();
-                  } else if (line.startsWith('data:')) {
-                    data += line.substring(5);
-                  }
-                }
-
-                if (eventType === 'result' && data) {
-                  const result = JSON.parse(data);
-                  console.log('Query result:', result);
-
-                  // Convert to falkordb-canvas format
-                  if (result.data && Array.isArray(result.data)) {
-                    result.data.forEach(row => {
-                      if (row.n) {
-                        const primaryLabel = row.n.labels[0] || 'Unknown';
-                        const node = {
-                          id: row.n.id,
-                          labels: row.n.labels,
-                          data: row.n.properties,
-                          visible: true,
-                          color: getColorForLabel(primaryLabel)
-                        };
-                        // Avoid duplicates
-                        if (!graphData.nodes.find(n => n.id === node.id)) {
-                          graphData.nodes.push(node);
-                        }
-                      }
-                      // Add target node if present
-                      if (row.m) {
-                        const primaryLabel = row.m.labels[0] || 'Unknown';
-                        const targetNode = {
-                          id: row.m.id,
-                          labels: row.m.labels,
-                          data: row.m.properties,
-                          visible: true,
-                          color: getColorForLabel(primaryLabel)
-                        };
-                        if (!graphData.nodes.find(n => n.id === targetNode.id)) {
-                          graphData.nodes.push(targetNode);
-                        }
-                      }
-                      // Add links if relationship present
-                      if (row.e && row.n && row.m) {
-                        const relType = row.e.relationshipType || 'RELATED';
-                        const link = {
-                          id: row.e.id,
-                          source: row.e.sourceId,
-                          target: row.e.destinationId,
-                          relationship: relType,
-                          data: row.e.properties || {},
-                          color: getColorForRelationship(relType),
-                          visible: true
-                        };
-                        if (!graphData.links.find(l => l.id === link.id)) {
-                          graphData.links.push(link);
-                        }
-                      }
-                    });
-                  }
-
-                  resolve(result);
-                } else if (eventType === 'error' && data) {
-                  const { message } = JSON.parse(data);
-                  console.error('Error:', message);
-                  reject(new Error(message));
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Fetch error:', error);
-            reject(error);
-          }
-        });
-      } catch (error) {
-        alert(error.message);
+    function updateDirectionOptions(layout) {
+      const dirSelect = document.getElementById('direction-select');
+      const options = directionsByLayout[layout] || [];
+      dirSelect.innerHTML = '';
+      for (const [value, label] of options) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        dirSelect.appendChild(opt);
       }
-    } else {
-      console.log('Using built-in sample graph data. Set API_TOKEN/graphName/query to fetch remote data.');
-    }
-    if (!shouldFetchRemote) {
-      graphData = mergeGraphDataWithContexts(SAMPLE_GRAPH_BASE_DATA, activeContextLayers);
+      dirSelect.disabled = options.length === 0;
+
+      if (canvas) {
+        const layoutOptions = canvas.config?.layoutOptions;
+        let storedDir;
+        if (layout === 'tree') storedDir = layoutOptions?.tree?.direction;
+        else if (layout === 'radial') storedDir = layoutOptions?.radial?.direction;
+        if (storedDir && dirSelect.querySelector(`option[value="${storedDir}"]`)) {
+          dirSelect.value = storedDir;
+        }
+      }
+
+      const levelInput = document.getElementById('level-distance');
+      const spacingInput = document.getElementById('node-spacing');
+      levelInput.disabled = layout === 'force';
+      spacingInput.disabled = layout === 'force';
+
+      // Restore per-layout stored values into the inputs
+      if (canvas && layout !== 'force') {
+        const layoutOptions = canvas.config?.layoutOptions;
+        if (layout === 'tree') {
+          levelInput.value = layoutOptions?.tree?.levelDistance ?? 80;
+          spacingInput.value = layoutOptions?.tree?.nodeSpacing ?? 60;
+        } else if (layout === 'radial') {
+          levelInput.value = layoutOptions?.radial?.levelDistance ?? 80;
+          spacingInput.value = layoutOptions?.radial?.nodeSpacing ?? 10;
+        }
+      }
     }
 
-    // Get the graph element
+    window.changeLayout = (layout) => {
+      currentLayout = layout;
+      updateDirectionOptions(layout);
+      canvas.setLayout(layout);
+    };
+
+    window.changeDirection = (direction) => {
+      const opts = {};
+      if (currentLayout === 'tree') {
+        opts[currentLayout] = { direction };
+      } else if (currentLayout === 'radial') {
+        opts.radial = { direction };
+      }
+      canvas.setLayoutOptions(opts);
+    };
+
+    window.changeSpacing = () => {
+      const levelInput = document.getElementById('level-distance');
+      const spacingInput = document.getElementById('node-spacing');
+      let levelDistance = parseInt(levelInput.value);
+      let nodeSpacing = parseInt(spacingInput.value);
+      if (isNaN(levelDistance)) levelDistance = 80;
+      if (isNaN(nodeSpacing)) nodeSpacing = 60;
+      levelDistance = Math.max(+levelInput.min, Math.min(+levelInput.max, levelDistance));
+      nodeSpacing = Math.max(+spacingInput.min, Math.min(+spacingInput.max, nodeSpacing));
+      levelInput.value = levelDistance;
+      spacingInput.value = nodeSpacing;
+      const opts = {};
+      if (currentLayout === 'tree') {
+        opts.tree = { levelDistance, nodeSpacing };
+      } else if (currentLayout === 'radial') {
+        opts.radial = { levelDistance, nodeSpacing };
+      }
+      canvas.setLayoutOptions(opts);
+    };
+
+    window.changeEdgeGap = () => {
+      const input = document.getElementById('edge-gap');
+      let edgeGap = parseInt(input.value);
+      if (isNaN(edgeGap)) edgeGap = 2;
+      edgeGap = Math.max(+input.min, Math.min(+input.max, edgeGap));
+      input.value = edgeGap;
+      canvas.setConfig({ linkStyle: { edgeGap } });
+    };
+
+    window.toggleAnimation = () => {
+      canvas.setAnimation(document.getElementById('animation-toggle').checked);
+    };
+
+    window.togglePin = () => {
+      canvas.setPinOnDragEnd(document.getElementById('pin-toggle').checked);
+    };
+
+    // ===== Config Apply Handlers =====
+    window.applyNodeStyle = () => {
+      canvas.setConfig({
+        nodeStyle: {
+          fontFamily: document.getElementById('ns-fontFamily').value,
+          fontWeightUnselected: parseInt(document.getElementById('ns-fontWeightUnselected').value),
+          fontWeightSelected: parseInt(document.getElementById('ns-fontWeightSelected').value),
+          fontSize: parseFloat(document.getElementById('ns-fontSize').value),
+          textFillRatio: parseFloat(document.getElementById('ns-textFillRatio').value),
+          strokeWidthSelected: parseFloat(document.getElementById('ns-strokeWidthSelected').value),
+          strokeWidthUnselected: parseFloat(document.getElementById('ns-strokeWidthUnselected').value),
+          glowDuration: parseInt(document.getElementById('ns-glowDuration').value),
+          glowSpread: parseInt(document.getElementById('ns-glowSpread').value),
+          glowSteps: parseInt(document.getElementById('ns-glowSteps').value),
+          glowColor: hexToRgb(document.getElementById('ns-glowColor').value),
+          glowMaxOpacity: parseFloat(document.getElementById('ns-glowMaxOpacity').value),
+        }
+      });
+    };
+
+    window.applyLinkStyle = () => {
+      canvas.setConfig({
+        linkStyle: {
+          fontFamily: document.getElementById('ls-fontFamily').value,
+          fontSize: parseFloat(document.getElementById('ls-fontSize').value),
+          fontWeightUnselected: parseInt(document.getElementById('ls-fontWeightUnselected').value),
+          fontWeightSelected: parseInt(document.getElementById('ls-fontWeightSelected').value),
+          lineWidthSelected: parseFloat(document.getElementById('ls-lineWidthSelected').value),
+          lineWidthUnselected: parseFloat(document.getElementById('ls-lineWidthUnselected').value),
+          arrowLengthSelected: parseFloat(document.getElementById('ls-arrowLengthSelected').value),
+          arrowLengthUnselected: parseFloat(document.getElementById('ls-arrowLengthUnselected').value),
+          arrowWidthRatio: parseFloat(document.getElementById('ls-arrowWidthRatio').value),
+          arrowNotchRatio: parseFloat(document.getElementById('ls-arrowNotchRatio').value),
+          selfLoopCurveFactor: parseFloat(document.getElementById('ls-selfLoopCurveFactor').value),
+          parallelEdgeCurveMultiplier: parseFloat(document.getElementById('ls-parallelEdgeCurveMultiplier').value),
+          labelBackgroundPadding: parseFloat(document.getElementById('ls-labelBackgroundPadding').value),
+        }
+      });
+    };
+
+    window.applySimulation = () => {
+      canvas.setConfig({
+        simulation: {
+          centerStrength: parseFloat(document.getElementById('sim-centerStrength').value),
+          chargeStrength: parseFloat(document.getElementById('sim-chargeStrength').value),
+          velocityDecay: parseFloat(document.getElementById('sim-velocityDecay').value),
+          alphaMin: parseFloat(document.getElementById('sim-alphaMin').value),
+          warmupTicks: parseInt(document.getElementById('sim-warmupTicks').value),
+        }
+      });
+    };
+
+    window.applyInteraction = () => {
+      canvas.setConfig({
+        interaction: {
+          tooltipFontSize: parseInt(document.getElementById('int-tooltipFontSize').value),
+          tooltipPadding: document.getElementById('int-tooltipPadding').value,
+          tooltipBorderRadius: document.getElementById('int-tooltipBorderRadius').value,
+          tooltipZIndex: parseInt(document.getElementById('int-tooltipZIndex').value),
+          zoomToFitPadding: parseFloat(document.getElementById('int-zoomToFitPadding').value),
+          zoomToFitDelay: parseInt(document.getElementById('int-zoomToFitDelay').value),
+          linkHitWidth: parseInt(document.getElementById('int-linkHitWidth').value),
+          contrastThreshold: parseFloat(document.getElementById('int-contrastThreshold').value),
+        }
+      });
+    };
+
+    window.applyLargeGraph = () => {
+      const enabled = document.getElementById('lg-enabled').checked;
+      canvas.setConfig({
+        largeGraph: {
+          enabled,
+          viewportPadding: parseInt(document.getElementById('lg-viewportPadding').value),
+          lowZoomThreshold: parseFloat(document.getElementById('lg-lowZoomThreshold').value),
+          skipLabelsAtLowZoom: document.getElementById('lg-skipLabelsAtLowZoom').checked,
+          skipArrowsAtLowZoom: document.getElementById('lg-skipArrowsAtLowZoom').checked,
+          skipLinkLabelsAtLowZoom: document.getElementById('lg-skipLinkLabelsAtLowZoom').checked,
+        }
+      });
+      if (enabled && !lgDebugInterval) {
+        lgDebugInterval = setInterval(window.updateLgDebug, 200);
+        window.updateLgDebug();
+      } else if (!enabled && lgDebugInterval) {
+        clearInterval(lgDebugInterval);
+        lgDebugInterval = null;
+        document.getElementById('lg-debug').classList.remove('visible');
+      }
+    };
+
+    window.applyColors = () => {
+      canvas.setConfig({
+        backgroundColor: document.getElementById('cfg-backgroundColor').value,
+        foregroundColor: document.getElementById('cfg-foregroundColor').value,
+        showPropertyKeyPrefix: document.getElementById('cfg-showPropertyKeyPrefix').checked,
+      });
+    };
+
+    // ===== Data Actions =====
+    let nodeCounter = 0;
+
+    window.addNode = () => {
+      const currentData = canvas.getData();
+      const id = `node-${++nodeCounter}`;
+      const labels = ['Person', 'Movie', 'Genre'][Math.floor(Math.random() * 3)];
+      currentData.nodes.push({
+        id,
+        labels: [labels],
+        data: { name: `${labels} ${nodeCounter}` },
+        visible: true,
+        color: getColorForLabel(labels)
+      });
+      canvas.setData(currentData);
+    };
+
+    window.addLink = () => {
+      const currentData = canvas.getData();
+      if (currentData.nodes.length < 2) { alert('Need at least 2 nodes'); return; }
+      const src = currentData.nodes[Math.floor(Math.random() * currentData.nodes.length)];
+      let tgt = src;
+      while (tgt === src) tgt = currentData.nodes[Math.floor(Math.random() * currentData.nodes.length)];
+      const relType = ['ACTED_IN', 'DIRECTED', 'KNOWS'][Math.floor(Math.random() * 3)];
+      currentData.links.push({
+        id: `link-${Date.now()}`,
+        source: src.id,
+        target: tgt.id,
+        relationship: relType,
+        data: {},
+        color: getColorForRelationship(relType),
+        visible: true
+      });
+      canvas.setData(currentData);
+    };
+
+    window.generateLargeGraph = () => {
+      const labels = ['Person', 'Movie', 'Genre', 'Company', 'Country'];
+      const relTypes = ['ACTED_IN', 'DIRECTED', 'KNOWS', 'WORKS_AT', 'BORN_IN'];
+      const nodes = [];
+      const links = [];
+      for (let i = 1; i <= 100; i++) {
+        const label = labels[Math.floor(Math.random() * labels.length)];
+        nodes.push({ id: `lg-${i}`, labels: [label], data: { name: `${label} ${i}` }, visible: true, color: getColorForLabel(label) });
+      }
+      for (let i = 0; i < 150; i++) {
+        const srcIdx = Math.floor(Math.random() * 100);
+        let tgtIdx = srcIdx;
+        while (tgtIdx === srcIdx) tgtIdx = Math.floor(Math.random() * 100);
+        const rel = relTypes[Math.floor(Math.random() * relTypes.length)];
+        links.push({ id: `lg-link-${i}`, source: nodes[srcIdx].id, target: nodes[tgtIdx].id, relationship: rel, data: {}, color: getColorForRelationship(rel), visible: true });
+      }
+      canvas.setData({ nodes, links });
+    };
+
+    // --- Selection state ---
+    let selectedNode = null;
+    let selectedLink = null;
+
+    function updateDeleteButtons() {
+      const sep = document.getElementById('delete-separator');
+      const btnNode = document.getElementById('btn-delete-node');
+      const btnLink = document.getElementById('btn-delete-link');
+      btnNode.style.display = selectedNode ? '' : 'none';
+      btnLink.style.display = selectedLink ? '' : 'none';
+      sep.style.display = (selectedNode || selectedLink) ? '' : 'none';
+    }
+
+    window.deleteSelectedNode = () => {
+      if (!selectedNode) return;
+      const data = canvas.getData();
+      const id = selectedNode.id;
+      data.nodes = data.nodes.filter(n => n.id !== id);
+      data.links = data.links.filter(l => l.source !== id && l.target !== id);
+      selectedNode = null;
+      updateDeleteButtons();
+      canvas.setGraphData(data);
+    };
+
+    window.deleteSelectedLink = () => {
+      if (!selectedLink) return;
+      const data = canvas.getData();
+      const id = selectedLink.id;
+      data.links = data.links.filter(l => l.id !== id);
+      selectedLink = null;
+      updateDeleteButtons();
+      canvas.setGraphData(data);
+    };
+
+    window.duplicateGraph = () => {
+      const data = canvas.getData();
+      const offset = data.nodes.length + 1000;
+      const newNodes = data.nodes.map(n => ({ ...n, id: n.id + offset, data: { ...n.data } }));
+      const newLinks = data.links.map(l => ({ ...l, id: l.id + '-dup-' + Date.now(), source: l.source + offset, target: l.target + offset }));
+      if (data.nodes.length > 0) {
+        newLinks.push({ id: 'bridge-' + Date.now(), source: data.nodes[0].id, target: newNodes[0].id, relationship: 'CLONED', data: {}, color: '#999', visible: true });
+      }
+      canvas.setData({ nodes: [...data.nodes, ...newNodes], links: [...data.links, ...newLinks] });
+    };
+
+    window.clearGraph = () => { canvas.setData({ nodes: [], links: [] }); };
+
+    // ===== View Actions =====
+    window.zoomToFit = () => { canvas.zoomToFit(); };
+    window.zoomIn = () => { canvas.zoom(canvas.getZoom() * 1.5); };
+    window.zoomOut = () => { canvas.zoom(canvas.getZoom() / 1.5); };
+    window.resetViewport = () => { canvas.setViewport({ zoom: 1, centerX: 0, centerY: 0 }); };
+
+    // ===== Style Actions =====
+    window.randomizeAllColors = () => {
+      const graphData = canvas.getGraphData();
+      const palette = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#96CEB4', '#FFEAA7', '#74B9FF', '#A29BFE', '#FD79A8', '#FDCB6E', '#6C5CE7', '#00B894', '#E17055', '#0984E3', '#D63031'];
+      graphData.nodes.forEach(node => { node.color = palette[Math.floor(Math.random() * palette.length)]; });
+      graphData.links.forEach(link => { link.color = palette[Math.floor(Math.random() * palette.length)]; });
+      canvas.refresh();
+    };
+
+    window.resizeAllNodes = () => {
+      const graphData = canvas.getGraphData();
+      const size = [4, 6, 8, 10, 12, 14][Math.floor(Math.random() * 6)];
+      graphData.nodes.forEach(node => { node.size = size + Math.random() * 4; });
+      canvas.refresh();
+    };
+
+    window.toggleNodeVisibility = () => {
+      const graphData = canvas.getGraphData();
+      graphData.nodes.forEach(node => { if (Math.random() < 0.3) node.visible = !node.visible; });
+      canvas.refresh();
+    };
+
+    window.reheatSim = () => {
+      const fg = canvas.getGraph();
+      if (fg) {
+        canvas.setAnimation(true);
+        document.getElementById('animation-toggle').checked = true;
+        fg.d3ReheatSimulation();
+      }
+    };
+
+    // ===== Large Graph Debug =====
+    let lgDebugInterval = null;
+
+    window.updateLgDebug = () => {
+      const debugEl = document.getElementById('lg-debug');
+      if (!document.getElementById('lg-enabled').checked) {
+        debugEl.classList.remove('visible');
+        return;
+      }
+      debugEl.classList.add('visible');
+      const stats = canvas.getCullingStats();
+      const threshold = parseFloat(document.getElementById('lg-lowZoomThreshold').value) || 0.5;
+      document.getElementById('lg-debug-zoom').textContent = stats.zoom.toFixed(3);
+      document.getElementById('lg-debug-culling-zoom').textContent = stats.zoom.toFixed(3);
+      document.getElementById('lg-debug-low-zoom').textContent = stats.zoom <= threshold ? 'YES' : 'no';
+      document.getElementById('lg-debug-threshold').textContent = threshold.toFixed(3);
+      document.getElementById('lg-debug-nodes').textContent = `${stats.visibleNodes}/${stats.totalNodes}`;
+      document.getElementById('lg-debug-links').textContent = `${stats.visibleLinks}/${stats.totalLinks}`;
+    };
+
+    // ===== Query =====
+    window.sendQuery = async () => {
+      const apiKey = document.getElementById('api-key').value.trim();
+      const domain = document.getElementById('domain-input').value.trim() || 'https://browser.falkordb.com';
+      const graphName = document.getElementById('graph-name').value.trim();
+      const query = document.getElementById('query-input').value.trim();
+
+      if (!graphName || !query) { alert('Provide both a graph name and a query.'); return; }
+      saveToStorage();
+
+      document.getElementById('selected-info').textContent = 'Sending query...';
+      const graphData = { nodes: [], links: [] };
+      const base = domain.replace(/\/+$/, '');
+      const url = `${base}/api/graph/${encodeURIComponent(graphName)}?query=${encodeURIComponent(query)}`;
+
+      try {
+        const headers = {};
+        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+        const response = await fetch(url, { method: 'GET', headers });
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const events = buffer.split('\n\n');
+          buffer = events.pop();
+
+          for (const event of events) {
+            if (!event.trim()) continue;
+            const lines = event.split('\n');
+            let eventType = '';
+            let data = '';
+            for (const line of lines) {
+              if (line.startsWith('event:')) eventType = line.substring(6).trim();
+              else if (line.startsWith('data:')) data += line.substring(5);
+            }
+
+            if (eventType === 'result' && data) {
+              const result = JSON.parse(data);
+              if (result.data && Array.isArray(result.data)) {
+                result.data.forEach(row => {
+                  for (const [, val] of Object.entries(row)) {
+                    if (val && val.labels && val.id !== undefined) {
+                      const primaryLabel = val.labels[0] || 'Unknown';
+                      const node = { id: val.id, labels: val.labels, data: val.properties || {}, visible: true, color: getColorForLabel(primaryLabel) };
+                      if (!graphData.nodes.find(n => n.id === node.id)) graphData.nodes.push(node);
+                    }
+                    if (val && val.relationshipType && val.sourceId !== undefined) {
+                      const relType = val.relationshipType || 'RELATED';
+                      const link = { id: val.id, source: val.sourceId, target: val.destinationId, relationship: relType, data: val.properties || {}, color: getColorForRelationship(relType), visible: true };
+                      if (!graphData.links.find(l => l.id === link.id)) graphData.links.push(link);
+                    }
+                  }
+                });
+              }
+            } else if (eventType === 'error' && data) {
+              throw new Error(JSON.parse(data).message);
+            }
+          }
+        }
+
+        canvas.setData(graphData);
+        document.getElementById('selected-info').textContent = `Loaded ${graphData.nodes.length} nodes and ${graphData.links.length} links`;
+      } catch (error) {
+        document.getElementById('selected-info').textContent = `Error: ${error.message}`;
+        console.error('Query error:', error);
+      }
+    };
+
+    // ===== Initialization =====
     canvas = document.getElementById('graph');
-
-    // Wait for the element to be defined
     await customElements.whenDefined('falkordb-canvas');
 
     const graphContainer = document.querySelector('.graph-container');
-
-    // Configure the graph using individual setters (more efficient!)
     canvas.setWidth(graphContainer.clientWidth);
     canvas.setHeight(graphContainer.clientHeight);
-    setContextControlsEnabled(!shouldFetchRemote);
-    updateContextStatus(shouldFetchRemote);
-    if (loadedFromCdnFallback) {
-      const selectedInfoElement = document.getElementById('selected-info');
-      if (selectedInfoElement) {
-        selectedInfoElement.textContent =
-          'Using CDN fallback build. If layout behavior looks outdated, run `npm run build` and refresh.';
+
+    // Resize canvas when container changes (debounced to avoid feedback loop)
+    let lastW = graphContainer.clientWidth;
+    let lastH = graphContainer.clientHeight;
+    const ro = new ResizeObserver(() => {
+      const w = graphContainer.clientWidth;
+      const h = graphContainer.clientHeight;
+      if (w !== lastW || h !== lastH) {
+        lastW = w;
+        lastH = h;
+        canvas.setWidth(w);
+        canvas.setHeight(h);
       }
-    }
+    });
+    ro.observe(graphContainer);
 
-    // Set initial data
-    canvas.setData(cloneGraphData(graphData));
-
-    // Set event handlers using setConfig (for callbacks)
     canvas.setConfig({
-      cooldownTicks: undefined,
-      autoStopOnSettle: false,
-      onNodeClick: (node, event) => {
-        console.log('Node clicked:', node);
-        document.getElementById('selected-info').textContent =
-          `Node: ${node.data.name || node.id} (${node.labels.join(', ')})`;
+      isNodeSelected: (node) => selectedNode && node.id === selectedNode.id,
+      isLinkSelected: (link) => selectedLink && link.id === selectedLink.id,
+      eventHandlers: {
+        onNodeClick: (node) => {
+          selectedNode = node;
+          selectedLink = null;
+          updateDeleteButtons();
+          document.getElementById('selected-info').textContent = `Node: ${node.data.name || node.id} (${node.labels.join(', ')})`;
+        },
+        onLinkClick: (link) => {
+          selectedLink = link;
+          selectedNode = null;
+          updateDeleteButtons();
+          document.getElementById('selected-info').textContent = `Link: ${link.relationship}`;
+        },
+        onBackgroundClick: () => {
+          selectedNode = null;
+          selectedLink = null;
+          updateDeleteButtons();
+          document.getElementById('selected-info').textContent = 'Click on a node or link to see details';
+        },
+        onNodeHover: (node) => { document.body.style.cursor = node ? 'pointer' : 'default'; },
+        onLinkHover: (link) => { document.body.style.cursor = link ? 'pointer' : 'default'; },
+        onPinChange: (pinned) => {
+          document.getElementById('pin-toggle').checked = pinned;
+          document.getElementById('animation-toggle').disabled = document.getElementById('layout-select').value !== 'force' || pinned;
+        },
+        onLayoutChange: (layout) => {
+          currentLayout = layout;
+          document.getElementById('layout-select').value = layout;
+          updateDirectionOptions(layout);
+        },
+        onZoom: (transform) => {
+          document.getElementById('zoom-info').textContent = `Zoom: ${transform.k.toFixed(2)}x`;
+          if (lgDebugInterval) window.updateLgDebug();
+        },
+        onEngineStop: () => { console.log('Simulation stopped'); },
       },
-      onLinkClick: (link, event) => {
-        console.log('Link clicked:', link);
-        document.getElementById('selected-info').textContent =
-          `Link: ${link.relationship}`;
-      },
-      onNodeRightClick: (node, event) => {
-        console.log('Node right-clicked:', node);
-        document.getElementById('selected-info').textContent =
-          `Right-clicked Node: ${node.data.name || node.id}`;
-      },
-      onLinkRightClick: (link, event) => {
-        console.log('Link right-clicked:', link);
-        document.getElementById('selected-info').textContent =
-          `Right-clicked Link: ${link.relationship}`;
-      },
-      onNodeHover: (node) => {
-        if (node) {
-          console.log('Node hover:', node);
-        }
-      },
-      onLinkHover: (link) => {
-        if (link) {
-          console.log('Link hover:', link);
-        }
-      },
-      onBackgroundClick: () => {
-        document.getElementById('selected-info').textContent =
-          'Click on a node or link to see details';
-      },
-      isNodeSelected: (node) => false,
-      isLinkSelected: (link) => false,
     });
 
-    // Initialize layout controls and apply selected layout
-    if (layoutSelect) {
-      updateDirectionControlState(layoutSelect.value);
-    }
-    window.changeLayout();
-    updateContextStatus(shouldFetchRemote);
+    // Enter to send query
+    document.getElementById('query-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') window.sendQuery();
+    });
+
+    // Delete key removes selected node/link
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if (selectedNode) { window.deleteSelectedNode(); }
+        else if (selectedLink) { window.deleteSelectedLink(); }
+      }
+    });
+
+    loadFromStorage();
+    updateDirectionOptions(document.getElementById('layout-select').value);
+
+    // Sample data
+    const sampleData = {
+      nodes: [
+        { id: 1, labels: ['Movie'], data: { name: 'The Matrix', year: 1999 }, visible: true, color: getColorForLabel('Movie') },
+        { id: 2, labels: ['Movie'], data: { name: 'John Wick', year: 2014 }, visible: true, color: getColorForLabel('Movie') },
+        { id: 3, labels: ['Movie'], data: { name: 'Speed', year: 1994 }, visible: true, color: getColorForLabel('Movie') },
+        { id: 4, labels: ['Person'], data: { name: 'Keanu Reeves', born: 1964 }, visible: true, color: getColorForLabel('Person') },
+        { id: 5, labels: ['Person'], data: { name: 'Lana Wachowski', born: 1965 }, visible: true, color: getColorForLabel('Person') },
+        { id: 6, labels: ['Person'], data: { name: 'Chad Stahelski', born: 1968 }, visible: true, color: getColorForLabel('Person') },
+        { id: 7, labels: ['Person'], data: { name: 'Carrie-Anne Moss', born: 1967 }, visible: true, color: getColorForLabel('Person') },
+        { id: 8, labels: ['Person'], data: { name: 'Sandra Bullock', born: 1964 }, visible: true, color: getColorForLabel('Person') },
+        { id: 9, labels: ['Genre'], data: { name: 'Action' }, visible: true, color: getColorForLabel('Genre') },
+        { id: 10, labels: ['Genre'], data: { name: 'Sci-Fi' }, visible: true, color: getColorForLabel('Genre') },
+      ],
+      links: [
+        { id: 'e1', source: 4, target: 1, relationship: 'ACTED_IN', data: { role: 'Neo' }, color: getColorForRelationship('ACTED_IN'), visible: true },
+        { id: 'e2', source: 4, target: 2, relationship: 'ACTED_IN', data: { role: 'John Wick' }, color: getColorForRelationship('ACTED_IN'), visible: true },
+        { id: 'e3', source: 4, target: 3, relationship: 'ACTED_IN', data: { role: 'Jack Traven' }, color: getColorForRelationship('ACTED_IN'), visible: true },
+        { id: 'e4', source: 7, target: 1, relationship: 'ACTED_IN', data: { role: 'Trinity' }, color: getColorForRelationship('ACTED_IN'), visible: true },
+        { id: 'e5', source: 8, target: 3, relationship: 'ACTED_IN', data: { role: 'Annie Porter' }, color: getColorForRelationship('ACTED_IN'), visible: true },
+        { id: 'e6', source: 5, target: 1, relationship: 'DIRECTED', data: {}, color: getColorForRelationship('DIRECTED'), visible: true },
+        { id: 'e7', source: 6, target: 2, relationship: 'DIRECTED', data: {}, color: getColorForRelationship('DIRECTED'), visible: true },
+        { id: 'e8', source: 1, target: 9, relationship: 'IN_GENRE', data: {}, color: getColorForRelationship('IN_GENRE'), visible: true },
+        { id: 'e9', source: 1, target: 10, relationship: 'IN_GENRE', data: {}, color: getColorForRelationship('IN_GENRE'), visible: true },
+        { id: 'e10', source: 2, target: 9, relationship: 'IN_GENRE', data: {}, color: getColorForRelationship('IN_GENRE'), visible: true },
+        { id: 'e11', source: 3, target: 9, relationship: 'IN_GENRE', data: {}, color: getColorForRelationship('IN_GENRE'), visible: true },
+      ]
+    };
+    canvas.setData(sampleData);
   </script>
 </body>
 

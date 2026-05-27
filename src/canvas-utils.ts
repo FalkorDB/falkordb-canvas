@@ -9,7 +9,7 @@ import {
 
 export const LINK_DISTANCE = 45;
 export const NODE_SIZE = 9;
-const LINK_CURVE_MULTIPLIER = 0.4;
+const DEFAULT_LINK_CURVE_MULTIPLIER = 0.4;
 
 type NodePair = [number, number];
 
@@ -20,20 +20,20 @@ function getPairIds(source: number, target: number): NodePair {
   return [target, source];
 }
 
-function calculateLinkCurve(index: number, isSelfLoop: boolean): number {
+export function calculateLinkCurve(index: number, isSelfLoop: boolean, curveMultiplier = DEFAULT_LINK_CURVE_MULTIPLIER): number {
   const even = index % 2 === 0;
 
   if (isSelfLoop) {
     if (even) {
-      return (Math.floor(-(index / 2)) - 3) * LINK_CURVE_MULTIPLIER;
+      return (Math.floor(-(index / 2)) - 3) * curveMultiplier;
     }
-    return (Math.floor((index + 1) / 2) + 2) * LINK_CURVE_MULTIPLIER;
+    return (Math.floor((index + 1) / 2) + 2) * curveMultiplier;
   }
 
   if (even) {
-    return Math.floor(-(index / 2)) * LINK_CURVE_MULTIPLIER;
+    return Math.floor(-(index / 2)) * curveMultiplier;
   }
-  return Math.floor((index + 1) / 2) * LINK_CURVE_MULTIPLIER;
+  return Math.floor((index + 1) / 2) * curveMultiplier;
 }
 
 /**
@@ -57,21 +57,33 @@ function circularLayout(nodes: GraphNode[], center: { x: number; y: number }, ra
 export function dataToGraphData(
   data: Data,
   position?: { x?: number, y?: number },
-  oldNodesMap?: Map<number, GraphNode>
+  oldNodesMap?: Map<number, GraphNode>,
+  curveMultiplier?: number
 ): GraphData {
   const nodes: GraphNode[] = data.nodes.map((node) => {
     const oldNode = oldNodesMap?.get(node.id);
+    // Reuse the original node object if it exists — preserves object identity
+    // so that links resolved against this array point to the same objects in the graph
+    if (oldNode) {
+      if (oldNode.expand[0] !== (node.expand ?? false)) {
+        oldNode.expand = [node.expand ?? false, new Date()];
+      }
+
+      return oldNode;
+    }
+    
     return {
       ...node,
       size: node.size ?? NODE_SIZE,
+      expand: [node.expand ?? false, new Date(0)],
       displayName: ["", ""] as [string, string],
-      x: oldNode?.x ?? position?.x,
-      y: oldNode?.y ?? position?.y,
+      x: position?.x,
+      y: position?.y,
       vx: undefined,
       vy: undefined,
       fx: undefined,
       fy: undefined,
-      initialPositionCalculated: oldNode?.initialPositionCalculated ?? false,
+      initialPositionCalculated: false,
     };
   });
 
@@ -117,7 +129,7 @@ export function dataToGraphData(
       ...link,
       source: sourceNode,
       target: targetNode,
-      curve: calculateLinkCurve(duplicateIndex, sourceNode.id === targetNode.id),
+      curve: calculateLinkCurve(duplicateIndex, sourceNode.id === targetNode.id, curveMultiplier),
     };
   }).filter((link) => link !== undefined);
 
@@ -130,7 +142,7 @@ export function dataToGraphData(
  */
 export function graphDataToData(graphData: GraphData): Data {
   const nodes: Node[] = graphData.nodes.map((node) => {
-    const { x, y, layoutTargetX, layoutTargetY, vx, vy, fx, fy, displayName, ...rest } = node;
+    const { x, y, layoutTargetX, layoutTargetY, vx, vy, fx, fy, displayName, expand, ...rest } = node;
     return rest;
   });
 
@@ -147,7 +159,7 @@ export function graphDataToData(graphData: GraphData): Data {
 }
 
 const resolveNodeCaption = (
-  node: Node,
+  node: Node | GraphNode,
   captionKeys: [string, boolean][]
 ): { requestedKey: string; actualKey: string } | null => {
   for (const [requestedKey, exactMatch] of captionKeys) {
@@ -173,7 +185,7 @@ const resolveNodeCaption = (
  * @param bgColor Background color in hex format (e.g., "#ff5733")
  * @returns "white" for dark backgrounds, "black" for light backgrounds
  */
-export const getContrastTextColor = (bgColor: string): string => {
+export const getContrastTextColor = (bgColor: string, threshold = 0.5): string => {
   let r: number;
   let g: number;
   let b: number;
@@ -229,11 +241,11 @@ export const getContrastTextColor = (bgColor: string): string => {
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
   // Return white for dark backgrounds, black for light backgrounds
-  return luminance > 0.5 ? 'black' : 'white';
+  return luminance > threshold ? 'black' : 'white';
 };
 
 export const getNodeDisplayText = (
-  node: Node,
+  node: Node | GraphNode,
   captionKeys: [string, boolean][],
   showPropertyKeyPrefix: boolean
 ) => {
@@ -249,7 +261,7 @@ export const getNodeDisplayText = (
 };
 
 export const getNodeDisplayKey = (
-  node: Node,
+  node: Node | GraphNode,
   captionKeys: [string, boolean][]
 ) => {
   const caption = resolveNodeCaption(node, captionKeys);
