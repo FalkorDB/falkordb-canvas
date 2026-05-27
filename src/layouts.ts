@@ -16,13 +16,6 @@ export function getDagMode(layoutMode: LayoutMode, options?: LayoutOptions): Dag
       if (dir === 'rl') return 'rl';
       return 'td';
     }
-    case 'flow': {
-      const dir = options?.flow?.direction ?? 'lr';
-      if (dir === 'rl') return 'rl';
-      if (dir === 'td') return 'td';
-      if (dir === 'bu') return 'bu';
-      return 'lr';
-    }
     case 'radial': {
       const dir = options?.radial?.direction ?? 'out';
       return dir === 'in' ? 'radialin' : 'radialout';
@@ -45,15 +38,7 @@ export function isForceLayout(layoutMode: LayoutMode): boolean {
 export function getDagLevelDistance(layoutMode: LayoutMode, options?: LayoutOptions): number | undefined {
   if (isForceLayout(layoutMode)) return undefined;
   if (layoutMode === 'radial') return options?.radial?.levelDistance ?? 80;
-  return undefined; // tree/flow use computeTreePositions
-}
-
-/**
- * Returns the charge strength for radial layout.
- */
-export function getChargeStrength(layoutMode: LayoutMode, options?: LayoutOptions): number {
-  if (layoutMode === 'radial') return options?.radial?.chargeStrength ?? -30;
-  return -30;
+  return undefined; // tree uses computeTreePositions
 }
 
 /**
@@ -93,17 +78,15 @@ export function unpinAllNodes(nodes: GraphNode[]) {
  */
 export function computeTreePositions(
   data: GraphData,
-  layoutMode: LayoutMode,
   options?: LayoutOptions
 ): boolean {
   const nodes = data.nodes;
   const links = data.links;
   if (nodes.length === 0) return true;
 
-  // Read from the appropriate layout-specific options
-  const treeOpts = layoutMode === 'flow' ? options?.flow : options?.tree;
-  const direction = treeOpts?.direction
-    ?? (layoutMode === 'flow' ? 'lr' : 'td');
+  // Read from the tree layout options
+  const treeOpts = options?.tree;
+  const direction = treeOpts?.direction ?? 'td';
   const baseLevelDistance = treeOpts?.levelDistance ?? 80;
   const baseNodeSpacing = treeOpts?.nodeSpacing ?? 60;
 
@@ -424,7 +407,8 @@ export function computeRadialPositions(
 
   // Compute dynamic radius for each depth level:
   // Each ring must be large enough to fit all its nodes with minimum spacing
-  const minGap = options?.radial?.minNodeGap ?? 10;
+  const nodeSpacing = options?.radial?.nodeSpacing ?? 10;
+  const levelDistance = options?.radial?.levelDistance ?? 80;
 
   // Count nodes per depth and track max node size per depth
   const nodesPerDepth = new Map<number, number>();
@@ -441,14 +425,14 @@ export function computeRadialPositions(
   // Effective spacing per depth = diameter of largest node + gap
   function spacingForDepth(d: number): number {
     const maxSize = maxSizePerDepth.get(d) ?? 9;
-    return maxSize * 2 + minGap;
+    return maxSize * 2 + nodeSpacing;
   }
 
-  // Minimum level gap accounts for node sizes on adjacent rings
+  // Minimum level gap accounts for node sizes on adjacent rings and levelDistance
   function levelGap(d1: number, d2: number): number {
     const s1 = maxSizePerDepth.get(d1) ?? 9;
     const s2 = maxSizePerDepth.get(d2) ?? 9;
-    return s1 + s2 + minGap * 2;
+    return Math.max(levelDistance, s1 + s2 + nodeSpacing * 2);
   }
 
   // Find the minimum angular gap between any two adjacent nodes per depth.

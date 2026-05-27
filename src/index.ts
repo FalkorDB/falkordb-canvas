@@ -88,7 +88,6 @@ export {
   getDagMode,
   isForceLayout,
   getDagLevelDistance,
-  getChargeStrength,
   pinAllNodes,
   unpinAllNodes,
 } from "./layouts.js";

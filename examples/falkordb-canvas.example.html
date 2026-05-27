@@ -436,7 +436,6 @@
               <select id="layout-select" onchange="changeLayout(this.value)">
                 <option value="force">Force</option>
                 <option value="tree">Tree</option>
-                <option value="flow">Flow</option>
                 <option value="radial">Radial</option>
               </select>
             </div>
@@ -810,7 +809,7 @@
         <tr><td><code>getZoom()</code></td><td>Get current zoom level</td></tr>
         <tr><td><code>setViewport({zoom, centerX, centerY})</code></td><td>Set viewport position and zoom</td></tr>
         <tr><td><code>getViewport()</code></td><td>Get current viewport state</td></tr>
-        <tr><td><code>setLayout(mode)</code></td><td>'force' | 'tree' | 'flow' | 'radial'</td></tr>
+        <tr><td><code>setLayout(mode)</code></td><td>'force' | 'tree' | 'radial'</td></tr>
         <tr><td><code>setLayoutOptions(opts)</code></td><td>Update layout-specific options</td></tr>
         <tr><td><code>setAnimation(enabled)</code></td><td>Enable/disable simulation</td></tr>
         <tr><td><code>setPinOnDragEnd(pin)</code></td><td>Pin nodes after dragging</td></tr>
@@ -914,12 +913,10 @@
         <tr><td><code>tree.direction</code></td><td>string</td><td>'td'</td><td>'td' | 'bu' | 'lr' | 'rl'</td></tr>
         <tr><td><code>tree.levelDistance</code></td><td>number</td><td>80</td><td>Spacing between levels</td></tr>
         <tr><td><code>tree.nodeSpacing</code></td><td>number</td><td>60</td><td>Sibling spacing</td></tr>
-        <tr><td><code>flow.direction</code></td><td>string</td><td>'lr'</td><td>Same as tree</td></tr>
-        <tr><td><code>flow.levelDistance</code></td><td>number</td><td>80</td><td>Level spacing</td></tr>
-        <tr><td><code>flow.nodeSpacing</code></td><td>number</td><td>60</td><td>Node spacing</td></tr>
         <tr><td><code>radial.direction</code></td><td>string</td><td>'out'</td><td>'out' | 'in'</td></tr>
         <tr><td><code>radial.levelDistance</code></td><td>number</td><td>80</td><td>Ring distance</td></tr>
-        <tr><td><code>force.linkDistance</code></td><td>number</td><td>30</td><td>Desired link length</td></tr>
+        <tr><td><code>radial.nodeSpacing</code></td><td>number</td><td>10</td><td>Gap between nodes on ring</td></tr>
+        <tr><td><code>force.linkDistance</code></td><td>number</td><td>45</td><td>Desired link length</td></tr>
         <tr><td><code>force.collisionPadding</code></td><td>number</td><td>25</td><td>Collision padding</td></tr>
       </table>
 
@@ -1039,7 +1036,6 @@
     const directionsByLayout = {
       force: [],
       tree: [['td', 'Top-Down'], ['bu', 'Bottom-Up'], ['lr', 'Left-Right'], ['rl', 'Right-Left']],
-      flow: [['lr', 'Left-Right'], ['rl', 'Right-Left'], ['td', 'Top-Down'], ['bu', 'Bottom-Up']],
       radial: [['out', 'Outward'], ['in', 'Inward']],
     };
 
@@ -1061,15 +1057,28 @@
         const layoutOptions = canvas.config?.layoutOptions;
         let storedDir;
         if (layout === 'tree') storedDir = layoutOptions?.tree?.direction;
-        else if (layout === 'flow') storedDir = layoutOptions?.flow?.direction;
         else if (layout === 'radial') storedDir = layoutOptions?.radial?.direction;
         if (storedDir && dirSelect.querySelector(`option[value="${storedDir}"]`)) {
           dirSelect.value = storedDir;
         }
       }
 
-      document.getElementById('level-distance').disabled = layout === 'force';
-      document.getElementById('node-spacing').disabled = (layout === 'force' || layout === 'radial');
+      const levelInput = document.getElementById('level-distance');
+      const spacingInput = document.getElementById('node-spacing');
+      levelInput.disabled = layout === 'force';
+      spacingInput.disabled = layout === 'force';
+
+      // Restore per-layout stored values into the inputs
+      if (canvas && layout !== 'force') {
+        const layoutOptions = canvas.config?.layoutOptions;
+        if (layout === 'tree') {
+          levelInput.value = layoutOptions?.tree?.levelDistance ?? 80;
+          spacingInput.value = layoutOptions?.tree?.nodeSpacing ?? 60;
+        } else if (layout === 'radial') {
+          levelInput.value = layoutOptions?.radial?.levelDistance ?? 80;
+          spacingInput.value = layoutOptions?.radial?.nodeSpacing ?? 10;
+        }
+      }
     }
 
     window.changeLayout = (layout) => {
@@ -1080,7 +1089,7 @@
 
     window.changeDirection = (direction) => {
       const opts = {};
-      if (currentLayout === 'tree' || currentLayout === 'flow') {
+      if (currentLayout === 'tree') {
         opts[currentLayout] = { direction };
       } else if (currentLayout === 'radial') {
         opts.radial = { direction };
@@ -1100,10 +1109,10 @@
       levelInput.value = levelDistance;
       spacingInput.value = nodeSpacing;
       const opts = {};
-      if (currentLayout === 'tree' || currentLayout === 'flow') {
-        opts[currentLayout] = { levelDistance, nodeSpacing };
+      if (currentLayout === 'tree') {
+        opts.tree = { levelDistance, nodeSpacing };
       } else if (currentLayout === 'radial') {
-        opts.radial = { levelDistance };
+        opts.radial = { levelDistance, nodeSpacing };
       }
       canvas.setLayoutOptions(opts);
     };

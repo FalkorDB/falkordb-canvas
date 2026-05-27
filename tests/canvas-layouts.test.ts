@@ -99,19 +99,6 @@ describe("layout modes", () => {
     expect(root!.fy).toBe(0);
   });
 
-  it("switches to flow layout", () => {
-    const canvas = createCanvas();
-    canvas.setConfig({ width: 800, height: 600 });
-    canvas.setData(TREE_DATA);
-
-    canvas.setLayout("flow");
-    const graphData = canvas.getGraphData();
-    for (const node of graphData.nodes) {
-      expect(node.fx).toBeDefined();
-      expect(node.fy).toBeDefined();
-    }
-  });
-
   it("switches back to force layout unpins nodes", () => {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });

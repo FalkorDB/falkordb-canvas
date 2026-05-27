@@ -307,7 +307,6 @@ class FalkorDBCanvas extends HTMLElement {
     if (config.layoutOptions) {
       const lo = config.layoutOptions;
       if (lo.tree) this.config.layoutOptions.tree = { ...this.config.layoutOptions.tree, ...lo.tree };
-      if (lo.flow) this.config.layoutOptions.flow = { ...this.config.layoutOptions.flow, ...lo.flow };
       if (lo.radial) this.config.layoutOptions.radial = { ...this.config.layoutOptions.radial, ...lo.radial };
       if (lo.force) this.config.layoutOptions.force = { ...this.config.layoutOptions.force, ...lo.force };
     }
@@ -455,9 +454,6 @@ class FalkorDBCanvas extends HTMLElement {
     if (options.tree) {
       this.config.layoutOptions.tree = { ...this.config.layoutOptions.tree, ...options.tree };
     }
-    if (options.flow) {
-      this.config.layoutOptions.flow = { ...this.config.layoutOptions.flow, ...options.flow };
-    }
     if (options.radial) {
       this.config.layoutOptions.radial = { ...this.config.layoutOptions.radial, ...options.radial };
     }
@@ -473,11 +469,9 @@ class FalkorDBCanvas extends HTMLElement {
     const layoutMode = this.config.layoutMode;
     const layoutOptions = this.config.layoutOptions;
 
-    if (layoutMode === 'tree' || layoutMode === 'flow') {
-      // Deterministic tree layout — compute positions directly, no force simulation
-      this.graph.dagMode(null as any);
+    if (layoutMode === 'tree') {
       unpinAllNodes(this.data.nodes);
-      computeTreePositions(this.data, layoutMode, layoutOptions);
+      computeTreePositions(this.data, layoutOptions);
 
       // Pin nodes and render
       this.config.pinOnDragEnd = true;
@@ -552,9 +546,8 @@ class FalkorDBCanvas extends HTMLElement {
 
     this.graph.dagMode(null as any);
 
-    if (layoutMode === 'tree' || layoutMode === 'flow') {
-      // Deterministic tree layout — positions computed directly
-      computeTreePositions(this.data, layoutMode, layoutOptions);
+    if (layoutMode === 'tree') {
+      computeTreePositions(this.data, layoutOptions);
       this.graph.cooldownTicks(0);
       this.graph.warmupTicks(0);
       this.graph.graphData(this.data);
@@ -607,7 +600,7 @@ class FalkorDBCanvas extends HTMLElement {
   /**
    * Trigger a repaint after in-place property mutations on nodes/links
    * (e.g. visibility, color, size, data attributes).
-   * For deterministic layouts (tree, flow, radial), recomputes positions
+   * For deterministic layouts (tree, radial), recomputes positions
    * to account for any size changes.
    */
   refresh() {
@@ -621,7 +614,7 @@ class FalkorDBCanvas extends HTMLElement {
     this.relationshipsTextCache.clear();
 
     const layoutMode = this.config.layoutMode;
-    if (layoutMode === 'tree' || layoutMode === 'flow' || layoutMode === 'radial') {
+    if (layoutMode === 'tree' || layoutMode === 'radial') {
       // Recompute layout to handle node size changes
       this.applyLayout(false);
     } else {
@@ -684,7 +677,7 @@ class FalkorDBCanvas extends HTMLElement {
         this.setupForces();
         this.runForceWarmup();
       } else {
-        // Non-force layout (tree/flow/radial): reapply the current layout
+        // Non-force layout (tree/radial): reapply the current layout
         this.applyLayout(false);
       }
     } else if (hasNewLinks && !isForceLayout(this.config.layoutMode)) {

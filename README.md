@@ -5,7 +5,7 @@ A standalone web component for visualizing FalkorDB graphs using force-directed 
 ## Features
 
 - 🎨 **Force-directed graph layout** - Automatic positioning using D3 force simulation with smart collision detection
-- 🧭 **Multiple layout modes** - Switch between `force`, `tree`, `flow`, and `radial` graph views
+- 🧭 **Multiple layout modes** - Switch between `force`, `tree`, and `radial` graph views
 - 🎯 **Interactive** - Click, hover, right-click interactions on nodes, links, and background
 - 🌓 **Theme support** - Light and dark mode compatible with customizable colors
 - ⚡ **Performance** - Optimized rendering with HTML5 canvas, including viewport culling and low-zoom draw skipping for large graphs
@@ -126,8 +126,8 @@ function GraphVisualization() {
 | **setForegroundColor**(*color*) | | Set foreground color for text and borders. |
 | **setAnimation**(*enabled*) | | Enable or disable force simulation animation. When disabled, pins all nodes in place. |
 | **setPinOnDragEnd**(*pin*) | | Enable or disable pinning nodes after dragging. |
-| **setLayout**(*layoutMode*) | `'force'` | Switch layout mode: `'force'` \| `'tree'` \| `'flow'` \| `'radial'`. |
-| **setLayoutOptions**(*options*) | | Update per-layout options (tree, flow, radial, force). Triggers re-layout. |
+| **setLayout**(*layoutMode*) | `'force'` | Switch layout mode: `'force'` \| `'tree'` \| `'radial'`. |
+| **setLayoutOptions**(*options*) | | Update per-layout options (tree, radial, force). Triggers re-layout. |
 | **setDebug**(*enabled*) | `false` | Enable or disable debug logging to console. All log messages are prefixed with `[FalkorDBCanvas]`. |
 | **refresh**() | | Trigger a repaint after in-place property mutations (visibility, color, size). Recomputes positions for deterministic layouts. |
 | **getViewport**() | | Get current zoom and center position as `ViewportState`. |
@@ -150,7 +150,7 @@ Configuration is passed to `setConfig()` as a `ForceGraphConfig` object. It is o
 | `height` | `<window height>` | Canvas height in pixels |
 | `backgroundColor` | `'#FFFFFF'` | Background color (hex or CSS color) |
 | `foregroundColor` | `'#1A1A1A'` | Foreground color for borders and text |
-| `layoutMode` | `'force'` | Layout algorithm: `'force'` \| `'tree'` \| `'flow'` \| `'radial'` |
+| `layoutMode` | `'force'` | Layout algorithm: `'force'` \| `'tree'` \| `'radial'` |
 | `layoutOptions` | `{}` | Per-layout options (see [Layout Modes](#layout-modes)) |
 | `animation` | | Enable/disable layout animation |
 | `captionsKeys` | `[]` | Node property keys to display as labels |
@@ -246,9 +246,9 @@ Use `layoutMode` in `setConfig` to choose the graph view style:
 
 ```typescript
 canvas.setConfig({
-  layoutMode: 'flow',
+  layoutMode: 'tree',
   layoutOptions: {
-    flow: {
+    tree: {
       direction: 'lr',      // 'lr' | 'rl' | 'td' | 'bu'
       levelDistance: 180,
       nodeSpacing: 110
@@ -257,7 +257,7 @@ canvas.setConfig({
 });
 ```
 
-Tree / radial example:
+Radial example:
 
 ```typescript
 canvas.setConfig({
@@ -274,8 +274,7 @@ canvas.setConfig({
 Notes:
 - `force` keeps simulation enabled with configurable physics (see `simulation` config).
 - `tree`: `direction` (`'td'` | `'bu'` | `'lr'` | `'rl'`), `levelDistance`, `nodeSpacing`.
-- `flow`: `direction` (`'lr'` | `'rl'` | `'td'` | `'bu'`), `levelDistance`, `nodeSpacing`.
-- `radial`: `direction` (`'out'` | `'in'`), `levelDistance`.
+- `radial`: `direction` (`'out'` | `'in'`), `levelDistance`, `nodeSpacing`.
 
 ### Data Types
 
@@ -480,7 +479,7 @@ while (true) {
 
 ## Performance Tips
 
-1. **Large graphs**: Disable animation (`setAnimation(false)`) once the layout stabilises
+1. **Large graphs**: Disable animation (`setAnimation(false)`) once the layout stabilizes
 2. **Static graphs**: Use a deterministic layout (`setLayout('tree')`) to avoid simulation overhead
 3. **Custom rendering**: Optimize your custom `nodeCanvasObject` and `linkCanvasObject` functions
 4. **Viewport**: Use `getViewport()` and `setViewport()` to preserve user's view when updating data

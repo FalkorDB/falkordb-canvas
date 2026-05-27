@@ -234,9 +234,9 @@ export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgr
   largeGraph: Required<LargeGraphConfig>;
 }
 
-export type LayoutMode = 'force' | 'tree' | 'flow' | 'radial';
+export type LayoutMode = 'force' | 'tree' | 'radial';
 
-/** Directions shared by tree and flow layouts */
+/** Directions for tree layout */
 export type HierarchyDirection = 'td' | 'bu' | 'lr' | 'rl';
 
 /** Directions for radial layout */
@@ -245,9 +245,9 @@ export type RadialDirection = 'out' | 'in';
 /** All possible layout directions */
 export type LayoutDirection = HierarchyDirection | RadialDirection;
 
-/** Options shared by tree and flow layouts */
+/** Options for tree layout */
 export interface HierarchyLayoutOptions {
-  /** Direction of the hierarchy. Tree default: 'td', Flow default: 'lr' */
+  /** Direction of the hierarchy. Default: 'td' */
   direction?: HierarchyDirection;
   /** Distance between levels (inter-layer spacing). Default: 80 */
   levelDistance?: number;
@@ -259,12 +259,10 @@ export interface HierarchyLayoutOptions {
 export interface RadialLayoutOptions {
   /** Direction of the radial expansion. Default: 'out' */
   direction?: RadialDirection;
-  /** Distance between levels (ring spacing). Default: 80 */
+  /** Minimum distance between rings (inter-level spacing). Default: 80 */
   levelDistance?: number;
-  /** Charge strength for node repulsion within a ring. Default: -300 */
-  chargeStrength?: number;
-  /** Minimum gap between node edges on the same ring (px). Default: 10 */
-  minNodeGap?: number;
+  /** Minimum gap between sibling nodes on the same ring (world-space units). Default: 10 */
+  nodeSpacing?: number;
   /** Inner-radius minimum multiplier for 'in' direction. Default: 2 */
   innerRadiusMultiplier?: number;
   /** Inter-ring gap multiplier for 'in' direction. Default: 1.5 */
@@ -282,7 +280,6 @@ export interface ForceLayoutOptions {
 /** Combined layout options with per-layout sections */
 export interface LayoutOptions {
   tree?: HierarchyLayoutOptions;
-  flow?: HierarchyLayoutOptions;
   radial?: RadialLayoutOptions;
   force?: ForceLayoutOptions;
 }
