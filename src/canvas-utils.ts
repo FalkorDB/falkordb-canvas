@@ -7,7 +7,9 @@ import {
   GraphLink,
 } from "./canvas-types.js";
 
+/** Default link distance between connected nodes (world units) */
 export const LINK_DISTANCE = 45;
+/** Default node circle radius (world units) */
 export const NODE_SIZE = 9;
 const DEFAULT_LINK_CURVE_MULTIPLIER = 0.4;
 
@@ -20,6 +22,16 @@ function getPairIds(source: number, target: number): NodePair {
   return [target, source];
 }
 
+/**
+ * Calculates the curvature value for a link based on its position among parallel edges.
+ * Parallel edges between the same node pair alternate above/below the straight line.
+ * Self-loops get stronger curvature to form visible loops.
+ *
+ * @param index - The 0-based index of this link among all links between the same node pair
+ * @param isSelfLoop - Whether source and target are the same node
+ * @param curveMultiplier - Multiplier controlling curve intensity. Default: 0.4
+ * @returns A curvature value (positive = above, negative = below the straight line)
+ */
 export function calculateLinkCurve(index: number, isSelfLoop: boolean, curveMultiplier = DEFAULT_LINK_CURVE_MULTIPLIER): number {
   const even = index % 2 === 0;
 
@@ -139,11 +151,12 @@ export function dataToGraphData(
 /**
  * Converts GraphData format to Data format
  * Removes runtime properties (x, y, layoutTargetX, layoutTargetY, vx, vy, fx, fy, displayName, curve)
+ * Preserves the expand boolean so the state survives round-trips through dataToGraphData.
  */
 export function graphDataToData(graphData: GraphData): Data {
   const nodes: Node[] = graphData.nodes.map((node) => {
     const { x, y, layoutTargetX, layoutTargetY, vx, vy, fx, fy, displayName, expand, ...rest } = node;
-    return rest;
+    return { ...rest, expand: expand[0] };
   });
 
   const links: Link[] = graphData.links.map((link) => {
@@ -158,6 +171,15 @@ export function graphDataToData(graphData: GraphData): Data {
   return { nodes, links };
 }
 
+/**
+ * Resolves which data property key to use as the node caption/label.
+ * Iterates through captionKeys in order and returns the first key that
+ * matches a non-empty property in node.data.
+ *
+ * @param node - The node to resolve caption for
+ * @param captionKeys - Ordered list of [key, exactMatch] tuples to try
+ * @returns The matched key pair, or null if no keys match
+ */
 const resolveNodeCaption = (
   node: Node | GraphNode,
   captionKeys: [string, boolean][]
@@ -244,6 +266,15 @@ export const getContrastTextColor = (bgColor: string, threshold = 0.5): string =
   return luminance > threshold ? 'black' : 'white';
 };
 
+/**
+ * Returns the display text for a node based on the configured captionsKeys.
+ * Tries each key in order; falls back to the node ID if none match.
+ *
+ * @param node - The node to get display text for
+ * @param captionKeys - Ordered list of [key, exactMatch] tuples
+ * @param showPropertyKeyPrefix - When true, prepends the key name (e.g. "name: Foo")
+ * @returns The resolved display string
+ */
 export const getNodeDisplayText = (
   node: Node | GraphNode,
   captionKeys: [string, boolean][],
@@ -260,6 +291,14 @@ export const getNodeDisplayText = (
   return showPropertyKeyPrefix ? `ID: ${String(node.id)}` : String(node.id);
 };
 
+/**
+ * Returns the actual data property key used for a node's display text.
+ * Useful for determining which property is currently being shown.
+ *
+ * @param node - The node to check
+ * @param captionKeys - Ordered list of [key, exactMatch] tuples
+ * @returns The matched property key name, or "id" if no keys match
+ */
 export const getNodeDisplayKey = (
   node: Node | GraphNode,
   captionKeys: [string, boolean][]
