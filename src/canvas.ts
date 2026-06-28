@@ -894,6 +894,12 @@ class FalkorDBCanvas extends HTMLElement {
           }
         }
 
+        // No node had valid coordinates yet (layout hasn't run); skip the cap.
+        if (!isFinite(minX)) {
+          this.graph.zoomToFit(0, padding, filter);
+          return;
+        }
+
         const worldWidth = maxX - minX;
         const worldHeight = maxY - minY;
 
@@ -1150,8 +1156,10 @@ class FalkorDBCanvas extends HTMLElement {
       } else {
         distMax = distMaxConfig;
       }
-      if (chargeForce.distanceMax && isFinite(distMax)) {
-        chargeForce.distanceMax(distMax);
+      if (chargeForce.distanceMax) {
+        // Always update the setter; use Infinity to reset to unlimited when the
+        // cap is cleared (distMaxConfig === undefined).
+        chargeForce.distanceMax(isFinite(distMax) ? distMax : Infinity);
       }
     }
 
@@ -1350,7 +1358,10 @@ class FalkorDBCanvas extends HTMLElement {
     const skipLabels = this.config.largeGraph.enabled &&
       this.config.largeGraph.skipLabelsAtLowZoom  &&
       this.cullingZoom <= nodeZoomThreshold;
-    if (skipLabels) return;
+    if (skipLabels) {
+      if (isDimmed) ctx.restore();
+      return;
+    }
 
     // Draw text
     ctx.fillStyle = getContrastTextColor(node.color, this.config.interaction.contrastThreshold);
@@ -1583,7 +1594,10 @@ class FalkorDBCanvas extends HTMLElement {
       // Guard: skip drawing when source and target are co-located (e.g. during
       // simulation start-up). perpX/perpY would be NaN and propagate through
       // all downstream bezier and arrowhead calculations.
-      if (distance === 0) return;
+      if (distance === 0) {
+        if (isLinkDimmed) ctx.restore();
+        return;
+      }
 
       const perpX = dy / distance;
       const perpY = -dx / distance;
