@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "prepare": "npm run build",
     "build:types": "tsc --declaration --emitDeclarationOnly --outDir dist",
     "dev": "tsc --watch",
     "example": "python3 -m http.server 8080",

@@ -71,6 +71,8 @@ const DEFAULT_SIMULATION: Required<SimulationConfig> = {
   velocityDecay: 0.4,
   alphaMin: 0.05,
   warmupTicks: 300,
+  chargeDistanceMax: Infinity,
+  disableCollisionAbove: 0,
 };
 
 const DEFAULT_INTERACTION: Required<InteractionConfig> = {
@@ -79,6 +81,7 @@ const DEFAULT_INTERACTION: Required<InteractionConfig> = {
   tooltipBorderRadius: '4px',
   tooltipZIndex: 1000,
   zoomToFitPadding: 0.1,
+  zoomToFitMaxZoom: 8,
   zoomToFitDelay: 50,
   linkHitWidth: 10,
   contrastThreshold: 0.5,
@@ -134,6 +137,23 @@ function createStyles(backgroundColor: string, foregroundColor: string, interact
   return style;
 }
 
+/**
+ * FalkorDB Canvas — a Web Component (`<falkordb-canvas>`) that renders an
+ * interactive force-directed graph visualization.
+ *
+ * Supports force, tree, and radial layouts; viewport culling for large graphs;
+ * custom node/link rendering; and configurable styling.
+ *
+ * @example
+ * ```html
+ * <falkordb-canvas id="graph"></falkordb-canvas>
+ * <script>
+ *   const canvas = document.getElementById('graph');
+ *   canvas.setConfig({ backgroundColor: '#1a1a2e' });
+ *   canvas.setData({ nodes: [...], links: [...] });
+ * </script>
+ * ```
+ */
 class FalkorDBCanvas extends HTMLElement {
   private graph: ForceGraphInstance;
 
@@ -217,7 +237,7 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   /**
-   * Enable or disable debug logging
+   * Enable or disable debug logging to the console.
    * @param enabled - Whether to enable debug logs
    */
   setDebug(enabled: boolean) {
@@ -271,6 +291,13 @@ class FalkorDBCanvas extends HTMLElement {
     }
   }
 
+  /**
+   * Update the canvas configuration. Accepts a partial config object —
+   * only the provided fields are changed; others retain their current values.
+   * Nested objects (nodeStyle, linkStyle, simulation, interaction, largeGraph) are deep-merged.
+   *
+   * @param config - Partial configuration to apply
+   */
   setConfig(config: Partial<ForceGraphConfig>) {
     this.log('Setting config:', config);
 
@@ -357,6 +384,10 @@ class FalkorDBCanvas extends HTMLElement {
     this.triggerRender();
   }
 
+  /**
+   * Set the canvas width in pixels.
+   * @param width - Width in pixels
+   */
   setWidth(width: number) {
     if (this.config.width === width) return;
     this.log('Setting width to:', width);
@@ -367,6 +398,10 @@ class FalkorDBCanvas extends HTMLElement {
     }
   }
 
+  /**
+   * Set the canvas height in pixels.
+   * @param height - Height in pixels
+   */
   setHeight(height: number) {
     if (this.config.height === height) return;
     this.log('Setting height to:', height);
@@ -377,6 +412,10 @@ class FalkorDBCanvas extends HTMLElement {
     }
   }
 
+  /**
+   * Set the canvas background color.
+   * @param color - CSS color string (hex, hsl, etc.)
+   */
   setBackgroundColor(color: string) {
     if (this.config.backgroundColor === color) return;
     this.log('Setting background color to:', color);
@@ -387,6 +426,10 @@ class FalkorDBCanvas extends HTMLElement {
     this.updateTooltipStyles();
   }
 
+  /**
+   * Set the foreground color used for strokes, labels, and borders.
+   * @param color - CSS color string (hex, hsl, etc.)
+   */
   setForegroundColor(color: string) {
     if (this.config.foregroundColor === color) return;
     this.log('Setting foreground color to:', color);
@@ -395,6 +438,11 @@ class FalkorDBCanvas extends HTMLElement {
     this.triggerRender();
   }
 
+  /**
+   * Enable or disable the force simulation animation.
+   * When disabled, nodes are frozen in place.
+   * @param enabled - Whether animation/simulation should run
+   */
   setAnimation(enabled: boolean) {
     if (this.config.animation === enabled) return;
     this.config.animation = enabled;
@@ -418,8 +466,28 @@ class FalkorDBCanvas extends HTMLElement {
     }
   }
 
+  /**
+   * Enable or disable the dim/focus effect.
+   * When enabled, nodes and links for which `isNodeDimmed`/`isLinkDimmed` return
+   * `true` are rendered at reduced opacity (`dimOpacity`).
+   * When disabled (default), all elements render at full opacity regardless of
+   * the dim predicates.
+   * @param enabled - Whether to activate focus-mode dimming
+   */
+  setDimmed(enabled: boolean) {
+    if (this.config.dimmed === enabled) return;
+    this.config.dimmed = enabled;
+    this.triggerRender();
+  }
 
 
+
+  /**
+   * Set whether nodes should remain pinned after being dragged.
+   * When enabled, all existing nodes are pinned and simulation stops.
+   * When disabled, nodes are unpinned and simulation may resume (if animation is on).
+   * @param pin - Whether to pin nodes on drag end
+   */
   setPinOnDragEnd(pin: boolean) {
     if (this.config.pinOnDragEnd === pin) return;
     this.config.pinOnDragEnd = pin;
@@ -443,12 +511,21 @@ class FalkorDBCanvas extends HTMLElement {
     this.config.eventHandlers?.onPinChange?.(pin);
   }
 
+  /**
+   * Switch to a different layout algorithm and recompute positions.
+   * @param layoutMode - The layout to apply: 'force', 'tree', or 'radial'
+   */
   setLayout(layoutMode: LayoutMode) {
     this.config.layoutMode = layoutMode;
     this.config.eventHandlers?.onLayoutChange?.(layoutMode);
     this.applyLayout();
   }
 
+  /**
+   * Update layout-specific options (direction, spacing, etc.) and recompute positions.
+   * Only the provided sub-options are changed; others retain their current values.
+   * @param options - Partial layout options to merge in
+   */
   setLayoutOptions(options: Partial<LayoutOptions>) {
     // Deep merge each layout-specific section
     if (options.tree) {
@@ -514,10 +591,21 @@ class FalkorDBCanvas extends HTMLElement {
     }
   }
 
+  /**
+   * Get the current graph data as a plain Data object (nodes reference by ID, no internal state).
+   * @returns A copy of the current graph data
+   */
   getData(): Data {
     return graphDataToData(this.data);
   }
 
+  /**
+   * Replace the entire graph data. Computes layout positions for all nodes
+   * and auto-zooms to fit. This is a full replacement — use `setGraphData` for
+   * incremental updates that preserve existing node positions.
+   *
+   * @param data - The new graph data (nodes + links)
+   */
   setData(data: Data) {
     this.log('setData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
     // Convert data and apply circular layout to new nodes only
@@ -572,6 +660,10 @@ class FalkorDBCanvas extends HTMLElement {
     setTimeout(() => this.zoomToFit(paddingMultiplier), this.config.interaction.zoomToFitDelay);
   }
 
+  /**
+   * Get the current viewport state (zoom level and center position).
+   * Returns undefined if the graph hasn't been initialized yet.
+   */
   getViewport(): ViewportState {
     if (!this.graph) return undefined;
 
@@ -586,6 +678,10 @@ class FalkorDBCanvas extends HTMLElement {
     };
   }
 
+  /**
+   * Restore a previously saved viewport state (zoom and center).
+   * @param viewport - The viewport state to restore
+   */
   setViewport(viewport: ViewportState) {
     this.log('Setting viewport:', viewport);
     if (!viewport || !this.graph) return;
@@ -593,6 +689,10 @@ class FalkorDBCanvas extends HTMLElement {
     this.graph.zoom(viewport.zoom, 0);
   }
 
+  /**
+   * Get the internal graph data with resolved references (GraphNode/GraphLink objects).
+   * Useful for reading current positions and runtime state.
+   */
   getGraphData(): GraphData {
     return this.data;
   }
@@ -622,6 +722,13 @@ class FalkorDBCanvas extends HTMLElement {
     }
   }
 
+  /**
+   * Incrementally update the graph data. Preserves positions of existing nodes,
+   * positions new nodes near their connected parent, and removes nodes/links
+   * that are no longer in the input. Recomputes layout for tree/radial modes.
+   *
+   * @param data - The updated graph data (full replacement, but positions are preserved)
+   */
   setGraphData(data: Data) {
     this.log('setGraphData called with', data.nodes.length, 'nodes and', data.links.length, 'links');
 
@@ -692,14 +799,23 @@ class FalkorDBCanvas extends HTMLElement {
     }
   }
 
+  /**
+   * Get the underlying force-graph library instance for advanced customization.
+   * Returns undefined if the graph hasn't been initialized.
+   */
   getGraph(): ForceGraphInstance | undefined {
     return this.graph;
   }
 
+  /** Get the current zoom level */
   public getZoom(): number {
     return this.graph?.zoom() || 0;
   }
 
+  /**
+   * Get viewport culling statistics for debugging large-graph performance.
+   * Shows how many nodes/links are visible vs total.
+   */
   public getCullingStats(): { enabled: boolean; bounds: WorldBounds | null; zoom: number; visibleNodes: number; totalNodes: number; visibleLinks: number; totalLinks: number } {
     const enabled = this.config.largeGraph?.enabled ?? false;
     const totalNodes = this.data.nodes.length;
@@ -721,6 +837,10 @@ class FalkorDBCanvas extends HTMLElement {
     };
   }
 
+  /**
+   * Programmatically set the zoom level.
+   * @param zoomLevel - The desired zoom scale (1 = 100%)
+   */
   public zoom(zoomLevel: number): ForceGraphInstance | undefined {
     if (!this.graph) return;
 
@@ -728,6 +848,23 @@ class FalkorDBCanvas extends HTMLElement {
     return this.graph.zoom(zoomLevel);
   }
 
+  /**
+   * Pan the viewport so the given world-space coordinates are at the center.
+   * @param x - World X coordinate
+   * @param y - World Y coordinate
+   * @param duration - Transition duration in ms (default 0 = instant)
+   */
+  public centerAt(x: number, y: number, duration = 0): void {
+    this.graph?.centerAt(x, y, duration);
+  }
+
+  /**
+   * Zoom the viewport to fit all visible nodes (or a filtered subset).
+   * Respects maxZoom and padding configuration.
+   *
+   * @param paddingMultiplier - Multiplier for the configured padding (default 1)
+   * @param filter - Optional filter function to zoom only to specific nodes
+   */
   public zoomToFit(paddingMultiplier = 1, filter?: (node: GraphNode) => boolean) {
     if (!this.graph || !this.shadowRoot) return;
 
@@ -739,11 +876,56 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Calculate padding as a fraction of the smallest canvas dimension
     const minDimension = Math.min(rect.width, rect.height);
-    const padding = minDimension * this.config.interaction.zoomToFitPadding;
+    let padding = minDimension * this.config.interaction.zoomToFitPadding * paddingMultiplier;
 
-    this.log('Zooming to fit with padding multiplier:', paddingMultiplier, 'padding:', padding * paddingMultiplier);
-    // Use the force-graph's built-in zoomToFit method (0 duration = instant)
-    this.graph.zoomToFit(0, padding * paddingMultiplier, filter);
+    // Enforce max zoom by increasing padding so zoomToFit naturally won't exceed it
+    const maxZoom = this.config.interaction.zoomToFitMaxZoom;
+    if (maxZoom) {
+      const nodes = filter ? this.data.nodes.filter(filter) : this.data.nodes;
+
+      if (nodes.length > 0) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const n of nodes) {
+          if (n.x !== undefined && n.y !== undefined) {
+            minX = Math.min(minX, n.x);
+            maxX = Math.max(maxX, n.x);
+            minY = Math.min(minY, n.y);
+            maxY = Math.max(maxY, n.y);
+          }
+        }
+
+        // No node had valid coordinates yet (layout hasn't run); skip the cap.
+        if (!isFinite(minX)) {
+          this.graph.zoomToFit(0, padding, filter);
+          return;
+        }
+
+        const worldWidth = maxX - minX;
+        const worldHeight = maxY - minY;
+
+        // Single node or overlapping nodes: center on them and set zoom to maxZoom directly
+        if (worldWidth === 0 && worldHeight === 0) {
+          const centerX = (minX + maxX) / 2;
+          const centerY = (minY + maxY) / 2;
+          this.graph.centerAt(centerX, centerY, 0);
+          this.graph.zoom(maxZoom);
+          return;
+        }
+
+        // zoomToFit: zoom = min((W - 2*pad) / worldW, (H - 2*pad) / worldH)
+        // To cap at maxZoom: pad >= (dimension - maxZoom * worldDim) / 2
+        const minPaddingW = (rect.width - maxZoom * worldWidth) / 2;
+        const minPaddingH = (rect.height - maxZoom * worldHeight) / 2;
+        const minPadding = Math.max(minPaddingW, minPaddingH);
+
+        if (minPadding > padding) {
+          padding = minPadding;
+        }
+      }
+    }
+
+    this.log('Zooming to fit with padding:', padding);
+    this.graph.zoomToFit(0, padding, filter);
   }
 
   private triggerRender() {
@@ -939,11 +1121,17 @@ class FalkorDBCanvas extends HTMLElement {
         return sourceSize + targetSize + linkDist * 2;
       });
 
-    // Collision force - node size + padding
-    this.graph.d3Force(
-      "collide",
-      d3.forceCollide((node: GraphNode) => node.size + collisionPad)
-    );
+    // Collision force - node size + padding (can be disabled for large graphs)
+    const nodeCount = this.graph.graphData()?.nodes?.length ?? 0;
+    const disableCollisionAbove = this.config.simulation.disableCollisionAbove;
+    if (disableCollisionAbove > 0 && nodeCount > disableCollisionAbove) {
+      this.graph.d3Force("collide", null);
+    } else {
+      this.graph.d3Force(
+        "collide",
+        d3.forceCollide((node: GraphNode) => node.size + collisionPad)
+      );
+    }
 
     // Center forces - separate X and Y forces
     this.graph.d3Force(
@@ -960,6 +1148,19 @@ class FalkorDBCanvas extends HTMLElement {
     const chargeForce = this.graph.d3Force("charge");
     if (chargeForce) {
       chargeForce.strength(this.config.simulation.chargeStrength);
+      // Limit charge interaction distance for performance on large graphs
+      const distMaxConfig = this.config.simulation.chargeDistanceMax;
+      let distMax: number;
+      if (distMaxConfig === "auto") {
+        distMax = Math.sqrt(nodeCount) * 30;
+      } else {
+        distMax = distMaxConfig;
+      }
+      if (chargeForce.distanceMax) {
+        // Always update the setter; use Infinity to reset to unlimited when the
+        // cap is cleared (distMaxConfig === undefined).
+        chargeForce.distanceMax(isFinite(distMax) ? distMax : Infinity);
+      }
     }
 
     // Set velocity decay and alpha min
@@ -1104,6 +1305,13 @@ class FalkorDBCanvas extends HTMLElement {
     // Viewport culling: skip nodes that are entirely outside the visible area.
     if (this.config.largeGraph?.enabled && !this.isNodeInCullingBounds(node)) return;
 
+    // Focus mode dimming: reduce opacity for nodes outside the focused set.
+    const isDimmed = this.config.dimmed === true && (this.config.isNodeDimmed?.(node) ?? false);
+    if (isDimmed) {
+      ctx.save();
+      ctx.globalAlpha = this.config.dimOpacity ?? 0.15;
+    }
+
     ctx.lineWidth = this.config.isNodeSelected?.(node) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected;
     ctx.strokeStyle = this.config.foregroundColor;
     ctx.fillStyle = node.color;
@@ -1150,7 +1358,10 @@ class FalkorDBCanvas extends HTMLElement {
     const skipLabels = this.config.largeGraph.enabled &&
       this.config.largeGraph.skipLabelsAtLowZoom  &&
       this.cullingZoom <= nodeZoomThreshold;
-    if (skipLabels) return;
+    if (skipLabels) {
+      if (isDimmed) ctx.restore();
+      return;
+    }
 
     // Draw text
     ctx.fillStyle = getContrastTextColor(node.color, this.config.interaction.contrastThreshold);
@@ -1224,6 +1435,11 @@ class FalkorDBCanvas extends HTMLElement {
     if (line2) {
       ctx.fillText(line2, node.x, node.y + halfTextHeight);
     }
+
+    // Restore opacity after dimmed draw.
+    if (isDimmed) {
+      ctx.restore();
+    }
   }
 
   private pointerNode(node: GraphNode, color: string, ctx: CanvasRenderingContext2D) {
@@ -1258,6 +1474,13 @@ class FalkorDBCanvas extends HTMLElement {
     // visible area.  The check is conservative (convex-hull AABB) so it never
     // produces false negatives.
     if (this.config.largeGraph?.enabled && !this.isLinkInCullingBounds(link)) return;
+
+    // Focus mode dimming: reduce opacity for links outside the focused set.
+    const isLinkDimmed = this.config.dimmed === true && (this.config.isLinkDimmed?.(link) ?? false);
+    if (isLinkDimmed) {
+      ctx.save();
+      ctx.globalAlpha = this.config.dimOpacity ?? 0.15;
+    }
 
     let textX;
     let textY;
@@ -1371,7 +1594,10 @@ class FalkorDBCanvas extends HTMLElement {
       // Guard: skip drawing when source and target are co-located (e.g. during
       // simulation start-up). perpX/perpY would be NaN and propagate through
       // all downstream bezier and arrowhead calculations.
-      if (distance === 0) return;
+      if (distance === 0) {
+        if (isLinkDimmed) ctx.restore();
+        return;
+      }
 
       const perpX = dy / distance;
       const perpY = -dx / distance;
@@ -1512,6 +1738,11 @@ class FalkorDBCanvas extends HTMLElement {
       ctx.lineTo(tipX - nx * aLen * (1 - this.config.linkStyle.arrowNotchRatio), tipY - ny * aLen * (1 - this.config.linkStyle.arrowNotchRatio));
       ctx.lineTo(tipX - nx * aLen - ny * aHW, tipY - ny * aLen + nx * aHW);
       ctx.fill();
+    }
+
+    // Restore opacity after dimmed draw.
+    if (isLinkDimmed) {
+      ctx.restore();
     }
   }
 
@@ -1699,6 +1930,15 @@ class FalkorDBCanvas extends HTMLElement {
       .nodeCanvasObject((node: GraphNode, ctx: CanvasRenderingContext2D) => {
         if (this.config.node) {
           this.config.node.nodeCanvasObject(node, ctx);
+          // Schedule re-render if the node has an active glow (expand/collapse animation)
+          const [, expandTime] = node.expand;
+          const expandAge = Date.now() - expandTime.getTime();
+          const glowDuration = this.config.nodeStyle.glowDuration;
+          if (expandAge < glowDuration) {
+            setTimeout(() => {
+              this.triggerRender();
+            }, Math.min(100, glowDuration - expandAge));
+          }
         } else {
           this.drawNode(node, ctx);
         }
