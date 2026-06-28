@@ -849,6 +849,16 @@ class FalkorDBCanvas extends HTMLElement {
   }
 
   /**
+   * Pan the viewport so the given world-space coordinates are at the center.
+   * @param x - World X coordinate
+   * @param y - World Y coordinate
+   * @param duration - Transition duration in ms (default 0 = instant)
+   */
+  public centerAt(x: number, y: number, duration = 0): void {
+    this.graph?.centerAt(x, y, duration);
+  }
+
+  /**
    * Zoom the viewport to fit all visible nodes (or a filtered subset).
    * Respects maxZoom and padding configuration.
    *
