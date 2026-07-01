@@ -656,8 +656,17 @@ class FalkorDBCanvas extends HTMLElement {
 
     // Auto zoom to fit (delay to let positions render)
     const nodeCount = this.data.nodes.length;
-    const paddingMultiplier = nodeCount < 2 ? 4 : 1;
-    setTimeout(() => this.zoomToFit(paddingMultiplier), this.config.interaction.zoomToFitDelay);
+    setTimeout(() => {
+      this.zoomToFit(1);
+      // For very small graphs the force simulation may push nodes far apart,
+      // producing a near-zero zoom that makes them invisible.
+      // zoomToFit is now synchronous, so this.graph.zoom() reflects the new
+      // value immediately and we can enforce a readable minimum.
+      if (nodeCount > 0 && nodeCount <= 3 && this.graph) {
+        const z = this.graph.zoom() ?? 1;
+        if (z < 1.0) this.graph.zoom(1.0);
+      }
+    }, this.config.interaction.zoomToFitDelay);
   }
 
   /**
@@ -865,7 +874,20 @@ class FalkorDBCanvas extends HTMLElement {
    * @param paddingMultiplier - Multiplier for the configured padding (default 1)
    * @param filter - Optional filter function to zoom only to specific nodes
    */
-  public zoomToFit(paddingMultiplier = 1, filter?: (node: GraphNode) => boolean) {
+  /**
+   * Zoom the viewport to fit all visible nodes (or a filtered subset).
+   *
+   * Unlike the underlying force-graph `zoomToFit`, this implementation is
+   * **synchronous**: it computes the bounding box, derives the fit zoom, and
+   * calls `centerAt` + `zoom` directly so callers can read the new zoom level
+   * immediately after the call returns.
+   *
+   * @param zoomMultiplier - Scale factor applied to the computed fit-zoom (0–2).
+   *   `1` uses the natural fit zoom, `>1` zooms in further, `<1` zooms out further.
+   *   Default: `1`.
+   * @param filter - Optional predicate to zoom only to a subset of nodes.
+   */
+  public zoomToFit(zoomMultiplier = 1, filter?: (node: GraphNode) => boolean) {
     if (!this.graph || !this.shadowRoot) return;
 
     // Get canvas from shadow DOM
@@ -873,59 +895,55 @@ class FalkorDBCanvas extends HTMLElement {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
+    const nodes = filter ? this.data.nodes.filter(filter) : this.data.nodes;
 
-    // Calculate padding as a fraction of the smallest canvas dimension
-    const minDimension = Math.min(rect.width, rect.height);
-    let padding = minDimension * this.config.interaction.zoomToFitPadding * paddingMultiplier;
+    if (nodes.length === 0) return;
 
-    // Enforce max zoom by increasing padding so zoomToFit naturally won't exceed it
-    const maxZoom = this.config.interaction.zoomToFitMaxZoom;
-    if (maxZoom) {
-      const nodes = filter ? this.data.nodes.filter(filter) : this.data.nodes;
-
-      if (nodes.length > 0) {
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        for (const n of nodes) {
-          if (n.x !== undefined && n.y !== undefined) {
-            minX = Math.min(minX, n.x);
-            maxX = Math.max(maxX, n.x);
-            minY = Math.min(minY, n.y);
-            maxY = Math.max(maxY, n.y);
-          }
-        }
-
-        // No node had valid coordinates yet (layout hasn't run); skip the cap.
-        if (!isFinite(minX)) {
-          this.graph.zoomToFit(0, padding, filter);
-          return;
-        }
-
-        const worldWidth = maxX - minX;
-        const worldHeight = maxY - minY;
-
-        // Single node or overlapping nodes: center on them and set zoom to maxZoom directly
-        if (worldWidth === 0 && worldHeight === 0) {
-          const centerX = (minX + maxX) / 2;
-          const centerY = (minY + maxY) / 2;
-          this.graph.centerAt(centerX, centerY, 0);
-          this.graph.zoom(maxZoom);
-          return;
-        }
-
-        // zoomToFit: zoom = min((W - 2*pad) / worldW, (H - 2*pad) / worldH)
-        // To cap at maxZoom: pad >= (dimension - maxZoom * worldDim) / 2
-        const minPaddingW = (rect.width - maxZoom * worldWidth) / 2;
-        const minPaddingH = (rect.height - maxZoom * worldHeight) / 2;
-        const minPadding = Math.max(minPaddingW, minPaddingH);
-
-        if (minPadding > padding) {
-          padding = minPadding;
-        }
+    // Compute node bounding box
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      if (n.x !== undefined && n.y !== undefined) {
+        minX = Math.min(minX, n.x);
+        maxX = Math.max(maxX, n.x);
+        minY = Math.min(minY, n.y);
+        maxY = Math.max(maxY, n.y);
       }
     }
 
-    this.log('Zooming to fit with padding:', padding);
-    this.graph.zoomToFit(0, padding, filter);
+    // No node had valid coordinates yet (layout hasn't run); fall back to the library default.
+    if (!isFinite(minX)) {
+      const padding = Math.min(rect.width, rect.height) * this.config.interaction.zoomToFitPadding;
+      this.graph.zoomToFit(0, padding, filter);
+      return;
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const worldWidth = maxX - minX;
+    const worldHeight = maxY - minY;
+    const maxZoom = this.config.interaction.zoomToFitMaxZoom ?? 8;
+
+    let zoom: number;
+    if (worldWidth === 0 && worldHeight === 0) {
+      // Single node or all nodes overlapping: zoom to max
+      zoom = maxZoom;
+    } else {
+      // Compute natural fit zoom with the configured edge padding
+      const minDimension = Math.min(rect.width, rect.height);
+      const padding = minDimension * this.config.interaction.zoomToFitPadding;
+      const availableW = Math.max(rect.width - 2 * padding, 0);
+      const availableH = Math.max(rect.height - 2 * padding, 0);
+      zoom = Math.min(availableW / worldWidth, availableH / worldHeight);
+    }
+
+    // Apply the caller-supplied multiplier then clamp to the configured max
+    zoom = Math.min(zoom * zoomMultiplier, maxZoom);
+    // Never collapse to zero (can happen with extreme zoomMultiplier values)
+    zoom = Math.max(zoom, 0.01);
+
+    this.log('Zooming to fit: center=(', centerX, ',', centerY, ') zoom=', zoom, ' multiplier=', zoomMultiplier);
+    this.graph.centerAt(centerX, centerY, 0);
+    this.graph.zoom(zoom);
   }
 
   private triggerRender() {
