@@ -382,6 +382,8 @@ export type GraphNode = NodeObject & {
   displayName: [string, string];
   /** Fill color for the node circle (CSS color string) */
   color: string;
+  /** Border stroke color for the node (CSS color string, optional — overrides config.borderColor if set) */
+  borderColor?: string;
   /** Radius of the node circle in world units */
   size: number;
   /** Arbitrary key-value properties on the node (used for label resolution via captionsKeys) */
