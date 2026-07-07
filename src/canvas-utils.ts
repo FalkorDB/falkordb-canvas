@@ -87,9 +87,11 @@ export function dataToGraphData(
         oldNode.expand = [node.expand ?? false, new Date()];
       }
       // Always sync mutable fields so callers can update color, visibility, borderColor,
-      // and arbitrary data (e.g. isPath / isPathSelected) without losing position.
+      // size, labels, and arbitrary data (e.g. isPath / isPathSelected) without losing position.
+      oldNode.labels = node.labels ?? oldNode.labels;
+      oldNode.size = node.size ?? oldNode.size;
       oldNode.color = node.color ?? oldNode.color;
-      oldNode.borderColor = node.borderColor;
+      oldNode.borderColor = node.borderColor ?? oldNode.borderColor;
       oldNode.visible = node.visible ?? oldNode.visible;
       oldNode.data = node.data ?? oldNode.data;
 
