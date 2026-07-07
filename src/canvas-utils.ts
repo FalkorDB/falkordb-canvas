@@ -7,6 +7,12 @@ import {
   GraphLink,
 } from "./canvas-types.js";
 
+/** Default canvas background color */
+export const DEFAULT_CANVAS_BACKGROUND = '#FFFFFF';
+
+/** Default canvas foreground color (text, node labels, etc.) */
+export const DEFAULT_CANVAS_FOREGROUND = '#1A1A1A';
+
 /** Default link distance between connected nodes (world units) */
 export const LINK_DISTANCE = 45;
 /** Default node circle radius (world units) */
@@ -80,10 +86,18 @@ export function dataToGraphData(
       if (oldNode.expand[0] !== (node.expand ?? false)) {
         oldNode.expand = [node.expand ?? false, new Date()];
       }
+      // Always sync mutable fields so callers can update color, visibility, borderColor,
+      // size, labels, and arbitrary data (e.g. isPath / isPathSelected) without losing position.
+      oldNode.labels = node.labels ?? oldNode.labels;
+      oldNode.size = node.size ?? oldNode.size;
+      oldNode.color = node.color ?? oldNode.color;
+      oldNode.borderColor = node.borderColor ?? oldNode.borderColor;
+      oldNode.visible = node.visible ?? oldNode.visible;
+      oldNode.data = node.data ?? oldNode.data;
 
       return oldNode;
     }
-    
+
     return {
       ...node,
       size: node.size ?? NODE_SIZE,

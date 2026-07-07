@@ -21,6 +21,8 @@ import {
 } from "./canvas-types.js";
 import {
   dataToGraphData,
+  DEFAULT_CANVAS_BACKGROUND,
+  DEFAULT_CANVAS_FOREGROUND,
   getContrastTextColor,
   getNodeDisplayText,
   graphDataToData,
@@ -167,8 +169,8 @@ class FalkorDBCanvas extends HTMLElement {
 
   private config: InternalForceGraphConfig = {
     // ─── Dimensions & Colors ─────────────────────────────────────────────────
-    backgroundColor: '#FFFFFF',
-    foregroundColor: '#1A1A1A',
+    backgroundColor: DEFAULT_CANVAS_BACKGROUND,
+    foregroundColor: DEFAULT_CANVAS_FOREGROUND,
 
     // ─── Layout ──────────────────────────────────────────────────────────────
     layoutMode: "force",
@@ -185,7 +187,8 @@ class FalkorDBCanvas extends HTMLElement {
     captionsKeys: [],
     showPropertyKeyPrefix: false,
     pinOnDragEnd: false,
-  };
+    dimmed: false,
+  } as InternalForceGraphConfig;
 
   private nodeMode: CanvasRenderMode = 'replace';
 
@@ -1331,7 +1334,7 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     ctx.lineWidth = this.config.isNodeSelected?.(node) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected;
-    ctx.strokeStyle = this.config.foregroundColor;
+    ctx.strokeStyle = node.borderColor ?? this.config.foregroundColor;
     ctx.fillStyle = node.color;
 
     const radius = node.size + ctx.lineWidth / 2;
