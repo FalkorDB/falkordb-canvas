@@ -936,7 +936,15 @@ class FalkorDBCanvas extends HTMLElement {
       const padding = minDimension * this.config.interaction.zoomToFitPadding;
       const availableW = Math.max(rect.width - 2 * padding, 0);
       const availableH = Math.max(rect.height - 2 * padding, 0);
-      zoom = Math.min(availableW / worldWidth, availableH / worldHeight);
+      
+      // For small node sets, add minimum padding to prevent over-zoom
+      // Ensure effective world dimensions have at least 15% padding on each side
+      const minWorldW = availableW * 0.7;
+      const minWorldH = availableH * 0.7;
+      const effectiveWorldW = Math.max(worldWidth, minWorldW);
+      const effectiveWorldH = Math.max(worldHeight, minWorldH);
+      
+      zoom = Math.min(availableW / effectiveWorldW, availableH / effectiveWorldH);
     }
 
     // Apply the caller-supplied multiplier then clamp to the configured max
