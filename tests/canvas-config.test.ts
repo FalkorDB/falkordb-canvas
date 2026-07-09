@@ -344,12 +344,12 @@ describe("setConfig immediate application", () => {
     const instance = getLastInstance();
     instance.resetTracking();
 
-    // zoomToFit hasn't fired yet
-    expect(instance.zoomToFitCalls).toBe(0);
+    // Auto-zoom hasn't fired yet — zoomValue is still the initial mock default
+    expect(instance.zoomValue).toBe(1);
 
-    // Advance past the delay
+    // Advance past the delay — custom zoom path calls graph.zoom(), not graph.zoomToFit()
     vi.advanceTimersByTime(200);
-    expect(instance.zoomToFitCalls).toBeGreaterThan(0);
+    expect(instance.zoomValue).not.toBe(1);
     vi.useRealTimers();
   });
 

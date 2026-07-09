@@ -7,9 +7,10 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
-import type { CanvasTestElement } from "./test-types";
+import type { CanvasTestElement, GraphNode } from "./test-types";
 
 type CanvasElement = CanvasTestElement;
+type RuntimeNode = GraphNode;
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -383,7 +384,7 @@ describe("zoomToFit with filter", () => {
     resetForceGraphMockState();
   });
 
-  it("calls force-graph zoomToFit with filter function", () => {
+  it("calls force-graph zoom with filter function", () => {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setData(SIMPLE_DATA);
@@ -394,7 +395,8 @@ describe("zoomToFit with filter", () => {
     const filter = (node: unknown) => (node as RuntimeNode).id === 1;
     canvas.zoomToFit(1, filter);
 
-    expect(instance.zoomToFitCalls).toBe(1);
+    // Single node after filter → worldWidth = worldHeight = 0 → zoom clamps to maxZoom=8
+    expect(instance.zoomValue).toBe(8);
   });
 
   it("uses default padding multiplier", () => {
@@ -406,7 +408,9 @@ describe("zoomToFit with filter", () => {
     instance.resetTracking();
 
     canvas.zoomToFit();
-    expect(instance.zoomToFitCalls).toBe(1);
+    // Nodes have coordinates from circular layout so the custom zoom path is taken
+    expect(instance.zoomValue).toBeGreaterThan(0);
+    expect(isFinite(instance.zoomValue)).toBe(true);
   });
 });
 

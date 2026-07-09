@@ -936,7 +936,20 @@ class FalkorDBCanvas extends HTMLElement {
       const padding = minDimension * this.config.interaction.zoomToFitPadding;
       const availableW = Math.max(rect.width - 2 * padding, 0);
       const availableH = Math.max(rect.height - 2 * padding, 0);
-      zoom = Math.min(availableW / worldWidth, availableH / worldHeight);
+      
+      // Cap effective world dimensions to prevent over-zoom on small node sets.
+      // When the bounding box is tiny relative to the viewport, the effective dimensions
+      // are floored to 70% of the available viewport, limiting auto-zoom to ~1.43x
+      // (availableViewport / (0.7 * availableViewport) = 1/0.7 ≈ 1.43).
+      const minWorldW = availableW * 0.7;
+      const minWorldH = availableH * 0.7;
+      const effectiveWorldW = Math.max(worldWidth, minWorldW);
+      const effectiveWorldH = Math.max(worldHeight, minWorldH);
+
+      zoom = Math.min(availableW / effectiveWorldW, availableH / effectiveWorldH);
+      // Guard against NaN when both the canvas dimension and the world dimension are 0
+      // (e.g., a hidden canvas combined with all nodes sharing the same coordinate axis).
+      if (!isFinite(zoom)) zoom = maxZoom;
     }
 
     // Apply the caller-supplied multiplier then clamp to the configured max
