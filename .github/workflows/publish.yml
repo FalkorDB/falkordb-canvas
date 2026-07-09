@@ -15,12 +15,11 @@ jobs:
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: '24'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
-      # Ensure npm 11.5.1 or later is installed
       - name: Update npm
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.5.1
       - run: npm ci
       - name: Set version from Git tag
         run: |
