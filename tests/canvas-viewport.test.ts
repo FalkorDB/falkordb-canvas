@@ -151,24 +151,54 @@ describe("viewport methods", () => {
     expect(instance.zoomValue).toBe(3);
   });
 
-  it("zoomToFit calls underlying force-graph method", () => {
+  it("zoomToFit applies computed zoom to the force-graph instance", () => {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setData(SIMPLE_DATA);
 
     canvas.zoomToFit(1);
     const instance = getLastInstance();
-    expect(instance.zoomToFitCalls).toBe(1);
+    // Nodes have coordinates from circular layout so the custom zoom path is taken;
+    // zoom() is called on the instance (not the fallback zoomToFit()).
+    expect(instance.zoomValue).toBeGreaterThan(0);
+    expect(isFinite(instance.zoomValue)).toBe(true);
   });
 
-  it("zoomToFit with default parameters", () => {
+  it("zoomToFit with default parameters applies computed zoom", () => {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setData(SIMPLE_DATA);
 
     canvas.zoomToFit();
     const instance = getLastInstance();
-    expect(instance.zoomToFitCalls).toBe(1);
+    expect(instance.zoomValue).toBeGreaterThan(0);
+    expect(isFinite(instance.zoomValue)).toBe(true);
+  });
+
+  it("zoomToFit caps zoom for small bounding boxes when nodes have coordinates", () => {
+    // Canvas: 800x600, zoomToFitPadding=0.1 → padding=60, availableW=680, availableH=480
+    // Nodes placed 10 world-units apart (tiny bounding box).
+    // Without the effective-world-dim cap:  zoom = min(680/10, 480/10) = 48, clamped to maxZoom=8.
+    // With the cap (floor at 70% of available viewport):
+    //   effectiveWorldW = max(10, 476) = 476,  effectiveWorldH = max(10, 336) = 336
+    //   zoom = min(680/476, 480/336) ≈ 1.43
+    const canvas = createCanvas();
+    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setData(SIMPLE_DATA);
+
+    const instance = getLastInstance();
+    const graphData = (canvas as any).getGraphData();
+    graphData.nodes[0].x = 0;
+    graphData.nodes[0].y = 0;
+    graphData.nodes[1].x = 10;
+    graphData.nodes[1].y = 10;
+
+    canvas.zoomToFit(1);
+
+    // zoom should be capped to ~1.43, not the uncapped ~48 or maxZoom=8
+    expect(instance.zoomValue).toBeCloseTo(1.43, 1);
+    // The fallback force-graph zoomToFit should NOT have been called
+    expect(instance.zoomToFitCalls).toBe(0);
   });
 });
 
