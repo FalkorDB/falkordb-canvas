@@ -21,12 +21,15 @@ import {
 } from "./canvas-types.js";
 import {
   dataToGraphData,
+  ARROW_SIZE,
   DEFAULT_CANVAS_BACKGROUND,
   DEFAULT_CANVAS_FOREGROUND,
   getContrastTextColor,
   getNodeDisplayText,
   graphDataToData,
   LINK_DISTANCE,
+  LINK_FONT_SIZE,
+  LINK_WIDTH,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
 import { isForceLayout, pinAllNodes, unpinAllNodes, computeTreePositions, computeRadialPositions } from "./layouts.js";
@@ -52,13 +55,13 @@ const DEFAULT_NODE_STYLE: Required<NodeStyleConfig> = {
 
 const DEFAULT_LINK_STYLE: Required<LinkStyleConfig> = {
   fontFamily: 'SofiaSans',
-  fontSize: 2,
+  fontSize: LINK_FONT_SIZE,
   fontWeightUnselected: 400,
   fontWeightSelected: 700,
-  lineWidthSelected: 2,
-  lineWidthUnselected: 1,
-  arrowLengthSelected: 16,
-  arrowLengthUnselected: 8,
+  lineWidthSelected: LINK_WIDTH * 2,
+  lineWidthUnselected: LINK_WIDTH,
+  arrowLengthSelected: ARROW_SIZE * 2,
+  arrowLengthUnselected: ARROW_SIZE,
   arrowWidthRatio: 1.6,
   arrowNotchRatio: 0.2,
   selfLoopCurveFactor: 11.67,
@@ -1521,7 +1524,11 @@ class FalkorDBCanvas extends HTMLElement {
     let angle;
 
     const isLinkSelected = this.config.isLinkSelected?.(link) ?? false;
-    const arrowLen = isLinkSelected ? this.config.linkStyle.arrowLengthSelected : this.config.linkStyle.arrowLengthUnselected;
+    // Per-link overrides (link.arrowSize / link.width / link.fontSize) take
+    // precedence over the shared linkStyle config, mirroring node.size.
+    const arrowLen = link.arrowSize ?? (isLinkSelected ? this.config.linkStyle.arrowLengthSelected : this.config.linkStyle.arrowLengthUnselected);
+    const lineWidth = link.width ?? (isLinkSelected ? this.config.linkStyle.lineWidthSelected : this.config.linkStyle.lineWidthUnselected);
+    const fontSize = link.fontSize ?? this.config.linkStyle.fontSize;
 
     // Low-zoom flags – evaluated once per link draw.
     // lowZoomThreshold is the zoom level below which details are hidden (e.g. 0.5 = skip at half zoom).
@@ -1539,7 +1546,7 @@ class FalkorDBCanvas extends HTMLElement {
       const nodeSize = start.size;
       const d = (link.curve || 0) * nodeSize * this.config.linkStyle.selfLoopCurveFactor;
 
-      ctx.lineWidth = (isLinkSelected ? this.config.linkStyle.lineWidthSelected : this.config.linkStyle.lineWidthUnselected) / globalScale;
+      ctx.lineWidth = lineWidth / globalScale;
       if (this.config.linkLineDash) ctx.setLineDash(this.config.linkLineDash(link));
 
       // The visible outer edge of the node border is nodeSize + strokeWidth
@@ -1704,7 +1711,7 @@ class FalkorDBCanvas extends HTMLElement {
       const subCtrlY = (1 - tArrowPrime) * gapStartY + tArrowPrime * newP1Y;
 
       ctx.strokeStyle = link.color;
-      ctx.lineWidth = (isLinkSelected ? this.config.linkStyle.lineWidthSelected : this.config.linkStyle.lineWidthUnselected) / globalScale;
+      ctx.lineWidth = lineWidth / globalScale;
 
       ctx.setLineDash(this.config.linkLineDash?.(link) ?? []);
       ctx.beginPath();
@@ -1724,12 +1731,12 @@ class FalkorDBCanvas extends HTMLElement {
       }
     }
 
-    ctx.font = isLinkSelected ? `${this.config.linkStyle.fontWeightSelected} ${this.config.linkStyle.fontSize}px ${this.config.linkStyle.fontFamily}` : `${this.config.linkStyle.fontWeightUnselected} ${this.config.linkStyle.fontSize}px ${this.config.linkStyle.fontFamily}`;
+    ctx.font = isLinkSelected ? `${this.config.linkStyle.fontWeightSelected} ${fontSize}px ${this.config.linkStyle.fontFamily}` : `${this.config.linkStyle.fontWeightUnselected} ${fontSize}px ${this.config.linkStyle.fontFamily}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     if (!skipLinkLabels) {
-      const cacheKey = `${link.relationship}_${isLinkSelected ? "700" : "400"}`;
+      const cacheKey = `${link.relationship}_${isLinkSelected ? "700" : "400"}_${fontSize}`;
       let cached = this.relationshipsTextCache.get(cacheKey);
 
       if (!cached) {
@@ -1738,7 +1745,7 @@ class FalkorDBCanvas extends HTMLElement {
 
         cached = {
           textWidth: metrics.width + bgPadding * 2,
-          textHeight: this.config.linkStyle.fontSize + bgPadding * 2,
+          textHeight: fontSize + bgPadding * 2,
         };
         this.relationshipsTextCache.set(cacheKey, cached);
       }

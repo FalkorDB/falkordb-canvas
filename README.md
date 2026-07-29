@@ -300,6 +300,9 @@ Notes:
 | `source` | *required* | Source node ID |
 | `target` | *required* | Target node ID |
 | `visible` | *required* | Whether the link is visible |
+| `width` | `1` | Line width override (before dividing by zoom scale) |
+| `fontSize` | `2` | Relationship caption font size override (world units) |
+| `arrowSize` | `8` | Arrowhead length override |
 | `data` | *required* | Link properties as key-value pairs |
 
 #### GraphNode

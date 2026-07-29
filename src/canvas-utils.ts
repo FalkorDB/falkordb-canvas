@@ -17,6 +17,12 @@ export const DEFAULT_CANVAS_FOREGROUND = '#1A1A1A';
 export const LINK_DISTANCE = 45;
 /** Default node circle radius (world units) */
 export const NODE_SIZE = 9;
+/** Default link line width (before dividing by globalScale) */
+export const LINK_WIDTH = 1;
+/** Default link label font size (world units) */
+export const LINK_FONT_SIZE = 2;
+/** Default link arrowhead length */
+export const ARROW_SIZE = 8;
 const DEFAULT_LINK_CURVE_MULTIPLIER = 0.4;
 
 type NodePair = [number, number];

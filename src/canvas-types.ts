@@ -426,6 +426,12 @@ export type GraphLink = {
   visible: boolean;
   /** Stroke color for the link line (CSS color string) */
   color: string;
+  /** Optional line width override (before dividing by globalScale). Defaults to linkStyle.lineWidth{Selected,Unselected} */
+  width?: number;
+  /** Optional label font size override in world units. Defaults to linkStyle.fontSize */
+  fontSize?: number;
+  /** Optional arrowhead length override. Defaults to linkStyle.arrowLength{Selected,Unselected} */
+  arrowSize?: number;
   /** Curvature value for parallel edges and self-loops */
   curve: number;
   /** Arbitrary key-value properties on the link */
