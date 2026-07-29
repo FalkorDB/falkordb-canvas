@@ -557,7 +557,7 @@ describe("link rendering", () => {
 
   it("uses per-link width, fontSize and arrowSize overrides", () => {
     const canvas = createCanvas();
-    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setConfig({ width: 800, height: 600, largeGraph: { lowZoomThreshold: 0.5 } });
     canvas.setData({
       nodes: [
         { id: 1, labels: ["A"], visible: true, color: "#f00", data: {} },
