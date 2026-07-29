@@ -295,9 +295,9 @@ Notes:
 | `source` | *required* | Source node ID |
 | `target` | *required* | Target node ID |
 | `visible` | *required* | Whether the link is visible |
-| `width` | `1` | Line width (before dividing by zoom scale) |
+| `width` | `1` | Line width in screen pixels (stays constant while zooming) |
 | `fontSize` | `6` | Relationship caption font size (world units) |
-| `arrowSize` | `8` | Arrowhead length |
+| `arrowSize` | `8` | Arrowhead length (world units) |
 | `data` | *required* | Link properties as key-value pairs |
 
 `width` and `arrowSize` are doubled while the link is selected, so selected

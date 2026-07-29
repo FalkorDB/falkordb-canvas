@@ -1284,7 +1284,9 @@ class FalkorDBCanvas extends HTMLElement {
    * For straight / quadratic-bezier links the test uses the convex-hull bounding
    * box of (source, control point, target), which is always a conservative
    * (never-false-negative) bound.  For self-loops the test uses a square of
-   * side ≈ the loop diameter centred on the node.
+   * side ≈ the loop diameter centred on the node.  Both are grown by the link's
+   * visual extent (arrowhead / label) so a large per-link `arrowSize` or
+   * `fontSize` never gets culled while still partly on screen.
    */
   private isLinkInCullingBounds(link: GraphLink): boolean {
     if (!this.cullingBounds) return true;
@@ -1295,11 +1297,18 @@ class FalkorDBCanvas extends HTMLElement {
     const ex = link.target.x ?? 0;
     const ey = link.target.y ?? 0;
 
+    // Visual extent beyond the pure link geometry: the arrowhead sticks out
+    // along the curve and the label is drawn around its midpoint.
+    const margin = Math.max(
+      (link.arrowSize ?? ARROW_SIZE) * LINK_SELECTED_SCALE,
+      link.fontSize ?? LINK_FONT_SIZE,
+    );
+
     if (link.source.id === link.target.id) {
       // Self-loop: the cubic bezier extends roughly |curve| * nodeSize * factor
       // away from the node centre. Use that as a conservative radius.
       const nodeSize = link.source.size;
-      const loopRadius = Math.abs(link.curve || 1) * nodeSize * this.config.linkStyle.selfLoopCurveFactor;
+      const loopRadius = Math.abs(link.curve || 1) * nodeSize * this.config.linkStyle.selfLoopCurveFactor + margin;
       return (
         sx + loopRadius >= minX && sx - loopRadius <= maxX &&
         sy + loopRadius >= minY && sy - loopRadius <= maxY
@@ -1312,7 +1321,7 @@ class FalkorDBCanvas extends HTMLElement {
     const distance = Math.sqrt(dx * dx + dy * dy);
     if (distance === 0) {
       // Co-located nodes: just check the point.
-      return sx >= minX && sx <= maxX && sy >= minY && sy <= maxY;
+      return sx + margin >= minX && sx - margin <= maxX && sy + margin >= minY && sy - margin <= maxY;
     }
 
     const curvature = link.curve ?? 0;
@@ -1321,11 +1330,11 @@ class FalkorDBCanvas extends HTMLElement {
     const cx = (sx + ex) / 2 + perpX * curvature * distance;
     const cy = (sy + ey) / 2 + perpY * curvature * distance;
 
-    // Convex-hull AABB of the three control points.
-    const lMinX = Math.min(sx, ex, cx);
-    const lMaxX = Math.max(sx, ex, cx);
-    const lMinY = Math.min(sy, ey, cy);
-    const lMaxY = Math.max(sy, ey, cy);
+    // Convex-hull AABB of the three control points, grown by the visual margin.
+    const lMinX = Math.min(sx, ex, cx) - margin;
+    const lMaxX = Math.max(sx, ex, cx) + margin;
+    const lMinY = Math.min(sy, ey, cy) - margin;
+    const lMaxY = Math.max(sy, ey, cy) + margin;
 
     return lMaxX >= minX && lMinX <= maxX && lMaxY >= minY && lMinY <= maxY;
   }

@@ -416,11 +416,11 @@ export type GraphLink = {
   visible: boolean;
   /** Stroke color for the link line (CSS color string) */
   color: string;
-  /** Line width before dividing by globalScale. Default: LINK_WIDTH. Doubled while the link is selected */
+  /** Line width in screen pixels (divided by globalScale, so it stays constant while zooming). Default: LINK_WIDTH. Doubled while the link is selected */
   width?: number;
-  /** Label font size in world units. Default: LINK_FONT_SIZE */
+  /** Label font size in world units (scales with zoom). Default: LINK_FONT_SIZE */
   fontSize?: number;
-  /** Arrowhead length. Default: ARROW_SIZE. Doubled while the link is selected */
+  /** Arrowhead length in world units (scales with zoom). Default: ARROW_SIZE. Doubled while the link is selected */
   arrowSize?: number;
   /** Curvature value for parallel edges and self-loops */
   curve: number;
