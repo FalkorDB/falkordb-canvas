@@ -17,6 +17,12 @@ export const DEFAULT_CANVAS_FOREGROUND = '#1A1A1A';
 export const LINK_DISTANCE = 45;
 /** Default node circle radius (world units) */
 export const NODE_SIZE = 9;
+/** Default link line width, in screen pixels (divided by globalScale so it stays constant while zooming) */
+export const LINK_WIDTH = 1;
+/** Default link label font size (world units — scales with zoom) */
+export const LINK_FONT_SIZE = 6;
+/** Default link arrowhead length (world units — scales with zoom) */
+export const ARROW_SIZE = 8;
 const DEFAULT_LINK_CURVE_MULTIPLIER = 0.4;
 
 type NodePair = [number, number];

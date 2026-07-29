@@ -21,17 +21,23 @@ import {
 } from "./canvas-types.js";
 import {
   dataToGraphData,
+  ARROW_SIZE,
   DEFAULT_CANVAS_BACKGROUND,
   DEFAULT_CANVAS_FOREGROUND,
   getContrastTextColor,
   getNodeDisplayText,
   graphDataToData,
   LINK_DISTANCE,
+  LINK_FONT_SIZE,
+  LINK_WIDTH,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
 import { isForceLayout, pinAllNodes, unpinAllNodes, computeTreePositions, computeRadialPositions } from "./layouts.js";
 
 const PADDING = 2;
+
+/** Selected links are drawn this many times wider, with a proportionally larger arrowhead. */
+const LINK_SELECTED_SCALE = 2;
 
 // ─── Default Sub-Configs ───────────────────────────────────────────────────────
 
@@ -52,13 +58,8 @@ const DEFAULT_NODE_STYLE: Required<NodeStyleConfig> = {
 
 const DEFAULT_LINK_STYLE: Required<LinkStyleConfig> = {
   fontFamily: 'SofiaSans',
-  fontSize: 2,
   fontWeightUnselected: 400,
   fontWeightSelected: 700,
-  lineWidthSelected: 2,
-  lineWidthUnselected: 1,
-  arrowLengthSelected: 16,
-  arrowLengthUnselected: 8,
   arrowWidthRatio: 1.6,
   arrowNotchRatio: 0.2,
   selfLoopCurveFactor: 11.67,
@@ -1283,7 +1284,9 @@ class FalkorDBCanvas extends HTMLElement {
    * For straight / quadratic-bezier links the test uses the convex-hull bounding
    * box of (source, control point, target), which is always a conservative
    * (never-false-negative) bound.  For self-loops the test uses a square of
-   * side ≈ the loop diameter centred on the node.
+   * side ≈ the loop diameter centred on the node.  Both are grown by the link's
+   * visual extent (arrowhead / label) so a large per-link `arrowSize` or
+   * `fontSize` never gets culled while still partly on screen.
    */
   private isLinkInCullingBounds(link: GraphLink): boolean {
     if (!this.cullingBounds) return true;
@@ -1294,11 +1297,18 @@ class FalkorDBCanvas extends HTMLElement {
     const ex = link.target.x ?? 0;
     const ey = link.target.y ?? 0;
 
+    // Visual extent beyond the pure link geometry: the arrowhead sticks out
+    // along the curve and the label is drawn around its midpoint.
+    const margin = Math.max(
+      (link.arrowSize ?? ARROW_SIZE) * LINK_SELECTED_SCALE,
+      link.fontSize ?? LINK_FONT_SIZE,
+    );
+
     if (link.source.id === link.target.id) {
       // Self-loop: the cubic bezier extends roughly |curve| * nodeSize * factor
       // away from the node centre. Use that as a conservative radius.
       const nodeSize = link.source.size;
-      const loopRadius = Math.abs(link.curve || 1) * nodeSize * this.config.linkStyle.selfLoopCurveFactor;
+      const loopRadius = Math.abs(link.curve || 1) * nodeSize * this.config.linkStyle.selfLoopCurveFactor + margin;
       return (
         sx + loopRadius >= minX && sx - loopRadius <= maxX &&
         sy + loopRadius >= minY && sy - loopRadius <= maxY
@@ -1311,7 +1321,7 @@ class FalkorDBCanvas extends HTMLElement {
     const distance = Math.sqrt(dx * dx + dy * dy);
     if (distance === 0) {
       // Co-located nodes: just check the point.
-      return sx >= minX && sx <= maxX && sy >= minY && sy <= maxY;
+      return sx + margin >= minX && sx - margin <= maxX && sy + margin >= minY && sy - margin <= maxY;
     }
 
     const curvature = link.curve ?? 0;
@@ -1320,11 +1330,11 @@ class FalkorDBCanvas extends HTMLElement {
     const cx = (sx + ex) / 2 + perpX * curvature * distance;
     const cy = (sy + ey) / 2 + perpY * curvature * distance;
 
-    // Convex-hull AABB of the three control points.
-    const lMinX = Math.min(sx, ex, cx);
-    const lMaxX = Math.max(sx, ex, cx);
-    const lMinY = Math.min(sy, ey, cy);
-    const lMaxY = Math.max(sy, ey, cy);
+    // Convex-hull AABB of the three control points, grown by the visual margin.
+    const lMinX = Math.min(sx, ex, cx) - margin;
+    const lMaxX = Math.max(sx, ex, cx) + margin;
+    const lMinY = Math.min(sy, ey, cy) - margin;
+    const lMaxY = Math.max(sy, ey, cy) + margin;
 
     return lMaxX >= minX && lMinX <= maxX && lMaxY >= minY && lMinY <= maxY;
   }
@@ -1521,7 +1531,12 @@ class FalkorDBCanvas extends HTMLElement {
     let angle;
 
     const isLinkSelected = this.config.isLinkSelected?.(link) ?? false;
-    const arrowLen = isLinkSelected ? this.config.linkStyle.arrowLengthSelected : this.config.linkStyle.arrowLengthUnselected;
+    // Link sizes live on the link itself (mirroring node.size); a selected link
+    // is drawn at double width/arrow size so selection stays visible.
+    const emphasis = isLinkSelected ? LINK_SELECTED_SCALE : 1;
+    const arrowLen = (link.arrowSize ?? ARROW_SIZE) * emphasis;
+    const lineWidth = (link.width ?? LINK_WIDTH) * emphasis;
+    const fontSize = link.fontSize ?? LINK_FONT_SIZE;
 
     // Low-zoom flags – evaluated once per link draw.
     // lowZoomThreshold is the zoom level below which details are hidden (e.g. 0.5 = skip at half zoom).
@@ -1539,7 +1554,7 @@ class FalkorDBCanvas extends HTMLElement {
       const nodeSize = start.size;
       const d = (link.curve || 0) * nodeSize * this.config.linkStyle.selfLoopCurveFactor;
 
-      ctx.lineWidth = (isLinkSelected ? this.config.linkStyle.lineWidthSelected : this.config.linkStyle.lineWidthUnselected) / globalScale;
+      ctx.lineWidth = lineWidth / globalScale;
       if (this.config.linkLineDash) ctx.setLineDash(this.config.linkLineDash(link));
 
       // The visible outer edge of the node border is nodeSize + strokeWidth
@@ -1547,48 +1562,57 @@ class FalkorDBCanvas extends HTMLElement {
       const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected;
       const borderRadius = nodeSize + nodeStrokeWidth + this.edgeGap;
 
-      // Binary search for tArrow near 1.0 where the curve is at distance borderRadius
-      // from the node center (i.e. on the outer edge of the node border stroke).
-      // Bezier parametric form: Bx(t)=sx+3(1-t)t²d, By(t)=sy-3(1-t)²td
-      // dist(t) = 3*(1-t)*t*|d|*sqrt(t² + (1-t)²)
+      // Binary search for t near 1.0 where the curve is at the given distance
+      // from the node center. Bezier parametric form:
+      // Bx(t)=sx+3(1-t)t²d, By(t)=sy-3(1-t)²td
+      // dist(t) = 3*(1-t)*t*|d|*sqrt(t² + (1-t)²), monotonically decreasing on [0.5, 1].
       const arrowHalfWidth = arrowLen / this.config.linkStyle.arrowWidthRatio / 2;
-      let lo = 0.5, hi = 1.0;
       const absD = Math.abs(d);
-      // Max reachable distance in [0.5, 1.0] is ≈ 0.53 * |d| (at t = 0.5).
-      // If |d| is too small to reach borderRadius, skip the arrowhead entirely.
-      const maxReachableDist = 3 * 0.5 * 0.5 * absD * Math.sqrt(0.5);
-      const canReachBorder = absD > 0 && maxReachableDist >= borderRadius;
-      if (canReachBorder) {
+      const solveT = (targetDist: number) => {
+        let lo = 0.5, hi = 1.0;
         for (let i = 0; i < 20; i++) {
           const mid = (lo + hi) / 2;
           const um = 1 - mid;
           const dist = 3 * um * mid * absD * Math.sqrt(mid * mid + um * um);
-          if (dist > borderRadius) lo = mid;
+          if (dist > targetDist) lo = mid;
           else hi = mid;
         }
-      }
-      const tArrow = (lo + hi) / 2;
+        return (lo + hi) / 2;
+      };
+      // Max reachable distance in [0.5, 1.0] is ≈ 0.53 * |d| (at t = 0.5).
+      // If |d| is too small to reach borderRadius, skip the arrowhead entirely.
+      const maxReachableDist = 3 * 0.5 * 0.5 * absD * Math.sqrt(0.5);
+      const canReachBorder = absD > 0 && maxReachableDist >= borderRadius;
+      const tArrow = canReachBorder ? solveT(borderRadius) : 0.75;
       const uArrow = 1 - tArrow;
       const tipX = start.x + 3 * uArrow * tArrow * tArrow * d;
       const tipY = start.y - 3 * uArrow * uArrow * tArrow * d;
+
+      // Stop the stroke at the arrowhead notch so the line never shows through
+      // the arrow tip.
+      const arrowBack = skipArrows ? 0 : arrowLen * (1 - this.config.linkStyle.arrowNotchRatio);
+      const tLine = canReachBorder ? solveT(borderRadius + arrowBack) : tArrow;
+      const uLine = 1 - tLine;
+      const lineEndX = start.x + 3 * uLine * tLine * tLine * d;
+      const lineEndY = start.y - 3 * uLine * uLine * tLine * d;
 
       ctx.strokeStyle = link.color;
       ctx.beginPath();
       ctx.moveTo(start.x, start.y);
       if (canReachBorder) {
-        // Clip the bezier stroke at tArrow using De Casteljau subdivision so
-        // the stroke stops exactly at the arrowhead tip and does not continue
-        // through it. Split control points for the [0, tArrow] segment:
-        //   CP1 = (sx,              sy - tArrow*d)
-        //   CP2 = (sx + tArrow²*d,  sy - 2*tArrow*(1-tArrow)*d)
-        //   End = B(tArrow) = (tipX, tipY)
+        // Clip the bezier stroke at tLine using De Casteljau subdivision so the
+        // stroke stops at the arrowhead base and does not continue through it.
+        // Split control points for the [0, tLine] segment:
+        //   CP1 = (sx,             sy - tLine*d)
+        //   CP2 = (sx + tLine²*d,  sy - 2*tLine*(1-tLine)*d)
+        //   End = B(tLine) = (lineEndX, lineEndY)
         ctx.bezierCurveTo(
           start.x,
-          start.y - tArrow * d,
-          start.x + tArrow * tArrow * d,
-          start.y - 2 * tArrow * uArrow * d,
-          tipX,
-          tipY,
+          start.y - tLine * d,
+          start.x + tLine * tLine * d,
+          start.y - 2 * tLine * uLine * d,
+          lineEndX,
+          lineEndY,
         );
       } else {
         // d is too small to reach the node border — draw the full self-loop
@@ -1680,6 +1704,14 @@ class FalkorDBCanvas extends HTMLElement {
       const tipX = uArrow * uArrow * start.x + 2 * uArrow * tArrow * controlX + tArrow * tArrow * end.x;
       const tipY = uArrow * uArrow * start.y + 2 * uArrow * tArrow * controlY + tArrow * tArrow * end.y;
 
+      // Stop the stroke at the arrowhead notch so the line never shows through
+      // the arrow tip.
+      const arrowBack = skipArrows ? 0 : arrowLen * (1 - this.config.linkStyle.arrowNotchRatio);
+      const tLine = Math.max(0.5, 1 - (borderRadius + arrowBack) / (2 * ctrlEndDist));
+      const uLine = 1 - tLine;
+      const lineEndX = uLine * uLine * start.x + 2 * uLine * tLine * controlX + tLine * tLine * end.x;
+      const lineEndY = uLine * uLine * start.y + 2 * uLine * tLine * controlY + tLine * tLine * end.y;
+
       // Source-side clip: place edge start at srcBorderRadius from node center
       const startNodeSize = start.size;
       const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + this.edgeGap;
@@ -1694,22 +1726,22 @@ class FalkorDBCanvas extends HTMLElement {
       const gapStartX = uS * uS * start.x + 2 * uS * tStart * controlX + tStart * tStart * end.x;
       const gapStartY = uS * uS * start.y + 2 * uS * tStart * controlY + tStart * tStart * end.y;
 
-      // Sub-bezier [tStart, tArrow] control point via De Casteljau:
+      // Sub-bezier [tStart, tLine] control point via De Casteljau:
       //   Right sub-bezier at tStart → NewP1 = lerp(control, end, tStart)
-      //   Left sub-curve at tArrow' = (tArrow-tStart)/(1-tStart) → ctrl = lerp(gapStart, NewP1, tArrow')
-      const tArrowPrime = tStart < tArrow ? (tArrow - tStart) / (1 - tStart) : 0;
+      //   Left sub-curve at tLine' = (tLine-tStart)/(1-tStart) → ctrl = lerp(gapStart, NewP1, tLine')
+      const tLinePrime = tStart < tLine ? (tLine - tStart) / (1 - tStart) : 0;
       const newP1X = (1 - tStart) * controlX + tStart * end.x;
       const newP1Y = (1 - tStart) * controlY + tStart * end.y;
-      const subCtrlX = (1 - tArrowPrime) * gapStartX + tArrowPrime * newP1X;
-      const subCtrlY = (1 - tArrowPrime) * gapStartY + tArrowPrime * newP1Y;
+      const subCtrlX = (1 - tLinePrime) * gapStartX + tLinePrime * newP1X;
+      const subCtrlY = (1 - tLinePrime) * gapStartY + tLinePrime * newP1Y;
 
       ctx.strokeStyle = link.color;
-      ctx.lineWidth = (isLinkSelected ? this.config.linkStyle.lineWidthSelected : this.config.linkStyle.lineWidthUnselected) / globalScale;
+      ctx.lineWidth = lineWidth / globalScale;
 
       ctx.setLineDash(this.config.linkLineDash?.(link) ?? []);
       ctx.beginPath();
       ctx.moveTo(gapStartX, gapStartY);
-      ctx.quadraticCurveTo(subCtrlX, subCtrlY, tipX, tipY);
+      ctx.quadraticCurveTo(subCtrlX, subCtrlY, lineEndX, lineEndY);
       ctx.stroke();
       ctx.setLineDash([]);
 
@@ -1724,12 +1756,12 @@ class FalkorDBCanvas extends HTMLElement {
       }
     }
 
-    ctx.font = isLinkSelected ? `${this.config.linkStyle.fontWeightSelected} ${this.config.linkStyle.fontSize}px ${this.config.linkStyle.fontFamily}` : `${this.config.linkStyle.fontWeightUnselected} ${this.config.linkStyle.fontSize}px ${this.config.linkStyle.fontFamily}`;
+    ctx.font = isLinkSelected ? `${this.config.linkStyle.fontWeightSelected} ${fontSize}px ${this.config.linkStyle.fontFamily}` : `${this.config.linkStyle.fontWeightUnselected} ${fontSize}px ${this.config.linkStyle.fontFamily}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     if (!skipLinkLabels) {
-      const cacheKey = `${link.relationship}_${isLinkSelected ? "700" : "400"}`;
+      const cacheKey = `${link.relationship}_${isLinkSelected ? "700" : "400"}_${fontSize}`;
       let cached = this.relationshipsTextCache.get(cacheKey);
 
       if (!cached) {
@@ -1738,7 +1770,7 @@ class FalkorDBCanvas extends HTMLElement {
 
         cached = {
           textWidth: metrics.width + bgPadding * 2,
-          textHeight: this.config.linkStyle.fontSize + bgPadding * 2,
+          textHeight: fontSize + bgPadding * 2,
         };
         this.relationshipsTextCache.set(cacheKey, cached);
       }

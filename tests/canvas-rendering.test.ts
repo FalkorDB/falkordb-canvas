@@ -554,6 +554,98 @@ describe("link rendering", () => {
 
     expect(ctx.setLineDash).toHaveBeenCalled();
   });
+
+  it("uses per-link width, fontSize and arrowSize overrides", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setData({
+      nodes: [
+        { id: 1, labels: ["A"], visible: true, color: "#f00", data: {} },
+        { id: 2, labels: ["B"], visible: true, color: "#0f0", data: {} },
+        { id: 3, labels: ["C"], visible: true, color: "#00f", data: {} },
+      ],
+      links: [
+        { id: 1, relationship: "PLAIN", source: 1, target: 2, visible: true, color: "#888", data: {} },
+        {
+          id: 2,
+          relationship: "BIG",
+          source: 1,
+          target: 3,
+          visible: true,
+          color: "#888",
+          width: 5,
+          fontSize: 20,
+          arrowSize: 40,
+          data: {},
+        },
+      ],
+    });
+
+    const instance = getLastInstance();
+    const graphData = canvas.getGraphData();
+    graphData.nodes.forEach((node, i) => {
+      node.x = i === 0 ? -50 : 50;
+      node.y = i === 2 ? 40 : 0;
+    });
+
+    instance.callbacks.onZoom?.({ k: 1, x: 0, y: 0 });
+
+    const plainCtx = createCtxSpy();
+    instance.callbacks.linkCanvasObject!(graphData.links[0], plainCtx, 1);
+    const plainArrowPoints = plainCtx.lineTo.mock.calls.length;
+
+    const bigCtx = createCtxSpy();
+    instance.callbacks.linkCanvasObject!(graphData.links[1], bigCtx, 1);
+
+    // width override drives ctx.lineWidth (divided by globalScale = 1 here)
+    expect(bigCtx.lineWidth).toBeGreaterThan(plainCtx.lineWidth);
+    expect(bigCtx.lineWidth).toBe(5);
+
+    // fontSize override drives the label font
+    expect(bigCtx.font).toContain("20px");
+
+    // arrowSize override makes the arrowhead geometry larger
+    expect(plainArrowPoints).toBeGreaterThan(0);
+    const arrowSpread = (calls: [number, number][]) => {
+      const xs = calls.map(([x]) => x);
+      const ys = calls.map(([, y]) => y);
+      return Math.max(...xs) - Math.min(...xs) + (Math.max(...ys) - Math.min(...ys));
+    };
+    expect(arrowSpread(bigCtx.lineTo.mock.calls as [number, number][]))
+      .toBeGreaterThan(arrowSpread(plainCtx.lineTo.mock.calls as [number, number][]));
+  });
+
+  it("doubles the width and arrow size of a selected link", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setData({
+      nodes: [
+        { id: 1, labels: ["A"], visible: true, color: "#f00", data: {} },
+        { id: 2, labels: ["B"], visible: true, color: "#0f0", data: {} },
+      ],
+      links: [
+        { id: 1, relationship: "R", source: 1, target: 2, visible: true, color: "#888", width: 3, data: {} },
+      ],
+    });
+
+    const instance = getLastInstance();
+    const graphData = canvas.getGraphData();
+    graphData.links[0].source.x = -50;
+    graphData.links[0].source.y = 0;
+    graphData.links[0].target.x = 50;
+    graphData.links[0].target.y = 0;
+
+    instance.callbacks.onZoom?.({ k: 1, x: 0, y: 0 });
+
+    const unselectedCtx = createCtxSpy();
+    instance.callbacks.linkCanvasObject!(graphData.links[0], unselectedCtx, 1);
+    expect(unselectedCtx.lineWidth).toBe(3);
+
+    canvas.setConfig({ isLinkSelected: () => true });
+    const selectedCtx = createCtxSpy();
+    instance.callbacks.linkCanvasObject!(graphData.links[0], selectedCtx, 1);
+    expect(selectedCtx.lineWidth).toBe(6);
+  });
 });
 
 describe("nodePointerAreaPaint", () => {

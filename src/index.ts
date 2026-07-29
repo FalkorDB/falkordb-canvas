@@ -75,6 +75,9 @@ export type { WorldBounds } from "./canvas.js";
 // Utils
 export {
   NODE_SIZE,
+  LINK_WIDTH,
+  LINK_FONT_SIZE,
+  ARROW_SIZE,
   dataToGraphData,
   graphDataToData,
   getContrastTextColor,

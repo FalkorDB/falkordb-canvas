@@ -185,13 +185,8 @@ Configuration is passed to `setConfig()` as a `ForceGraphConfig` object. It is o
 | Option | Default | Description |
 |--------|---------|-------------|
 | `fontFamily` | `'SofiaSans'` | Font family for link labels |
-| `fontSize` | `2` | Font size for link labels (world units) |
 | `fontWeightUnselected` | `400` | Font weight when not selected |
 | `fontWeightSelected` | `700` | Font weight when selected |
-| `lineWidthSelected` | `2` | Line width when selected |
-| `lineWidthUnselected` | `1` | Line width when not selected |
-| `arrowLengthSelected` | `16` | Arrow length when selected |
-| `arrowLengthUnselected` | `8` | Arrow length when not selected |
 | `arrowWidthRatio` | `1.6` | Arrow width-to-height ratio |
 | `arrowNotchRatio` | `0.2` | Arrow notch depth ratio |
 | `selfLoopCurveFactor` | `11.67` | Self-loop curve factor |
@@ -300,7 +295,13 @@ Notes:
 | `source` | *required* | Source node ID |
 | `target` | *required* | Target node ID |
 | `visible` | *required* | Whether the link is visible |
+| `width` | `1` | Line width in screen pixels (stays constant while zooming) |
+| `fontSize` | `6` | Relationship caption font size (world units) |
+| `arrowSize` | `8` | Arrowhead length (world units) |
 | `data` | *required* | Link properties as key-value pairs |
+
+`width` and `arrowSize` are doubled while the link is selected, so selected
+links stay visually distinct.
 
 #### GraphNode
 Internal format with computed properties:

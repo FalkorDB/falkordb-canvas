@@ -43,20 +43,10 @@ export interface NodeStyleConfig {
 export interface LinkStyleConfig {
   /** Font family for link labels. Default: 'SofiaSans' */
   fontFamily?: string;
-  /** Font size for link labels (world units). Default: 2 */
-  fontSize?: number;
   /** Font weight when link is not selected. Default: 400 */
   fontWeightUnselected?: number;
   /** Font weight when link is selected. Default: 700 */
   fontWeightSelected?: number;
-  /** Line width when selected (before dividing by globalScale). Default: 2 */
-  lineWidthSelected?: number;
-  /** Line width when not selected (before dividing by globalScale). Default: 1 */
-  lineWidthUnselected?: number;
-  /** Arrow length when selected. Default: 16 */
-  arrowLengthSelected?: number;
-  /** Arrow length when not selected. Default: 8 */
-  arrowLengthUnselected?: number;
   /** Arrow width-to-height ratio. Default: 1.6 */
   arrowWidthRatio?: number;
   /** Arrow notch depth ratio. Default: 0.2 */
@@ -426,6 +416,12 @@ export type GraphLink = {
   visible: boolean;
   /** Stroke color for the link line (CSS color string) */
   color: string;
+  /** Line width in screen pixels (divided by globalScale, so it stays constant while zooming). Default: LINK_WIDTH. Doubled while the link is selected */
+  width?: number;
+  /** Label font size in world units (scales with zoom). Default: LINK_FONT_SIZE */
+  fontSize?: number;
+  /** Arrowhead length in world units (scales with zoom). Default: ARROW_SIZE. Doubled while the link is selected */
+  arrowSize?: number;
   /** Curvature value for parallel edges and self-loops */
   curve: number;
   /** Arbitrary key-value properties on the link */

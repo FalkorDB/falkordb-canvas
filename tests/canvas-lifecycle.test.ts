@@ -278,20 +278,20 @@ describe("setConfig triggers render", () => {
     const internalConfig = (canvas as any).config;
     expect(internalConfig.nodeStyle.strokeWidthSelected).toBe(3);
 
-    canvas.setConfig({ linkStyle: { lineWidthSelected: 2 } });
-    expect(internalConfig.linkStyle.lineWidthSelected).toBe(2);
+    canvas.setConfig({ linkStyle: { arrowWidthRatio: 2 } });
+    expect(internalConfig.linkStyle.arrowWidthRatio).toBe(2);
   });
 
   it("setConfig before setData does not throw", () => {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setConfig({ nodeStyle: { fontSize: 4 } });
-    canvas.setConfig({ linkStyle: { lineWidthUnselected: 0.3 } });
+    canvas.setConfig({ linkStyle: { edgeGap: 0.3 } });
     canvas.setConfig({ simulation: { chargeStrength: -100 } });
 
     const internalConfig = (canvas as any).config;
     expect(internalConfig.nodeStyle.fontSize).toBe(4);
-    expect(internalConfig.linkStyle.lineWidthUnselected).toBe(0.3);
+    expect(internalConfig.linkStyle.edgeGap).toBe(0.3);
     expect(internalConfig.simulation.chargeStrength).toBe(-100);
   });
 });
