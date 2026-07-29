@@ -20,7 +20,7 @@ export const NODE_SIZE = 9;
 /** Default link line width (before dividing by globalScale) */
 export const LINK_WIDTH = 1;
 /** Default link label font size (world units) */
-export const LINK_FONT_SIZE = 2;
+export const LINK_FONT_SIZE = 6;
 /** Default link arrowhead length */
 export const ARROW_SIZE = 8;
 const DEFAULT_LINK_CURVE_MULTIPLIER = 0.4;

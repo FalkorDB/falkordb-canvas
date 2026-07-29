@@ -70,12 +70,12 @@ describe("setConfig deep merge", () => {
   it("merges linkStyle partially — unset fields preserved", () => {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });
-    canvas.setConfig({ linkStyle: { lineWidthSelected: 5 } });
-    canvas.setConfig({ linkStyle: { lineWidthUnselected: 0.5 } });
+    canvas.setConfig({ linkStyle: { arrowWidthRatio: 5 } });
+    canvas.setConfig({ linkStyle: { edgeGap: 0.5 } });
 
     const internalConfig = (canvas as any).config;
-    expect(internalConfig.linkStyle.lineWidthSelected).toBe(5);
-    expect(internalConfig.linkStyle.lineWidthUnselected).toBe(0.5);
+    expect(internalConfig.linkStyle.arrowWidthRatio).toBe(5);
+    expect(internalConfig.linkStyle.edgeGap).toBe(0.5);
   });
 
   it("merges simulation config partially", () => {
@@ -534,7 +534,7 @@ describe("setConfig immediate application", () => {
     internalCanvas.relationshipsTextCache.set("test-key", { width: 50, height: 10 });
     expect(internalCanvas.relationshipsTextCache.size).toBe(1);
 
-    canvas.setConfig({ linkStyle: { lineWidthSelected: 4 } });
+    canvas.setConfig({ linkStyle: { arrowWidthRatio: 4 } });
     expect(internalCanvas.relationshipsTextCache.size).toBe(0);
   });
 
