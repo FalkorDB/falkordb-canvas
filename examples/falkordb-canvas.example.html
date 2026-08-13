@@ -421,6 +421,16 @@
             <button class="btn-secondary btn-sm" onclick="generateLargeGraph()">100 Nodes</button>
           </div>
           <div class="field-row">
+            <div class="field">
+              <label for="node-shape">Node Shape</label>
+              <select id="node-shape">
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+              </select>
+            </div>
+            <button class="btn-secondary btn-sm" onclick="applyShapeToAll()">Apply to All</button>
+          </div>
+          <div class="field-row">
             <button class="btn-danger btn-sm" onclick="clearGraph()">Clear</button>
           </div>
         </div>
@@ -918,6 +928,7 @@
     visible: boolean,
     color: string,
     size?: number,           // Radius in world units (default: 9)
+    shape?: 'circle' | 'square',  // Node outline (default: 'circle')
     expand?: boolean,
   }],
   links: [{
@@ -1200,6 +1211,8 @@
     // ===== Data Actions =====
     let nodeCounter = 0;
 
+    const selectedShape = () => document.getElementById('node-shape').value;
+
     window.addNode = () => {
       const currentData = canvas.getData();
       const id = `node-${++nodeCounter}`;
@@ -1209,9 +1222,17 @@
         labels: [labels],
         data: { name: `${labels} ${nodeCounter}` },
         visible: true,
-        color: getColorForLabel(labels)
+        color: getColorForLabel(labels),
+        shape: selectedShape()
       });
       canvas.setData(currentData);
+    };
+
+    window.applyShapeToAll = () => {
+      const graphData = canvas.getGraphData();
+      const shape = selectedShape();
+      graphData.nodes.forEach(node => { node.shape = shape; });
+      canvas.refresh();
     };
 
     window.addLink = () => {
@@ -1236,11 +1257,12 @@
     window.generateLargeGraph = () => {
       const labels = ['Person', 'Movie', 'Genre', 'Company', 'Country'];
       const relTypes = ['ACTED_IN', 'DIRECTED', 'KNOWS', 'WORKS_AT', 'BORN_IN'];
+      const shape = selectedShape();
       const nodes = [];
       const links = [];
       for (let i = 1; i <= 100; i++) {
         const label = labels[Math.floor(Math.random() * labels.length)];
-        nodes.push({ id: `lg-${i}`, labels: [label], data: { name: `${label} ${i}` }, visible: true, color: getColorForLabel(label) });
+        nodes.push({ id: `lg-${i}`, labels: [label], data: { name: `${label} ${i}` }, visible: true, color: getColorForLabel(label), shape });
       }
       for (let i = 0; i < 150; i++) {
         const srcIdx = Math.floor(Math.random() * 100);

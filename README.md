@@ -282,6 +282,7 @@ Notes:
 | `color` | *required* | Node color (hex or CSS color) |
 | `visible` | *required* | Whether the node is visible |
 | `size` | `9` | Node radius (world units) |
+| `shape` | `'circle'` | Node outline: `'circle'` or `'square'` (a square uses the circle's bounding box) |
 | `caption` | `'id'` | Property key to use from the data for display text |
 | `data` | *required* | Node properties as key-value pairs |
 
