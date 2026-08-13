@@ -31,6 +31,7 @@ function createCtxSpy() {
     closePath: vi.fn(),
     fillRect: vi.fn(),
     strokeRect: vi.fn(),
+    rect: vi.fn(),
     clearRect: vi.fn(),
     getLineDash: vi.fn(() => []),
     measureText: vi.fn(() => ({
@@ -119,6 +120,35 @@ describe("node rendering", () => {
     // Should draw a circle (arc call)
     expect(ctx.arc).toHaveBeenCalled();
     expect(ctx.fill).toHaveBeenCalled();
+  });
+
+  it("draws a square for a node with shape 'square'", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setData({
+      nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", shape: "square", data: { name: "test" } }],
+      links: [],
+    });
+
+    const instance = getLastInstance();
+    const node = canvas.getGraphData().nodes[0];
+    node.x = 100;
+    node.y = 100;
+    instance.callbacks.onZoom?.({ k: 1, x: 100, y: 100 });
+
+    const ctx = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(node, ctx);
+
+    expect(ctx.rect).toHaveBeenCalled();
+    expect(ctx.arc).not.toHaveBeenCalled();
+    expect(ctx.fill).toHaveBeenCalled();
+
+    // The square is the circle's bounding box: side = 2 × radius.
+    const [x, y, width, height] = ctx.rect.mock.calls.at(-1)!;
+    expect(width).toBe(node.size * 2);
+    expect(height).toBe(width);
+    expect(x).toBe(node.x! - node.size);
+    expect(y).toBe(node.y! - node.size);
   });
 
   it("applies node color as fill style", () => {

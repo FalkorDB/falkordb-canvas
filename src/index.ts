@@ -63,6 +63,7 @@ export type {
   GraphLink,
   GraphData,
   Node,
+  NodeShape,
   Link,
   Data,
   ViewportState,

@@ -1339,6 +1339,23 @@ class FalkorDBCanvas extends HTMLElement {
     return lMaxX >= minX && lMinX <= maxX && lMaxY >= minY && lMinY <= maxY;
   }
 
+  /**
+   * Starts a path outlining `node` at `radius`, in the node's shape.
+   *
+   * A square is the circle's bounding box rather than its inscribed square, so
+   * a caption laid out for the default circle keeps fitting.
+   */
+  private traceNodeShape(node: GraphNode, ctx: CanvasRenderingContext2D, radius: number) {
+    ctx.beginPath();
+
+    if (node.shape === "square") {
+      ctx.rect(node.x! - radius, node.y! - radius, radius * 2, radius * 2);
+      return;
+    }
+
+    ctx.arc(node.x!, node.y!, radius, 0, 2 * Math.PI, false);
+  }
+
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
 
     if (node.x === undefined || node.y === undefined) {
@@ -1378,8 +1395,7 @@ class FalkorDBCanvas extends HTMLElement {
         const alpha = glowMaxOpacity * (1 - t) * (1 - t);
         ctx.strokeStyle = `rgba(${gr}, ${gg}, ${gb}, ${alpha})`;
         ctx.lineWidth = glowRadius / steps;
-        ctx.beginPath();
-        ctx.arc(node.x!, node.y!, radius + spread, 0, 2 * Math.PI, false);
+        this.traceNodeShape(node, ctx, radius + spread);
         ctx.stroke();
       }
       ctx.restore();
@@ -1388,12 +1404,10 @@ class FalkorDBCanvas extends HTMLElement {
       }, glowDuration - expandAge);
     }
 
-    ctx.beginPath();
-    ctx.arc(node.x!, node.y!, radius, 0, 2 * Math.PI, false);
+    this.traceNodeShape(node, ctx, radius);
     ctx.stroke();
 
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, node.size, 0, 2 * Math.PI, false);
+    this.traceNodeShape(node, ctx, node.size);
     ctx.fill();
 
     // Low-zoom optimisation: skip labels when zoomed out beyond threshold.
@@ -1498,8 +1512,7 @@ class FalkorDBCanvas extends HTMLElement {
     const radius = node.size + PADDING;
 
     ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+    this.traceNodeShape(node, ctx, radius);
     ctx.fill();
   }
 
