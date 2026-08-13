@@ -1257,11 +1257,12 @@
     window.generateLargeGraph = () => {
       const labels = ['Person', 'Movie', 'Genre', 'Company', 'Country'];
       const relTypes = ['ACTED_IN', 'DIRECTED', 'KNOWS', 'WORKS_AT', 'BORN_IN'];
+      const shape = selectedShape();
       const nodes = [];
       const links = [];
       for (let i = 1; i <= 100; i++) {
         const label = labels[Math.floor(Math.random() * labels.length)];
-        nodes.push({ id: `lg-${i}`, labels: [label], data: { name: `${label} ${i}` }, visible: true, color: getColorForLabel(label) });
+        nodes.push({ id: `lg-${i}`, labels: [label], data: { name: `${label} ${i}` }, visible: true, color: getColorForLabel(label), shape });
       }
       for (let i = 0; i < 150; i++) {
         const srcIdx = Math.floor(Math.random() * 100);

@@ -356,8 +356,8 @@ export interface LayoutOptions {
 }
 
 /**
- * Outline a node is drawn with. A square uses the circle's bounding box, so a
- * caption laid out for the default circle keeps fitting.
+ * The outline a node is drawn with. A square uses the circle's bounding box,
+ * so a caption laid out for the default circle keeps fitting.
  */
 export type NodeShape = "circle" | "square";
 
@@ -382,7 +382,7 @@ export type GraphNode = NodeObject & {
   borderColor?: string;
   /** Radius of the node circle in world units */
   size: number;
-  /** Outline the node is drawn with. Defaults to "circle" */
+  /** The outline this node is drawn with. Defaults to "circle" */
   shape?: NodeShape;
   /** Arbitrary key-value properties on the node (used for label resolution via captionsKeys) */
   data: {

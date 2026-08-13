@@ -1356,6 +1356,56 @@ class FalkorDBCanvas extends HTMLElement {
     ctx.arc(node.x!, node.y!, radius, 0, 2 * Math.PI, false);
   }
 
+  /**
+   * How far `node`'s outline sits from its centre along `(dx, dy)`.
+   *
+   * A circle is `radius` away in every direction, but a square reaches out to
+   * `radius * √2` towards its corners — clipping a diagonal link at `radius`
+   * would end it under the fill and hide the arrowhead.
+   */
+  private static borderDistance(node: GraphNode, radius: number, dx: number, dy: number): number {
+    if (node.shape !== "square") return radius;
+
+    const longest = Math.max(Math.abs(dx), Math.abs(dy));
+    if (longest === 0) return radius;
+
+    return (radius * Math.hypot(dx, dy)) / longest;
+  }
+
+  /**
+   * Binary search for the self-loop bezier parameter whose point sits
+   * `targetDist` from the node centre. Distance is monotonically decreasing on
+   * [0.5, 1], where dist(t) = 3(1-t)t|d|√(t² + (1-t)²).
+   */
+  private static solveSelfLoopT(absD: number, targetDist: number): number {
+    let lo = 0.5;
+    let hi = 1.0;
+
+    for (let i = 0; i < 20; i += 1) {
+      const mid = (lo + hi) / 2;
+      const um = 1 - mid;
+      const dist = 3 * um * mid * absD * Math.sqrt(mid * mid + um * um);
+      if (dist > targetDist) lo = mid;
+      else hi = mid;
+    }
+
+    return (lo + hi) / 2;
+  }
+
+  /**
+   * The distance a self-loop has to clear to leave `node`'s outline. Circles
+   * clear at `borderRadius`; for a square the direction of the exit point is
+   * only known once solved, so the circular solution seeds a single refinement.
+   */
+  private static selfLoopBorderRadius(node: GraphNode, d: number, borderRadius: number): number {
+    if (node.shape !== "square") return borderRadius;
+
+    const t = FalkorDBCanvas.solveSelfLoopT(Math.abs(d), borderRadius);
+    const u = 1 - t;
+
+    return FalkorDBCanvas.borderDistance(node, borderRadius, 3 * u * t * t * d, -3 * u * u * t * d);
+  }
+
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D) {
 
     if (node.x === undefined || node.y === undefined) {
@@ -1575,28 +1625,20 @@ class FalkorDBCanvas extends HTMLElement {
       const nodeStrokeWidth = this.config.isNodeSelected?.(start) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected;
       const borderRadius = nodeSize + nodeStrokeWidth + this.edgeGap;
 
-      // Binary search for t near 1.0 where the curve is at the given distance
-      // from the node center. Bezier parametric form:
-      // Bx(t)=sx+3(1-t)t²d, By(t)=sy-3(1-t)²td
-      // dist(t) = 3*(1-t)*t*|d|*sqrt(t² + (1-t)²), monotonically decreasing on [0.5, 1].
+      // Bezier parametric form: Bx(t)=sx+3(1-t)t²d, By(t)=sy-3(1-t)²td.
       const arrowHalfWidth = arrowLen / this.config.linkStyle.arrowWidthRatio / 2;
       const absD = Math.abs(d);
-      const solveT = (targetDist: number) => {
-        let lo = 0.5, hi = 1.0;
-        for (let i = 0; i < 20; i++) {
-          const mid = (lo + hi) / 2;
-          const um = 1 - mid;
-          const dist = 3 * um * mid * absD * Math.sqrt(mid * mid + um * um);
-          if (dist > targetDist) lo = mid;
-          else hi = mid;
-        }
-        return (lo + hi) / 2;
-      };
+      const solveT = (targetDist: number) => FalkorDBCanvas.solveSelfLoopT(absD, targetDist);
       // Max reachable distance in [0.5, 1.0] is ≈ 0.53 * |d| (at t = 0.5).
       // If |d| is too small to reach borderRadius, skip the arrowhead entirely.
       const maxReachableDist = 3 * 0.5 * 0.5 * absD * Math.sqrt(0.5);
-      const canReachBorder = absD > 0 && maxReachableDist >= borderRadius;
-      const tArrow = canReachBorder ? solveT(borderRadius) : 0.75;
+      // A square node's outline sits further out along the loop's exit
+      // direction, so the loop has to clear more than the circular radius.
+      const loopRadius = maxReachableDist >= borderRadius
+        ? FalkorDBCanvas.selfLoopBorderRadius(start, d, borderRadius)
+        : borderRadius;
+      const canReachBorder = absD > 0 && maxReachableDist >= loopRadius;
+      const tArrow = canReachBorder ? solveT(loopRadius) : 0.75;
       const uArrow = 1 - tArrow;
       const tipX = start.x + 3 * uArrow * tArrow * tArrow * d;
       const tipY = start.y - 3 * uArrow * uArrow * tArrow * d;
@@ -1604,7 +1646,7 @@ class FalkorDBCanvas extends HTMLElement {
       // Stop the stroke at the arrowhead notch so the line never shows through
       // the arrow tip.
       const arrowBack = skipArrows ? 0 : arrowLen * (1 - this.config.linkStyle.arrowNotchRatio);
-      const tLine = canReachBorder ? solveT(borderRadius + arrowBack) : tArrow;
+      const tLine = canReachBorder ? solveT(loopRadius + arrowBack) : tArrow;
       const uLine = 1 - tLine;
       const lineEndX = start.x + 3 * uLine * tLine * tLine * d;
       const lineEndY = start.y - 3 * uLine * uLine * tLine * d;
@@ -1706,10 +1748,15 @@ class FalkorDBCanvas extends HTMLElement {
       // along the bezier tangent direction. Near t=1 the bezier is linear,
       // so t offset = borderRadius / (2 * |control - end|).
       const endNodeSize = end.size;
-      const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected) + this.edgeGap;
-
       const ceX = controlX - end.x;
       const ceY = controlY - end.y;
+      const borderRadius = FalkorDBCanvas.borderDistance(
+        end,
+        endNodeSize + (this.config.isNodeSelected?.(end) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected) + this.edgeGap,
+        ceX,
+        ceY,
+      );
+
       const ctrlEndDist = Math.sqrt(ceX * ceX + ceY * ceY);
       const tArrow = Math.max(0.5, 1 - borderRadius / (2 * ctrlEndDist));
       const uArrow = 1 - tArrow;
@@ -1727,10 +1774,15 @@ class FalkorDBCanvas extends HTMLElement {
 
       // Source-side clip: place edge start at srcBorderRadius from node center
       const startNodeSize = start.size;
-      const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + this.edgeGap;
-
       const csX = controlX - start.x;
       const csY = controlY - start.y;
+      const srcBorderRadius = FalkorDBCanvas.borderDistance(
+        start,
+        startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + this.edgeGap,
+        csX,
+        csY,
+      );
+
       const ctrlStartDist = Math.sqrt(csX * csX + csY * csY);
       const tStart = Math.min(0.5, srcBorderRadius / (2 * ctrlStartDist));
 
@@ -1856,19 +1908,14 @@ class FalkorDBCanvas extends HTMLElement {
       const borderRadius = nodeSize + nodeStrokeWidth + this.edgeGap;
       const absD = Math.abs(d);
       const maxReachableDist = 3 * 0.5 * 0.5 * absD * Math.sqrt(0.5);
-      const canReachBorder = absD > 0 && maxReachableDist >= borderRadius;
+      const loopRadius = maxReachableDist >= borderRadius
+        ? FalkorDBCanvas.selfLoopBorderRadius(start, d, borderRadius)
+        : borderRadius;
+      const canReachBorder = absD > 0 && maxReachableDist >= loopRadius;
 
       ctx.moveTo(start.x, start.y);
       if (canReachBorder) {
-        let lo = 0.5, hi = 1.0;
-        for (let i = 0; i < 20; i++) {
-          const mid = (lo + hi) / 2;
-          const um = 1 - mid;
-          const dist = 3 * um * mid * absD * Math.sqrt(mid * mid + um * um);
-          if (dist > borderRadius) lo = mid;
-          else hi = mid;
-        }
-        const tArrow = (lo + hi) / 2;
+        const tArrow = FalkorDBCanvas.solveSelfLoopT(absD, loopRadius);
         const uArrow = 1 - tArrow;
         const tipX = start.x + 3 * uArrow * tArrow * tArrow * d;
         const tipY = start.y - 3 * uArrow * uArrow * tArrow * d;
@@ -1901,10 +1948,15 @@ class FalkorDBCanvas extends HTMLElement {
 
         // Target-side clip: constant gap from node center along tangent direction
         const endNodeSize = end.size;
-        const borderRadius = endNodeSize + (this.config.isNodeSelected?.(end) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected) + this.edgeGap;
-
         const ceX = controlX - end.x;
         const ceY = controlY - end.y;
+        const borderRadius = FalkorDBCanvas.borderDistance(
+          end,
+          endNodeSize + (this.config.isNodeSelected?.(end) ? this.config.nodeStyle.strokeWidthSelected : this.config.nodeStyle.strokeWidthUnselected) + this.edgeGap,
+          ceX,
+          ceY,
+        );
+
         const ctrlEndDist = Math.sqrt(ceX * ceX + ceY * ceY);
         const tArrow = Math.max(0.5, 1 - borderRadius / (2 * ctrlEndDist));
         const uArrow = 1 - tArrow;
@@ -1913,10 +1965,15 @@ class FalkorDBCanvas extends HTMLElement {
 
         // Source-side clip: constant gap from node center along tangent direction
         const startNodeSize = start.size;
-        const srcBorderRadius = startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + this.edgeGap;
-
         const csX = controlX - start.x;
         const csY = controlY - start.y;
+        const srcBorderRadius = FalkorDBCanvas.borderDistance(
+          start,
+          startNodeSize + (this.config.isNodeSelected?.(start) ? 1 : 0.5) + this.edgeGap,
+          csX,
+          csY,
+        );
+
         const ctrlStartDist = Math.sqrt(csX * csX + csY * csY);
         const tStart = Math.min(0.5, srcBorderRadius / (2 * ctrlStartDist));
 

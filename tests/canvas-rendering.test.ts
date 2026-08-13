@@ -676,6 +676,70 @@ describe("link rendering", () => {
     instance.callbacks.linkCanvasObject!(graphData.links[0], selectedCtx, 1);
     expect(selectedCtx.lineWidth).toBe(6);
   });
+
+  it("clips a diagonal link at the square outline of its target", () => {
+    // A square reaches out to radius × √2 towards its corners, so a link
+    // arriving diagonally has to stop that much further from the centre.
+    const drawDiagonalLink = (shape?: "square") => {
+      const canvas = createCanvas();
+      canvas.setConfig({ width: 800, height: 600 });
+      canvas.setData({
+        nodes: [
+          { id: 1, labels: ["A"], visible: true, color: "#f00", data: {} },
+          { id: 2, labels: ["B"], visible: true, color: "#0f0", shape, data: {} },
+        ],
+        links: [{ id: 1, relationship: "R", source: 1, target: 2, visible: true, color: "#888", data: {} }],
+      });
+
+      const instance = getLastInstance();
+      const link = canvas.getGraphData().links[0];
+      link.source.x = 0;
+      link.source.y = 0;
+      link.target.x = 100;
+      link.target.y = 100;
+
+      instance.callbacks.onZoom?.({ k: 1, x: 0, y: 0 });
+
+      const ctx = createCtxSpy();
+      instance.callbacks.linkCanvasObject!(link, ctx, 1);
+
+      const [, , endX, endY] = ctx.quadraticCurveTo.mock.calls.at(-1)!;
+      return Math.hypot(endX - link.target.x!, endY - link.target.y!);
+    };
+
+    const circleGap = drawDiagonalLink();
+    const squareGap = drawDiagonalLink("square");
+
+    expect(squareGap / circleGap).toBeCloseTo(Math.SQRT2, 2);
+  });
+
+  it("clips a self-loop at the square outline of its node", () => {
+    const drawSelfLoop = (shape?: "square") => {
+      const canvas = createCanvas();
+      canvas.setConfig({ width: 800, height: 600 });
+      canvas.setData({
+        nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", shape, data: {} }],
+        links: [{ id: 1, relationship: "SELF", source: 1, target: 1, visible: true, color: "#888", data: {} }],
+      });
+
+      const instance = getLastInstance();
+      const link = canvas.getGraphData().links[0];
+      link.source.x = 0;
+      link.source.y = 0;
+
+      instance.callbacks.onZoom?.({ k: 1, x: 0, y: 0 });
+
+      const ctx = createCtxSpy();
+      instance.callbacks.linkCanvasObject!(link, ctx, 1);
+
+      const [, , , , endX, endY] = ctx.bezierCurveTo.mock.calls.at(-1)!;
+      return Math.hypot(endX - link.source.x!, endY - link.source.y!);
+    };
+
+    // The loop leaves the node off-axis, so a square pushes its tip further out
+    // than a circle of the same radius — but by less than the √2 corner factor.
+    expect(drawSelfLoop("square")).toBeGreaterThan(drawSelfLoop());
+  });
 });
 
 describe("nodePointerAreaPaint", () => {
