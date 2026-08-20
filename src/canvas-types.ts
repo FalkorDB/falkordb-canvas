@@ -292,6 +292,7 @@ export interface ForceGraphConfig {
 export interface InternalForceGraphConfig extends Omit<ForceGraphConfig, 'backgroundColor' | 'foregroundColor' | 'captionsKeys' | 'showPropertyKeyPrefix' | 'layoutMode' | 'layoutOptions' | 'pinOnDragEnd' | 'nodeStyle' | 'linkStyle' | 'simulation' | 'interaction' | 'largeGraph'> {
   backgroundColor: string;
   foregroundColor: string;
+  /** Normalized from `ForceGraphConfig.captionsKeys` — bare strings become `[key, false]`. */
   captionsKeys: [string, boolean][];
   showPropertyKeyPrefix: boolean;
   layoutMode: LayoutMode;

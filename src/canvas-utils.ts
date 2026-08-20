@@ -193,6 +193,20 @@ export function graphDataToData(graphData: GraphData): Data {
 }
 
 /**
+ * Normalizes user-supplied caption keys into `[key, exactMatch]` tuples.
+ * Bare strings default to a fuzzy (non-exact) match.
+ *
+ * @param captionKeys - Caption keys as plain strings and/or `[key, exactMatch]` tuples
+ * @returns Normalized `[key, exactMatch]` tuples
+ */
+export const normalizeCaptionsKeys = (
+  captionKeys: Array<string | [string, boolean]> | undefined
+): [string, boolean][] =>
+  (captionKeys ?? []).map((key): [string, boolean] =>
+    typeof key === "string" ? [key, false] : [key[0], key[1] ?? false]
+  );
+
+/**
  * Resolves which data property key to use as the node caption/label.
  * Iterates through captionKeys in order and returns the first key that
  * matches a non-empty property in node.data.
