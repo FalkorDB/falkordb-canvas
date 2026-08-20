@@ -7,6 +7,7 @@ import {
 vi.mock("force-graph", async () => import("./mocks/force-graph"));
 
 import "../src/canvas";
+import { getNodeDisplayText } from "../src/canvas-utils";
 import type { CanvasTestElement } from "./test-types";
 
 type CanvasElement = CanvasTestElement;
@@ -564,6 +565,52 @@ describe("setConfig immediate application", () => {
 
     canvas.setConfig({ captionsKeys: [["name", true]] });
     expect(data.nodes[0].displayName).toEqual(["", ""]);
+  });
+
+  it("normalizes bare-string captionsKeys into [key, exactMatch] tuples", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({ width: 800, height: 600, captionsKeys: ["name"] });
+
+    expect((canvas as any).config.captionsKeys).toEqual([["name", false]]);
+  });
+
+  it("normalizes a mix of strings and tuples, preserving order and exactMatch", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({
+      width: 800,
+      height: 600,
+      captionsKeys: ["title", ["name", true], ["label", false]],
+    });
+
+    expect((canvas as any).config.captionsKeys).toEqual([
+      ["title", false],
+      ["name", true],
+      ["label", false],
+    ]);
+  });
+
+  it("resolves captions from bare-string captionsKeys instead of falling back to node id", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({ width: 800, height: 600, captionsKeys: ["name"] });
+    canvas.setData(SIMPLE_DATA);
+
+    const data = (canvas as any).getGraphData();
+    const text = getNodeDisplayText(data.nodes[0], (canvas as any).config.captionsKeys, false);
+    expect(text).toBe("Alice");
+  });
+
+  it("does not re-invalidate the display cache when equivalent string/tuple keys are set", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({ width: 800, height: 600, captionsKeys: ["name"] });
+    canvas.setData(SIMPLE_DATA);
+
+    const data = (canvas as any).getGraphData();
+    data.nodes[0].displayName = ["cached", ""];
+
+    // ["name"] normalizes to [["name", false]] — same as what is already stored,
+    // so the cache-invalidation check must treat this as unchanged.
+    canvas.setConfig({ captionsKeys: [["name", false]] });
+    expect(data.nodes[0].displayName).toEqual(["cached", ""]);
   });
 
   // --- layout ---
