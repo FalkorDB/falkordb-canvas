@@ -30,6 +30,7 @@ import {
   LINK_DISTANCE,
   LINK_FONT_SIZE,
   LINK_WIDTH,
+  normalizeCaptionsKeys,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
 import { isForceLayout, pinAllNodes, unpinAllNodes, computeTreePositions, computeRadialPositions } from "./layouts.js";
@@ -305,9 +306,16 @@ class FalkorDBCanvas extends HTMLElement {
   setConfig(config: Partial<ForceGraphConfig>) {
     this.log('Setting config:', config);
 
+    // The public API accepts captionsKeys as `Array<string | [string, boolean]>`,
+    // but every internal consumer expects [key, exactMatch] tuples. Normalize up
+    // front so bare strings don't destructure character-wise downstream.
+    const nextCaptionsKeys = config.captionsKeys !== undefined
+      ? normalizeCaptionsKeys(config.captionsKeys)
+      : undefined;
+
     // If captionsKeys or showPropertyKeyPrefix changed, invalidate cached display names and font sizes
     // so text is recomputed with the new keys on the next render.
-    if ((config.captionsKeys && JSON.stringify(config.captionsKeys) !== JSON.stringify(this.config.captionsKeys))
+    if ((nextCaptionsKeys && JSON.stringify(nextCaptionsKeys) !== JSON.stringify(this.config.captionsKeys))
       || (config.showPropertyKeyPrefix !== undefined && config.showPropertyKeyPrefix !== this.config.showPropertyKeyPrefix)) {
       this.nodeDisplayFontSize.clear();
       for (const node of this.data.nodes) {
@@ -332,8 +340,12 @@ class FalkorDBCanvas extends HTMLElement {
     }
 
     // Shallow-assign top-level scalar/function fields (after deep-merge to avoid clobbering nested objects)
-    const { largeGraph, nodeStyle, linkStyle, simulation, interaction, eventHandlers, layoutOptions, ...scalarConfig } = config;
+    const { largeGraph, nodeStyle, linkStyle, simulation, interaction, eventHandlers, layoutOptions, captionsKeys, ...scalarConfig } = config;
     Object.assign(this.config, scalarConfig);
+
+    if (nextCaptionsKeys) {
+      this.config.captionsKeys = nextCaptionsKeys;
+    }
 
     if (config.layoutOptions) {
       const lo = config.layoutOptions;
