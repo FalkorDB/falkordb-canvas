@@ -337,8 +337,9 @@ class FalkorDBCanvas extends HTMLElement {
       }
     }
 
-    // Shallow-assign top-level scalar/function fields (after deep-merge to avoid clobbering nested objects)
-    const { largeGraph, nodeStyle, linkStyle, simulation, interaction, eventHandlers, layoutOptions, ...scalarConfig } = config;
+    // Shallow-assign top-level scalar/function fields (after deep-merge to avoid clobbering nested objects).
+    // `captionsKeys` is excluded so only the normalized tuples are ever written to the internal config.
+    const { largeGraph, nodeStyle, linkStyle, simulation, interaction, eventHandlers, layoutOptions, captionsKeys: _captionsKeys, ...scalarConfig } = config;
     Object.assign(this.config, scalarConfig);
 
     if (captionsKeys) {

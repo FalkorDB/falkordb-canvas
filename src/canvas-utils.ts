@@ -200,7 +200,7 @@ export function graphDataToData(graphData: GraphData): Data {
  * @returns Normalized `[key, exactMatch]` tuples
  */
 export const normalizeCaptionsKeys = (
-  captionKeys: Array<string | [string, boolean]> | undefined
+  captionKeys: Array<string | [string, boolean?]> | undefined
 ): [string, boolean][] =>
   (captionKeys ?? []).map((key): [string, boolean] =>
     typeof key === "string" ? [key, false] : [key[0], key[1] ?? false]

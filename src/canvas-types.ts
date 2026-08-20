@@ -236,7 +236,7 @@ export interface ForceGraphConfig {
    * @example ["name", "title"] — tries 'name' first, then 'title'
    * @example [["Name", true]] — exact match only for 'Name'
    */
-  captionsKeys?: Array<string | [string, boolean]>;
+  captionsKeys?: Array<string | [string, boolean?]>;
   /** When true, display the property key prefix before the value in labels (e.g. "name: Foo"). Default: false */
   showPropertyKeyPrefix?: boolean;
   /** When true, nodes stay pinned at their position after being dragged. Default: false */
