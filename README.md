@@ -153,7 +153,7 @@ Configuration is passed to `setConfig()` as a `ForceGraphConfig` object. It is o
 | `layoutMode` | `'force'` | Layout algorithm: `'force'` \| `'tree'` \| `'radial'` |
 | `layoutOptions` | `{}` | Per-layout options (see [Layout Modes](#layout-modes)) |
 | `animation` | | Enable/disable layout animation |
-| `captionsKeys` | `[]` | Node property keys to display as labels |
+| `captionsKeys` | `[]` | Ordered node property keys to display as labels. Each entry is a plain string (fuzzy, case-insensitive match) or a `[key, exactMatch]` tuple — e.g. `['name', ['Title', true]]`. Falls back to the node ID if none match |
 | `showPropertyKeyPrefix` | `false` | Show property key prefix in node labels |
 | `pinOnDragEnd` | `false` | Pin nodes after dragging |
 | `isNodeSelected` | | Function: `(node: GraphNode) => boolean` |

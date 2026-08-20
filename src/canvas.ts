@@ -30,6 +30,7 @@ import {
   LINK_DISTANCE,
   LINK_FONT_SIZE,
   LINK_WIDTH,
+  normalizeCaptionsKeys,
   wrapTextForCircularNode,
 } from "./canvas-utils.js";
 import { isForceLayout, pinAllNodes, unpinAllNodes, computeTreePositions, computeRadialPositions } from "./layouts.js";
@@ -299,15 +300,20 @@ class FalkorDBCanvas extends HTMLElement {
    * Update the canvas configuration. Accepts a partial config object —
    * only the provided fields are changed; others retain their current values.
    * Nested objects (nodeStyle, linkStyle, simulation, interaction, largeGraph) are deep-merged.
+   * `captionsKeys` entries given as bare strings are normalized to `[key, false]` (fuzzy match).
    *
    * @param config - Partial configuration to apply
    */
   setConfig(config: Partial<ForceGraphConfig>) {
     this.log('Setting config:', config);
 
+    const captionsKeys = config.captionsKeys
+      ? normalizeCaptionsKeys(config.captionsKeys)
+      : undefined;
+
     // If captionsKeys or showPropertyKeyPrefix changed, invalidate cached display names and font sizes
     // so text is recomputed with the new keys on the next render.
-    if ((config.captionsKeys && JSON.stringify(config.captionsKeys) !== JSON.stringify(this.config.captionsKeys))
+    if ((captionsKeys && JSON.stringify(captionsKeys) !== JSON.stringify(this.config.captionsKeys))
       || (config.showPropertyKeyPrefix !== undefined && config.showPropertyKeyPrefix !== this.config.showPropertyKeyPrefix)) {
       this.nodeDisplayFontSize.clear();
       for (const node of this.data.nodes) {
@@ -331,9 +337,14 @@ class FalkorDBCanvas extends HTMLElement {
       }
     }
 
-    // Shallow-assign top-level scalar/function fields (after deep-merge to avoid clobbering nested objects)
-    const { largeGraph, nodeStyle, linkStyle, simulation, interaction, eventHandlers, layoutOptions, ...scalarConfig } = config;
+    // Shallow-assign top-level scalar/function fields (after deep-merge to avoid clobbering nested objects).
+    // `captionsKeys` is excluded so only the normalized tuples are ever written to the internal config.
+    const { largeGraph, nodeStyle, linkStyle, simulation, interaction, eventHandlers, layoutOptions, captionsKeys: _captionsKeys, ...scalarConfig } = config;
     Object.assign(this.config, scalarConfig);
+
+    if (captionsKeys) {
+      this.config.captionsKeys = captionsKeys;
+    }
 
     if (config.layoutOptions) {
       const lo = config.layoutOptions;

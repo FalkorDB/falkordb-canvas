@@ -338,6 +338,34 @@ describe("node rendering", () => {
     expect(textArg).toContain("Hello");
   });
 
+  it("resolves caption from a bare-string captionsKeys entry", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({
+      width: 800,
+      height: 600,
+      captionsKeys: ["Name"], // bare string → fuzzy, case-insensitive match
+      largeGraph: { lowZoomThreshold: 0.5 },
+    });
+    canvas.setData({
+      nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", data: { displayName: "Hello" } }],
+      links: [],
+    });
+
+    const instance = getLastInstance();
+    const graphData = canvas.getGraphData();
+    const node = graphData.nodes[0];
+    node.x = 0;
+    node.y = 0;
+    instance.callbacks.onZoom?.({ k: 1, x: 0, y: 0 });
+
+    const ctx = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(node, ctx);
+
+    expect(ctx.fillText).toHaveBeenCalled();
+    const textArg = ctx.fillText.mock.calls[0]?.[0];
+    expect(textArg).toContain("Hello");
+  });
+
   it("falls back to node ID if no caption key matches", () => {
     const canvas = createCanvas();
     canvas.setConfig({

@@ -566,6 +566,23 @@ describe("setConfig immediate application", () => {
     expect(data.nodes[0].displayName).toEqual(["", ""]);
   });
 
+  it("normalizes bare-string and flagless-tuple captionsKeys to [key, false]", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({ captionsKeys: ["name", ["title"], ["Label", true]] });
+
+    const internalConfig = (canvas as any).config;
+    expect(internalConfig.captionsKeys).toEqual([["name", false], ["title", false], ["Label", true]]);
+  });
+
+  it("preserves captionsKeys when a later setConfig omits them", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({ captionsKeys: ["name"] });
+    canvas.setConfig({ captionsKeys: undefined, width: 400 });
+
+    const internalConfig = (canvas as any).config;
+    expect(internalConfig.captionsKeys).toEqual([["name", false]]);
+  });
+
   // --- layout ---
 
   it("setLayout applies layout to force-graph immediately", () => {
