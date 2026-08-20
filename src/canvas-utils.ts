@@ -193,6 +193,31 @@ export function graphDataToData(graphData: GraphData): Data {
 }
 
 /**
+ * Normalizes the public `captionsKeys` config into the internal tuple form.
+ * The public API accepts `Array<string | [string, boolean]>`, but every internal
+ * consumer destructures entries as `[key, exactMatch]` tuples. A bare string
+ * would otherwise destructure character-wise (`'name'` -> key `'n'`,
+ * exactMatch `'a'`), silently falling back to the node id.
+ * Bare strings default to substring matching (exactMatch = false).
+ *
+ * @param keys - Public captionsKeys value, possibly mixing strings and tuples
+ * @returns Ordered list of [key, exactMatch] tuples
+ */
+export const normalizeCaptionsKeys = (
+  keys: Array<string | [string, boolean]> | undefined
+): [string, boolean][] => {
+  if (!Array.isArray(keys)) return [];
+  return keys.reduce<[string, boolean][]>((acc, key) => {
+    if (typeof key === 'string') {
+      acc.push([key, false]);
+    } else if (Array.isArray(key) && typeof key[0] === 'string') {
+      acc.push([key[0], Boolean(key[1])]);
+    }
+    return acc;
+  }, []);
+};
+
+/**
  * Resolves which data property key to use as the node caption/label.
  * Iterates through captionKeys in order and returns the first key that
  * matches a non-empty property in node.data.
