@@ -217,6 +217,9 @@ class FalkorDBCanvas extends HTMLElement {
   // rather than one per frame.
   private glowRenderScheduled: Map<number, ReturnType<typeof setTimeout>> = new Map();
 
+  // Link forces whose `links` binder has been wrapped to drop hidden links.
+  private visibilityFilteredLinkForces = new WeakSet<object>();
+
   private relationshipsTextCache: Map<
     string,
     {
@@ -1207,15 +1210,21 @@ class FalkorDBCanvas extends HTMLElement {
     const linkDist = this.config.layoutOptions.force?.linkDistance ?? LINK_DISTANCE;
     const collisionPad = this.config.layoutOptions.force?.collisionPadding ?? 25;
 
-    // force-graph's linkVisibility only filters drawing — it hands d3 the full
-    // link set, so a hidden link goes on pulling its endpoints together. Give
-    // the simulation the visible links alone rather than zeroing their strength:
-    // d3 also derives each link's `bias` (how the correction is split between
-    // its endpoints) from degree counts in `initialize()`, and unlike strength
-    // and distance that has no setter, so hidden links would keep skewing the
-    // split. Feeding it a filtered set recomputes all three, and d3's default
-    // strength then normalises over visible degrees on its own.
-    linkForce.links(this.data.links.filter((link) => link.visible !== false));
+    // force-graph's linkVisibility only filters drawing, and it re-binds the
+    // full link array to this force inside every graphData digest — then runs
+    // the warmup ticks that produce the layout in that same digest, so a set
+    // filtered from the outside is overwritten before it ever does any work.
+    // Patch the force's own binder so every bind is filtered, whoever makes it.
+    // Hidden links have to stay out of d3 rather than merely be zeroed: d3 also
+    // derives each link's `bias` — how it splits a correction between its two
+    // endpoints — from degree counts in initialize(), and bias has no setter.
+    if (!this.visibilityFilteredLinkForces.has(linkForce)) {
+      const bind = linkForce.links.bind(linkForce);
+      linkForce.links = (links?: GraphLink[]) =>
+        (links === undefined ? bind() : bind(links.filter((link) => link.visible !== false)));
+      this.visibilityFilteredLinkForces.add(linkForce);
+    }
+    linkForce.links(this.data.links);
 
     // distance based on node size + constant
     linkForce
