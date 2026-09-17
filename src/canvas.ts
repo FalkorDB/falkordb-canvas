@@ -1204,6 +1204,29 @@ class FalkorDBCanvas extends HTMLElement {
         return sourceSize + targetSize + linkDist * 2;
       });
 
+    // force-graph's linkVisibility only filters drawing — d3 still receives the
+    // full link set, so a hidden link goes on pulling its endpoints together.
+    // Zero it out, and mirror d3's degree normalisation over visible links only
+    // so hiding one link does not weaken the ones left behind.
+    const visibleDegree = new Map<number, number>();
+    linkForce.strength((link: GraphLink, index: number, links: GraphLink[]) => {
+      if (index === 0) {
+        visibleDegree.clear();
+        links.forEach((l) => {
+          if (l.visible === false) return;
+          visibleDegree.set(l.source.id, (visibleDegree.get(l.source.id) ?? 0) + 1);
+          visibleDegree.set(l.target.id, (visibleDegree.get(l.target.id) ?? 0) + 1);
+        });
+      }
+
+      if (link.visible === false) return 0;
+
+      return 1 / Math.min(
+        visibleDegree.get(link.source.id) ?? 1,
+        visibleDegree.get(link.target.id) ?? 1,
+      );
+    });
+
     // Collision force - node size + padding (can be disabled for large graphs)
     const nodeCount = this.graph.graphData()?.nodes?.length ?? 0;
     const disableCollisionAbove = this.config.simulation.disableCollisionAbove;

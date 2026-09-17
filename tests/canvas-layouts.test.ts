@@ -271,3 +271,58 @@ describe("setPinOnDragEnd", () => {
     expect(onPinChange).toHaveBeenCalledWith(false);
   });
 });
+
+describe("link force visibility", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    resetForceGraphMockState();
+  });
+
+  function linkStrengths(data: typeof TREE_DATA) {
+    const canvas = createCanvas();
+    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setData(data);
+
+    const instance = getLastInstance();
+    const linkForce = instance.d3Force("link") as {
+      strengthAccessor?: (link: unknown, index: number, links: unknown[]) => number;
+    };
+    const links = canvas.getGraphData().links;
+
+    return links.map((link, index) => linkForce.strengthAccessor!(link, index, links));
+  }
+
+  it("gives a hidden link no pull over its endpoints", () => {
+    const hidden = {
+      ...TREE_DATA,
+      links: TREE_DATA.links.map((l) => (l.id === 3 ? { ...l, visible: false } : l)),
+    };
+
+    expect(linkStrengths(hidden)[2]).toBe(0);
+  });
+
+  it("does not weaken the remaining links when one is hidden", () => {
+    const before = linkStrengths(TREE_DATA);
+    document.body.innerHTML = "";
+    resetForceGraphMockState();
+
+    const hidden = {
+      ...TREE_DATA,
+      links: TREE_DATA.links.map((l) => (l.id === 3 ? { ...l, visible: false } : l)),
+    };
+    const after = linkStrengths(hidden);
+
+    // Link 1 shares node 2 with the hidden link 3. Node 2's visible degree
+    // drops to 1, so link 1 pulls at full strength rather than 1/2.
+    expect(before[0]).toBe(0.5);
+    expect(after[0]).toBe(1);
+  });
+
+  it("normalises visible links by degree", () => {
+    const strengths = linkStrengths(TREE_DATA);
+
+    // d3's rule: 1 / min(degree(source), degree(target)). Nodes 1 and 2 have
+    // degree 2, nodes 3 and 4 degree 1.
+    expect(strengths).toEqual([0.5, 1, 1]);
+  });
+});
