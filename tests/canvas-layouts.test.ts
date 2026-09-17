@@ -325,4 +325,36 @@ describe("link force visibility", () => {
     // degree 2, nodes 3 and 4 degree 1.
     expect(strengths).toEqual([0.5, 1, 1]);
   });
+
+  it("re-derives strengths when a live link is hidden and refresh() is called", () => {
+    const canvas = createCanvas();
+    canvas.setConfig({ width: 800, height: 600 });
+    canvas.setData(TREE_DATA);
+
+    const instance = getLastInstance();
+    const read = () => {
+      const linkForce = instance.d3Force("link") as {
+        strengthAccessor?: (link: unknown, index: number, links: unknown[]) => number;
+      };
+      const links = canvas.getGraphData().links;
+      return links.map((link, index) => linkForce.strengthAccessor!(link, index, links));
+    };
+
+    expect(read()).toEqual([0.5, 1, 1]);
+
+    // getGraphData() hands back the live links, so this is an in-place mutation.
+    canvas.getGraphData().links[2].visible = false;
+
+    // d3 caches strengths at initialise time and never recomputes them per
+    // tick, so the fix is that refresh() re-registers the accessor — that setter
+    // is what re-runs initializeStrength. Asserting on the accessor's return
+    // value alone would pass either way, since the accessor itself is pure.
+    const linkForce = instance.d3Force("link") as { strength: (fn: unknown) => unknown };
+    const strengthSpy = vi.spyOn(linkForce, "strength");
+
+    canvas.refresh();
+
+    expect(strengthSpy).toHaveBeenCalled();
+    expect(read()).toEqual([1, 1, 0]);
+  });
 });

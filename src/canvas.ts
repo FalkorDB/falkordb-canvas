@@ -213,9 +213,9 @@ class FalkorDBCanvas extends HTMLElement {
     }
   > = new Map();
 
-  // Nodes whose glow already has a re-render scheduled, so a glowing node
-  // queues one timer rather than one per frame.
-  private glowRenderScheduled: Set<number> = new Set();
+  // Pending glow repaints, keyed by node, so a glowing node queues one timer
+  // rather than one per frame.
+  private glowRenderScheduled: Map<number, ReturnType<typeof setTimeout>> = new Map();
 
   private relationshipsTextCache: Map<
     string,
@@ -306,6 +306,8 @@ class FalkorDBCanvas extends HTMLElement {
   disconnectedCallback() {
     this.log('Component disconnected from DOM');
     document.fonts.removeEventListener("loadingdone", this.onFontsLoadingDone);
+    this.glowRenderScheduled.forEach(clearTimeout);
+    this.glowRenderScheduled.clear();
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
@@ -764,6 +766,9 @@ class FalkorDBCanvas extends HTMLElement {
       // Recompute layout to handle node size changes
       this.applyLayout(false);
     } else {
+      // Callers mutate the live links from getGraphData(), and d3 caches link
+      // strengths and distances at initialise time, so re-derive them here.
+      this.setupForces();
       this.triggerRender();
     }
   }
@@ -1004,11 +1009,13 @@ class FalkorDBCanvas extends HTMLElement {
   private scheduleGlowRender(nodeId: number, delay: number) {
     if (this.glowRenderScheduled.has(nodeId)) return;
 
-    this.glowRenderScheduled.add(nodeId);
-    setTimeout(() => {
-      this.glowRenderScheduled.delete(nodeId);
-      this.triggerRender();
-    }, delay);
+    this.glowRenderScheduled.set(
+      nodeId,
+      setTimeout(() => {
+        this.glowRenderScheduled.delete(nodeId);
+        this.triggerRender();
+      }, delay),
+    );
   }
 
   private triggerRender() {
