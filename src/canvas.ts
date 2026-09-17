@@ -382,6 +382,10 @@ class FalkorDBCanvas extends HTMLElement {
       for (const node of this.data.nodes) {
         node.displayName = ["", ""];
       }
+      // Pending glow repaints hold the old glowDuration's deadline. Drop them so
+      // the repaint below re-schedules a still-glowing node against the new one.
+      this.glowRenderScheduled.forEach(clearTimeout);
+      this.glowRenderScheduled.clear();
     }
 
     // Clear cached link label metrics when link style changes
@@ -1203,6 +1207,16 @@ class FalkorDBCanvas extends HTMLElement {
     const linkDist = this.config.layoutOptions.force?.linkDistance ?? LINK_DISTANCE;
     const collisionPad = this.config.layoutOptions.force?.collisionPadding ?? 25;
 
+    // force-graph's linkVisibility only filters drawing — it hands d3 the full
+    // link set, so a hidden link goes on pulling its endpoints together. Give
+    // the simulation the visible links alone rather than zeroing their strength:
+    // d3 also derives each link's `bias` (how the correction is split between
+    // its endpoints) from degree counts in `initialize()`, and unlike strength
+    // and distance that has no setter, so hidden links would keep skewing the
+    // split. Feeding it a filtered set recomputes all three, and d3's default
+    // strength then normalises over visible degrees on its own.
+    linkForce.links(this.data.links.filter((link) => link.visible !== false));
+
     // distance based on node size + constant
     linkForce
       .distance((link: GraphLink) => {
@@ -1210,29 +1224,6 @@ class FalkorDBCanvas extends HTMLElement {
         const targetSize = link.target.size;
         return sourceSize + targetSize + linkDist * 2;
       });
-
-    // force-graph's linkVisibility only filters drawing — d3 still receives the
-    // full link set, so a hidden link goes on pulling its endpoints together.
-    // Zero it out, and mirror d3's degree normalisation over visible links only
-    // so hiding one link does not weaken the ones left behind.
-    const visibleDegree = new Map<number, number>();
-    linkForce.strength((link: GraphLink, index: number, links: GraphLink[]) => {
-      if (index === 0) {
-        visibleDegree.clear();
-        links.forEach((l) => {
-          if (l.visible === false) return;
-          visibleDegree.set(l.source.id, (visibleDegree.get(l.source.id) ?? 0) + 1);
-          visibleDegree.set(l.target.id, (visibleDegree.get(l.target.id) ?? 0) + 1);
-        });
-      }
-
-      if (link.visible === false) return 0;
-
-      return 1 / Math.min(
-        visibleDegree.get(link.source.id) ?? 1,
-        visibleDegree.get(link.target.id) ?? 1,
-      );
-    });
 
     // Collision force - node size + padding (can be disabled for large graphs)
     const nodeCount = this.graph.graphData()?.nodes?.length ?? 0;

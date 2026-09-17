@@ -278,83 +278,46 @@ describe("link force visibility", () => {
     resetForceGraphMockState();
   });
 
-  function linkStrengths(data: typeof TREE_DATA) {
+  function simulationLinkIds(data: typeof TREE_DATA) {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setData(data);
 
-    const instance = getLastInstance();
-    const linkForce = instance.d3Force("link") as {
-      strengthAccessor?: (link: unknown, index: number, links: unknown[]) => number;
-    };
-    const links = canvas.getGraphData().links;
+    const linkForce = getLastInstance().d3Force("link") as { linkSet?: { id: number }[] };
 
-    return links.map((link, index) => linkForce.strengthAccessor!(link, index, links));
+    return linkForce.linkSet!.map((link) => link.id);
   }
 
-  it("gives a hidden link no pull over its endpoints", () => {
+  it("keeps a hidden link out of the simulation entirely", () => {
     const hidden = {
       ...TREE_DATA,
       links: TREE_DATA.links.map((l) => (l.id === 3 ? { ...l, visible: false } : l)),
     };
 
-    expect(linkStrengths(hidden)[2]).toBe(0);
-  });
-
-  it("does not weaken the remaining links when one is hidden", () => {
-    const before = linkStrengths(TREE_DATA);
+    // Not merely zero-strength: d3 derives each link's bias from degree counts
+    // in initialize(), and bias has no setter, so a hidden link left in the set
+    // would go on skewing how every surviving link splits its pull.
+    expect(simulationLinkIds(TREE_DATA)).toEqual([1, 2, 3]);
     document.body.innerHTML = "";
     resetForceGraphMockState();
-
-    const hidden = {
-      ...TREE_DATA,
-      links: TREE_DATA.links.map((l) => (l.id === 3 ? { ...l, visible: false } : l)),
-    };
-    const after = linkStrengths(hidden);
-
-    // Link 1 shares node 2 with the hidden link 3. Node 2's visible degree
-    // drops to 1, so link 1 pulls at full strength rather than 1/2.
-    expect(before[0]).toBe(0.5);
-    expect(after[0]).toBe(1);
+    expect(simulationLinkIds(hidden)).toEqual([1, 2]);
   });
 
-  it("normalises visible links by degree", () => {
-    const strengths = linkStrengths(TREE_DATA);
-
-    // d3's rule: 1 / min(degree(source), degree(target)). Nodes 1 and 2 have
-    // degree 2, nodes 3 and 4 degree 1.
-    expect(strengths).toEqual([0.5, 1, 1]);
-  });
-
-  it("re-derives strengths when a live link is hidden and refresh() is called", () => {
+  it("re-derives the simulation link set when a live link is hidden and refresh() is called", () => {
     const canvas = createCanvas();
     canvas.setConfig({ width: 800, height: 600 });
     canvas.setData(TREE_DATA);
 
     const instance = getLastInstance();
-    const read = () => {
-      const linkForce = instance.d3Force("link") as {
-        strengthAccessor?: (link: unknown, index: number, links: unknown[]) => number;
-      };
-      const links = canvas.getGraphData().links;
-      return links.map((link, index) => linkForce.strengthAccessor!(link, index, links));
-    };
+    const linkIds = () => (instance.d3Force("link") as { linkSet?: { id: number }[] }).linkSet!.map((l) => l.id);
 
-    expect(read()).toEqual([0.5, 1, 1]);
+    expect(linkIds()).toEqual([1, 2, 3]);
 
     // getGraphData() hands back the live links, so this is an in-place mutation.
+    // d3 caches the set at initialise time, so only re-binding it takes effect.
     canvas.getGraphData().links[2].visible = false;
-
-    // d3 caches strengths at initialise time and never recomputes them per
-    // tick, so the fix is that refresh() re-registers the accessor — that setter
-    // is what re-runs initializeStrength. Asserting on the accessor's return
-    // value alone would pass either way, since the accessor itself is pure.
-    const linkForce = instance.d3Force("link") as { strength: (fn: unknown) => unknown };
-    const strengthSpy = vi.spyOn(linkForce, "strength");
-
     canvas.refresh();
 
-    expect(strengthSpy).toHaveBeenCalled();
-    expect(read()).toEqual([1, 1, 0]);
+    expect(linkIds()).toEqual([1, 2]);
   });
 });

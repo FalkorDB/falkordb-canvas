@@ -22,15 +22,15 @@ type CallbackMap = {
 class MockLinkForce {
   public distanceAccessor: unknown;
 
-  public strengthAccessor: ((link: unknown, index: number, links: unknown[]) => number) | undefined;
+  public linkSet: { id: number }[] | undefined;
 
   distance(accessor: unknown) {
     this.distanceAccessor = accessor;
     return this;
   }
 
-  strength(accessor: (link: unknown, index: number, links: unknown[]) => number) {
-    this.strengthAccessor = accessor;
+  links(links: { id: number }[]) {
+    this.linkSet = links;
     return this;
   }
 }
