@@ -236,13 +236,11 @@ const resolveNodeCaption = (
   return null;
 };
 
-/**
- * Calculates the appropriate text color (black or white) based on background color brightness
- * Uses the relative luminance formula from WCAG guidelines
- * @param bgColor Background color in hex format (e.g., "#ff5733")
- * @returns "white" for dark backgrounds, "black" for light backgrounds
- */
-export const getContrastTextColor = (bgColor: string, threshold = 0.5): string => {
+const contrastTextColorCache = new Map<string, string>();
+/** Palettes are small; the bound only stops an unbounded run of generated colors. */
+const CONTRAST_CACHE_LIMIT = 512;
+
+const computeContrastTextColor = (bgColor: string, threshold: number): string => {
   let r: number;
   let g: number;
   let b: number;
@@ -299,6 +297,28 @@ export const getContrastTextColor = (bgColor: string, threshold = 0.5): string =
 
   // Return white for dark backgrounds, black for light backgrounds
   return luminance > threshold ? 'black' : 'white';
+};
+
+/**
+ * Calculates the appropriate text color (black or white) based on background color brightness
+ * Uses the relative luminance formula from WCAG guidelines
+ *
+ * Memoized: this runs once per node per frame, and the result depends only on
+ * the arguments.
+ *
+ * @param bgColor Background color in hex format (e.g., "#ff5733")
+ * @returns "white" for dark backgrounds, "black" for light backgrounds
+ */
+export const getContrastTextColor = (bgColor: string, threshold = 0.5): string => {
+  const key = `${bgColor}|${threshold}`;
+  const hit = contrastTextColorCache.get(key);
+  if (hit !== undefined) return hit;
+
+  const color = computeContrastTextColor(bgColor, threshold);
+  if (contrastTextColorCache.size >= CONTRAST_CACHE_LIMIT) contrastTextColorCache.clear();
+  contrastTextColorCache.set(key, color);
+
+  return color;
 };
 
 /**

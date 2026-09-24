@@ -416,6 +416,70 @@ describe("node rendering", () => {
   });
 });
 
+describe("node label caching", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    resetForceGraphMockState();
+  });
+
+  function paintRepeatedly(frames: number) {
+    const canvas = createCanvas();
+    canvas.setConfig({
+      width: 800,
+      height: 600,
+      captionsKeys: [["name", true]],
+      largeGraph: { lowZoomThreshold: 0.5 },
+    });
+    canvas.setData({
+      nodes: [{ id: 1, labels: ["A"], visible: true, color: "#f00", data: { name: "test", title: "other" } }],
+      links: [],
+    });
+
+    const instance = getLastInstance();
+    const node = canvas.getGraphData().nodes[0];
+    node.x = 100;
+    node.y = 100;
+    instance.callbacks.onZoom?.({ k: 1, x: 100, y: 100 });
+
+    const contexts = Array.from({ length: frames }, () => createCtxSpy());
+    contexts.forEach((ctx) => instance.callbacks.nodeCanvasObject!(node, ctx));
+
+    return { canvas, contexts };
+  }
+
+  it("measures a node's label once, not once per frame", () => {
+    const { contexts } = paintRepeatedly(3);
+    const [first, ...rest] = contexts;
+
+    expect(first.measureText).toHaveBeenCalled();
+    rest.forEach((ctx) => expect(ctx.measureText).not.toHaveBeenCalled());
+  });
+
+  it("keeps the label in the same place across frames", () => {
+    const { contexts } = paintRepeatedly(3);
+    const positions = contexts.map((ctx) => ctx.fillText.mock.calls);
+
+    positions.forEach((calls) => expect(calls).toEqual(positions[0]));
+    expect(positions[0].length).toBeGreaterThan(0);
+  });
+
+  it("re-measures after the caption keys change", () => {
+    const { canvas, contexts } = paintRepeatedly(2);
+    const instance = getLastInstance();
+    const node = canvas.getGraphData().nodes[0];
+
+    expect(contexts[1].measureText).not.toHaveBeenCalled();
+
+    canvas.setConfig({ captionsKeys: [["title", true]] });
+
+    const ctx = createCtxSpy();
+    instance.callbacks.nodeCanvasObject!(node, ctx);
+
+    expect(ctx.measureText).toHaveBeenCalled();
+    expect(ctx.fillText.mock.calls[0]?.[0]).toBe("other");
+  });
+});
+
 describe("link rendering", () => {
   afterEach(() => {
     document.body.innerHTML = "";

@@ -22,15 +22,15 @@ type CallbackMap = {
 class MockLinkForce {
   public distanceAccessor: unknown;
 
-  public strengthValue: number | undefined;
+  public linkSet: { id: number }[] | undefined;
 
   distance(accessor: unknown) {
     this.distanceAccessor = accessor;
     return this;
   }
 
-  strength(value: number) {
-    this.strengthValue = value;
+  links(links: { id: number }[]) {
+    this.linkSet = links;
     return this;
   }
 }
@@ -149,6 +149,11 @@ export class MockForceGraphInstance {
   graphData(value?: { nodes: unknown[]; links: unknown[] }) {
     if (value === undefined) return this.data;
     this.data = value;
+    // force-graph re-binds the full link array to the link force inside every
+    // digest, before the warmup ticks. Reproduce that, so tests see the real
+    // call order rather than whatever happened to be bound last.
+    const linkForce = this.d3Force("link") as { links?: (links: unknown[]) => unknown } | undefined;
+    linkForce?.links?.(value.links);
     return this;
   }
 
