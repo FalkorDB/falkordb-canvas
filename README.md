@@ -3,7 +3,7 @@
 `@falkordb/canvas` now lives in the FalkorDB UI monorepo:
 **[FalkorDB/falkordb-ui → `web-components/canvas`](https://github.com/FalkorDB/falkordb-ui/tree/main/web-components/canvas)**.
 
-This repository is archived and read-only. Its history was carried over to the new location.
+This repository is no longer maintained. Its history was carried over to the new location.
 
 ## What this means for you
 
