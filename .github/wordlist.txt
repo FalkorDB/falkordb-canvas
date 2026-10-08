@@ -40,3 +40,7 @@ Bezier
 offscreen
 renderer
 culling
+monorepo
+MIT
+README
+ui
